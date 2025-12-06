@@ -5,7 +5,6 @@ build appstate
 wire dependencies: repo, downloader, service
  */
 
-
 fn main() {
     println!("Hello World!");
 }
