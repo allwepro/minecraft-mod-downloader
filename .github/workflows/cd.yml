@@ -1,0 +1,100 @@
+name: Rust CD
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  BIN_NAME: minecraft_mod_downloader
+
+jobs:
+  build-release:
+    name: Artifact Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_name: linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive_name: macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive_name: macos-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_name: windows-x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+      
+      - name: Configure sccache env
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+      - name: Build Binary
+        run: cargo build --release --target ${{ matrix.target }} --verbose
+
+      - name: Create Archive (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czf ../../../${{ env.BIN_NAME }}-${{ matrix.archive_name }}.tar.gz ${{ env.BIN_NAME }}
+          cd -
+
+      - name: Create Archive (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path ${{ env.BIN_NAME }}.exe -DestinationPath ..\..\..\${{ env.BIN_NAME }}-${{ matrix.archive_name }}.zip
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.archive_name }}
+          path: ${{ env.BIN_NAME }}-*.*
+          retention-days: 1
+
+  create-release:
+    name: Artifact Create GitHub Release
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: build-*
+          merge-multiple: true
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          draft: true # Can check manually if it all works before publishing
+          prerelease: false

@@ -1,0 +1,104 @@
+# =======================
+# Rust / Cargo
+# =======================
+/target/
+/Cargo.lock
+**/*.rs.bk
+
+# Cargo build output
+debug/
+release/
+*.dSYM
+*.pdb
+**/mutants.out*/
+
+# Rust toolchains and build metadata
+/.rustup/
+/.cargo/
+
+# =======================
+# OS-specific
+# =======================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*.swp
+*.swo
+*~
+.nfs*
+
+# =======================
+# IDEs and Editors
+# =======================
+
+# VS Code
+.vscode/
+.history/
+*.code-workspace
+
+# IntelliJ / RustRover / CLion
+.idea/
+*.iml
+out/
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.vim
+*.swp
+*.swo
+*.un~
+Session.vim
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# =======================
+# Build and Packaging Tools
+# =======================
+/pkg/
+*.crate
+*.tar.gz
+
+# =======================
+# Miscellaneous
+# =======================
+# Temp
+*.tmp
+*.temp
+
+# Coverage / analytics
+/coverage/
+/cov-report/
+/grcov/
+
+# =======================
+# Backup and System files
+# =======================
+*.bak
+*.old
+*.orig
+*.rej
+
+# =======================
+# Editor configs
+# =======================
+*.lsp/
+.settings/
+.cache/
+temp/
