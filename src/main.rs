@@ -1,13 +1,10 @@
-//#![windows_subsystem = "windows"]
 mod adapters;
-mod app;
 mod domain;
 mod infra;
 mod ui;
 
 use eframe::NativeOptions;
 use egui::IconData;
-use image::DynamicImage;
 use tokio::runtime::Runtime;
 use ui::App;
 
@@ -16,9 +13,8 @@ fn main() -> eframe::Result<()> {
 
     let runtime = Runtime::new().expect("Failed to create Tokio runtime");
 
-    let fallback = DynamicImage::new_rgba8(64, 64);
     let icon_path = "assets/icon.png";
-    let image = image::open(icon_path).unwrap_or_else(|_| fallback.clone());
+    let image = image::open(icon_path).expect("Failed to open image");
     let image_rgba = image.to_rgba8();
     let (width, height) = image_rgba.dimensions();
 
@@ -31,7 +27,6 @@ fn main() -> eframe::Result<()> {
     let options = NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 700.0])
-            .with_min_inner_size([1000.0, 400.0])
             .with_title("Minecraft Mod Downloader")
             .with_icon(icon_data),
         ..Default::default()

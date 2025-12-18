@@ -1,93 +1,15 @@
+pub mod mod_src;
+
+pub use mod_src::ModProvider;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-
-pub mod mod_source;
-
-pub use mod_source::ModProvider;
-
-pub mod mod_service;
-
-use crate::infra::DownloadMetadata;
-pub use mod_service::ModService;
-
-pub fn sanitize_filename(name: &str) -> String {
-    name.chars()
-        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
-        .collect::<String>()
-        .trim_matches(|c| c == '_' || c == '-')
-        .to_string()
-}
-
-pub fn generate_mod_filename(mod_info: &ModInfo) -> String {
-    let sanitized_name = sanitize_filename(&mod_info.name);
-    let extension = mod_info.project_type.fileext();
-    format!("{sanitized_name}.{extension}")
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
-pub enum ProjectType {
-    #[default]
-    #[serde(rename = "mod")]
-    Mod,
-    #[serde(rename = "resourcepack")]
-    ResourcePack,
-    #[serde(rename = "shader")]
-    Shader,
-    #[serde(rename = "datapack")]
-    Datapack,
-    #[serde(rename = "plugin")]
-    Plugin,
-}
-
-impl ProjectType {
-    pub fn id(&self) -> &str {
-        match self {
-            ProjectType::Mod => "mod",
-            ProjectType::ResourcePack => "resourcepack",
-            ProjectType::Shader => "shader",
-            ProjectType::Datapack => "datapack",
-            ProjectType::Plugin => "plugin",
-        }
-    }
-
-    pub fn display_name(&self) -> &str {
-        match self {
-            ProjectType::Mod => "Mod",
-            ProjectType::ResourcePack => "Resource Pack",
-            ProjectType::Shader => "Shader",
-            ProjectType::Datapack => "Data Pack",
-            ProjectType::Plugin => "Plugin",
-        }
-    }
-
-    pub fn fileext(&self) -> &str {
-        match self {
-            ProjectType::Mod => "jar",
-            ProjectType::ResourcePack => "zip",
-            ProjectType::Shader => "zip",
-            ProjectType::Datapack => "zip",
-            ProjectType::Plugin => "jar",
-        }
-    }
-
-    pub fn emoji(&self) -> &str {
-        match self {
-            ProjectType::Mod => "⚒",
-            ProjectType::ResourcePack => "🖼",
-            ProjectType::Shader => "✨",
-            ProjectType::Datapack => "📦",
-            ProjectType::Plugin => "🔌",
-        }
-    }
-}
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModInfo {
     pub id: String,
-    pub slug: String,
     pub name: String,
-    pub icon_url: String,
     pub description: String,
     pub version: String,
     pub author: String,
@@ -95,8 +17,14 @@ pub struct ModInfo {
     pub download_url: String,
     pub supported_versions: Vec<String>,
     pub supported_loaders: Vec<String>,
-    #[serde(default)]
-    pub project_type: ProjectType,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DownloadStatus {
+    Idle,
+    Downloading,
+    Complete,
+    Failed,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -116,10 +44,6 @@ pub struct ModEntry {
     pub mod_id: String,
     pub mod_name: String,
     pub added_at: DateTime<Utc>,
-    #[serde(default)]
-    pub archived: bool,
-    #[serde(default)]
-    pub compatibility_override: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -128,75 +52,37 @@ pub struct ModList {
     pub name: String,
     pub created_at: DateTime<Utc>,
     pub mods: Vec<ModEntry>,
-    #[serde(default)]
-    pub version: String,
-    #[serde(default = "default_modloader", deserialize_with = "deserialize_loader")]
-    pub loader: ModLoader,
-    #[serde(default)]
-    pub download_dir: String,
-    #[serde(default)]
-    pub content_type: ProjectType,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub current_list_id: Option<String>,
-    #[serde(default = "default_list_name")]
-    pub default_list_name: String,
+    pub selected_version: String,
+    pub selected_loader: String,
+    pub current_list_id: String,
+    pub download_dir: String,
 }
 
-fn default_list_name() -> String {
-    "New List".to_string()
-}
-
-fn default_modloader() -> ModLoader {
-    ModLoader {
-        id: String::new(),
-        name: String::new(),
-    }
-}
-
-fn deserialize_loader<'de, D>(deserializer: D) -> Result<ModLoader, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error as _;
-    let value = serde_json::Value::deserialize(deserializer).map_err(D::Error::custom)?;
-
-    if value.is_string()
-        && let Some(s) = value.as_str()
-    {
-        return Ok(ModLoader {
-            id: s.to_string(),
-            name: s.to_string(),
-        });
-    }
-
-    let ml: ModLoader = serde_json::from_value(value).map_err(D::Error::custom)?;
-    Ok(ml)
-}
-
-pub enum Event {
-    InitialDataLoaded {
-        mod_lists: Vec<ModList>,
-        current_list_id: Option<String>,
-        minecraft_versions: Vec<MinecraftVersion>,
-        mod_loaders: Vec<ModLoader>,
-        default_list_name: String,
-    },
-    LoadersForTypeLoaded {
-        project_type: ProjectType,
-        loaders: Vec<ModLoader>,
-    },
-    SearchResults(Vec<Arc<ModInfo>>),
-    ModDetails {
-        info: Arc<ModInfo>,
+pub enum Command {
+    SearchMods {
+        query: String,
         version: String,
         loader: String,
     },
-    ModDetailsFailed {
+    FetchModDetails {
         mod_id: String,
+        version: String,
+        loader: String,
     },
+    DownloadMod {
+        mod_info: ModInfo,
+        download_dir: String,
+    },
+}
+
+pub enum Event {
+    SearchResults(Vec<ModInfo>),
+    ModDetails(ModInfo),
+    ModDetailsFailed { mod_id: String },
     DownloadProgress {
         mod_id: String,
         progress: f32,
@@ -205,24 +91,81 @@ pub enum Event {
         mod_id: String,
         success: bool,
     },
-    LegacyListProgress {
-        current: usize,
-        total: usize,
-        message: String,
-    },
-    LegacyListComplete {
-        suggested_name: String,
-        successful: Vec<Arc<ModInfo>>,
-        failed: Vec<String>,
-        warnings: Vec<String>,
-        is_import: bool,
-    },
-    LegacyListFailed {
-        error: String,
-        is_import: bool,
-    },
-    MetadataLoaded {
-        download_dir: String,
-        metadata: DownloadMetadata,
-    },
+}
+
+#[derive(Clone, Debug)]
+pub struct CachedModInfo {
+    pub info: ModInfo,
+    pub cached_at: DateTime<Utc>,
+}
+
+impl CachedModInfo {
+    pub fn new(info: ModInfo) -> Self {
+        Self {
+            info,
+            cached_at: Utc::now(),
+        }
+    }
+
+    pub fn is_expired(&self, max_age_hours: i64) -> bool {
+        let now = Utc::now();
+        let age = now.signed_duration_since(self.cached_at);
+        age.num_hours() >= max_age_hours
+    }
+}
+
+pub struct ModCache {
+    pub cache: HashMap<String, CachedModInfo>,
+    max_size: usize,
+    max_age_hours: i64,
+}
+
+impl ModCache {
+    pub fn new(max_size: usize, max_age_hours: i64) -> Self {
+        Self {
+            cache: HashMap::new(),
+            max_size,
+            max_age_hours,
+        }
+    }
+
+    pub fn get(&self, mod_id: &str) -> Option<ModInfo> {
+        self.cache.get(mod_id).and_then(|cached| {
+            if cached.is_expired(self.max_age_hours) {
+                None
+            } else {
+                Some(cached.info.clone())
+            }
+        })
+    }
+
+    pub fn insert(&mut self, mod_id: String, info: ModInfo) {
+        if self.cache.len() >= self.max_size {
+            self.evict_oldest();
+        }
+        self.cache.insert(mod_id, CachedModInfo::new(info));
+    }
+
+    pub fn contains_valid(&self, mod_id: &str) -> bool {
+        self.cache
+            .get(mod_id)
+            .map(|c| !c.is_expired(self.max_age_hours))
+            .unwrap_or(false)
+    }
+
+    fn evict_oldest(&mut self) {
+        if let Some(oldest_key) = self
+            .cache
+            .iter()
+            .min_by_key(|(_, v)| v.cached_at)
+            .map(|(k, _)| k.clone())
+        {
+            self.cache.remove(&oldest_key);
+        }
+    }
+
+    pub fn clear_expired(&mut self) {
+        self.cache
+            .retain(|_, v| !v.is_expired(self.max_age_hours));
+    }
 }
