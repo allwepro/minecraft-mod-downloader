@@ -425,23 +425,84 @@ impl App {
     }
 
     fn share_current_list(&mut self) {
-        if let Some(current_list) = self.get_current_list() {
-            let list_id = current_list.id.clone();
-            let list_name = current_list.name.clone();
+        let Some(current_list) = self.get_current_list() else {
+            return;
+        };
 
-            if let Some(save_path) = FileDialog::new()
-                .set_title("Export Mod List")
-                .set_file_name(&format!("{}.toml", list_name))
-                .save_file()
-            {
-                let cm = self.config_manager.clone();
-                self.runtime_handle.spawn(async move {
-                    let source_path = cm.get_lists_dir().join(format!("{}.toml", list_id));
-                    let _ = tokio::fs::copy(&source_path, &save_path).await;
-                });
-            }
+        let default_name = format!("{}.mods", current_list.name);
+
+        let Some(save_path) = FileDialog::new()
+            .set_title("Export Mod List")
+            .set_file_name(&default_name)
+            .add_filter("Mod List", &["mods"])
+            .save_file()
+        else {
+            return;
+        };
+
+        // Eine Mod-ID pro Zeile
+        let content = current_list
+            .mods
+            .iter()
+            .map(|m| m.mod_id.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if let Err(e) = std::fs::write(&save_path, content) {
+            log::warn!("Failed to export .mods file: {}", e);
         }
     }
+
+
+    fn import_mod_list(&mut self) {
+        let Some(path) = FileDialog::new()
+            .set_title("Import Mod List")
+            .add_filter("Mod List", &["mods"])
+            .pick_file()
+        else {
+            return;
+        };
+
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("Failed to read .mods file: {}", e);
+                return;
+            }
+        };
+
+        let mod_ids: Vec<String> = content
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .map(|l| l.to_string())
+            .collect();
+
+        if mod_ids.is_empty() {
+            return;
+        }
+
+        if let Some(list) = self.get_current_list_mut() {
+            for mod_id in mod_ids {
+                if !list.mods.iter().any(|m| m.mod_id == mod_id) {
+                    list.mods.push(ModEntry {
+                        mod_id: mod_id.clone(),
+                        mod_name: mod_id.clone(), // Platzhalter, Details kommen später
+                        added_at: Utc::now(),
+                    });
+                }
+            }
+
+            let list_clone = list.clone();
+            let cm = self.config_manager.clone();
+            self.runtime_handle.spawn(async move {
+                let _ = cm.save_list(&list_clone).await;
+            });
+        }
+
+        self.invalidate_and_reload();
+    }
+
 }
 
 impl eframe::App for App {
@@ -628,6 +689,10 @@ impl eframe::App for App {
 
                 if ui.button("📤 Share").clicked() {
                     self.share_current_list();
+                }
+
+                if ui.button("📥 Import").clicked() {
+                    self.import_mod_list();
                 }
 
                 if self.show_rename_input {
