@@ -24,6 +24,7 @@ struct ModrinthSearchResult {
 #[derive(Deserialize)]
 struct ModrinthProject {
     project_id: String,
+    slug: String,
     title: String,
     description: String,
     author: String,
@@ -37,6 +38,7 @@ struct ModrinthProject {
 #[derive(Deserialize)]
 struct ModrinthProjectDetails {
     id: String,
+    slug: String,
     title: String,
     description: String,
     #[serde(default)]
@@ -98,6 +100,7 @@ impl ModProvider for ModrinthProvider {
             .into_iter()
             .map(|hit| ModInfo {
                 id: hit.project_id,
+                slug: hit.slug,
                 name: hit.title,
                 description: hit.description,
                 version: "Latest".to_string(),
@@ -160,6 +163,7 @@ impl ModProvider for ModrinthProvider {
 
         Ok(ModInfo {
             id: project.id,
+            slug: project.slug,
             name: project.title,
             description: project.description,
             version: compatible_version.version_number.clone(),
