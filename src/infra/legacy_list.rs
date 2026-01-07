@@ -1,15 +1,43 @@
-use crate::domain::{Event, ModService};
-use std::path::PathBuf;
+use crate::domain::{ConnectionLimiter, Event, ModProvider};
+use anyhow::Result;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
+
+#[derive(Default)]
+pub struct SlugCache {
+    slug_to_id: HashMap<String, String>,
+    id_to_slug: HashMap<String, String>,
+}
+
+impl SlugCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn get_id(&self, slug: &str) -> Option<&str> {
+        self.slug_to_id.get(slug).map(|s| s.as_str())
+    }
+
+    pub fn get_slug(&self, id: &str) -> Option<&str> {
+        self.id_to_slug.get(id).map(|s| s.as_str())
+    }
+
+    pub fn insert(&mut self, slug: String, id: String) {
+        self.slug_to_id.insert(slug.clone(), id.clone());
+        self.id_to_slug.insert(id, slug);
+    }
+}
 
 pub struct LegacyListService {
-    mod_service: Arc<ModService>,
+    pub provider: Arc<dyn ModProvider>,
+    pub limiter: Arc<ConnectionLimiter>,
 }
 
 impl LegacyListService {
-    pub fn new(mod_service: Arc<ModService>) -> Self {
-        Self { mod_service }
+    pub fn new(provider: Arc<dyn ModProvider>, limiter: Arc<ConnectionLimiter>) -> Self {
+        Self { provider, limiter }
     }
 
     pub async fn import_legacy_list(
@@ -24,7 +52,7 @@ impl LegacyListService {
             Err(e) => {
                 let _ = tx
                     .send(Event::LegacyListFailed {
-                        error: format!("Failed to read file: {e}"),
+                        error: format!("Failed to read file: {}", e),
                         is_import: true,
                     })
                     .await;
@@ -41,27 +69,26 @@ impl LegacyListService {
 
         let mut successful_mods = Vec::new();
         let mut failed = Vec::new();
-        let warnings = Vec::new();
+        let mut warnings = Vec::new();
 
         for (idx, slug) in slugs.iter().enumerate() {
             let _ = tx
                 .send(Event::LegacyListProgress {
                     current: idx + 1,
                     total: slugs.len(),
-                    message: format!("Resolving '{slug}'..."),
+                    message: format!("Resolving '{}'...", slug),
                 })
                 .await;
 
+            let _permit = self.limiter.acquire(1).await;
             match self
-                .mod_service
-                .get_mod_by_slug(slug, &version, &loader)
+                .provider
+                .fetch_mod_details(slug, &version, &loader)
                 .await
             {
-                Ok(info) => {
-                    successful_mods.push(info);
-                }
+                Ok(mod_info) => successful_mods.push(mod_info),
                 Err(e) => {
-                    log::warn!("Failed to resolve slug '{slug}': {e}");
+                    log::warn!("Failed to resolve slug '{}': {}", slug, e);
                     failed.push(slug.clone());
                 }
             }
@@ -69,7 +96,6 @@ impl LegacyListService {
 
         let _ = tx
             .send(Event::LegacyListComplete {
-                suggested_name: path.file_stem().unwrap().to_str().unwrap().to_string(),
                 successful: successful_mods,
                 failed,
                 warnings,
@@ -96,27 +122,27 @@ impl LegacyListService {
                 .send(Event::LegacyListProgress {
                     current: idx + 1,
                     total: mod_ids.len(),
-                    message: format!("Resolving '{mod_id}'..."),
+                    message: format!("Resolving '{}'...", mod_id),
                 })
                 .await;
 
+            let _permit = self.limiter.acquire(1).await;
             match self
-                .mod_service
-                .get_mod_by_id(mod_id, &version, &loader)
+                .provider
+                .fetch_mod_details(mod_id, &version, &loader)
                 .await
             {
                 Ok(mod_info) => {
-                    let info_ref = mod_info.as_ref();
-                    if info_ref.slug.is_empty() {
-                        warnings.push(format!("Mod '{mod_id}' has no slug, skipping"));
+                    if mod_info.slug.is_empty() {
+                        warnings.push(format!("Mod '{}' has no slug, skipping", mod_id));
                         failed.push(mod_id.clone());
                     } else {
-                        slugs.push(info_ref.slug.clone());
+                        slugs.push(mod_info.slug.clone());
                         successful_mods.push(mod_info);
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to resolve ID '{mod_id}': {e}");
+                    log::warn!("Failed to resolve ID '{}': {}", mod_id, e);
                     failed.push(mod_id.clone());
                 }
             }
@@ -132,7 +158,7 @@ impl LegacyListService {
         if let Err(e) = tokio::fs::write(&temp_path, content).await {
             let _ = tx
                 .send(Event::LegacyListFailed {
-                    error: format!("Failed to write file: {e}"),
+                    error: format!("Failed to write file: {}", e),
                     is_import: false,
                 })
                 .await;
@@ -142,7 +168,7 @@ impl LegacyListService {
         if let Err(e) = tokio::fs::rename(temp_path, &path).await {
             let _ = tx
                 .send(Event::LegacyListFailed {
-                    error: format!("Failed to finalize file: {e}"),
+                    error: format!("Failed to finalize file: {}", e),
                     is_import: false,
                 })
                 .await;
@@ -151,7 +177,6 @@ impl LegacyListService {
 
         let _ = tx
             .send(Event::LegacyListComplete {
-                suggested_name: path.file_stem().unwrap().to_str().unwrap().to_string(),
                 successful: successful_mods,
                 failed,
                 warnings,

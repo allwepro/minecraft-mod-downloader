@@ -11,6 +11,7 @@ pub use mod_src::ModProvider;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModInfo {
     pub id: String,
+    pub slug: String,
     pub name: String,
     pub description: String,
     pub version: String,
@@ -80,14 +81,48 @@ pub enum Command {
         mod_info: ModInfo,
         download_dir: String,
     },
+    LegacyListImport {
+        path: std::path::PathBuf,
+        version: String,
+        loader: String,
+    },
+    LegacyListExport {
+        path: std::path::PathBuf,
+        mod_ids: Vec<String>,
+        version: String,
+        loader: String,
+    },
 }
 
 pub enum Event {
     SearchResults(Vec<ModInfo>),
     ModDetails(ModInfo),
-    ModDetailsFailed { mod_id: String },
-    DownloadProgress { mod_id: String, progress: f32 },
-    DownloadComplete { mod_id: String, success: bool },
+    ModDetailsFailed {
+        mod_id: String,
+    },
+    DownloadProgress {
+        mod_id: String,
+        progress: f32,
+    },
+    DownloadComplete {
+        mod_id: String,
+        success: bool,
+    },
+    LegacyListProgress {
+        current: usize,
+        total: usize,
+        message: String,
+    },
+    LegacyListComplete {
+        successful: Vec<ModInfo>,
+        failed: Vec<String>,
+        warnings: Vec<String>,
+        is_import: bool,
+    },
+    LegacyListFailed {
+        error: String,
+        is_import: bool,
+    },
 }
 
 #[derive(Clone, Debug)]

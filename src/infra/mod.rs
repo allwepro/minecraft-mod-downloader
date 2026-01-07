@@ -1,4 +1,5 @@
 mod config;
-pub mod import;
+mod legacy_list;
 
 pub use config::ConfigManager;
+pub use legacy_list::LegacyListService;

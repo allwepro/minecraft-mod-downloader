@@ -1,11 +1,11 @@
 use crate::adapters::ModrinthProvider;
 use crate::domain::*;
-use crate::infra::ConfigManager;
+use crate::infra::*;
+use crate::ui::app::ListAction::Import;
 use chrono::Utc;
 use eframe::egui;
 use rfd::FileDialog;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -14,6 +14,22 @@ use tokio::sync::mpsc;
 pub enum ListAction {
     Import,
     Duplicate,
+}
+
+#[derive(PartialEq)]
+enum LegacyState {
+    Idle,
+    InProgress {
+        current: usize,
+        total: usize,
+        message: String,
+    },
+    Complete {
+        successful: Vec<String>,
+        failed: Vec<String>,
+        warnings: Vec<String>,
+        is_import: bool,
+    },
 }
 
 pub struct App {
@@ -51,6 +67,9 @@ pub struct App {
     pending_import_list: Option<ModList>,
     import_name_input: String,
     active_action: ListAction,
+    legacy_state: LegacyState,
+    pending_legacy_mods: Option<Vec<ModInfo>>,
+    legacy_service: Arc<LegacyListService>,
 }
 
 impl App {
@@ -62,14 +81,21 @@ impl App {
         let provider: Arc<dyn ModProvider> = Arc::new(ModrinthProvider::new());
         let provider_clone = provider.clone();
 
-        let connection_limiter = ConnectionLimiter::new(5);
+        let connection_limiter = Arc::new(ConnectionLimiter::new(5));
         let limiter_clone = connection_limiter.clone();
+
+        let legacy_service = Arc::new(LegacyListService::new(
+            provider.clone(),
+            connection_limiter.clone(),
+        ));
+        let legacy_service_for_spawn = legacy_service.clone();
 
         runtime_handle.spawn(async move {
             while let Some(cmd) = cmd_rx.recv().await {
                 let provider = provider_clone.clone();
                 let event_tx = event_tx.clone();
                 let limiter = limiter_clone.clone();
+                let legacy_service = legacy_service_for_spawn.clone();
 
                 match cmd {
                     Command::SearchMods {
@@ -136,6 +162,29 @@ impl App {
                                     mod_id,
                                     success: result.is_ok(),
                                 })
+                                .await;
+                        });
+                    }
+                    Command::LegacyListImport {
+                        path,
+                        version,
+                        loader,
+                    } => {
+                        tokio::spawn(async move {
+                            legacy_service
+                                .import_legacy_list(path, version, loader, event_tx)
+                                .await;
+                        });
+                    }
+                    Command::LegacyListExport {
+                        path,
+                        mod_ids,
+                        version,
+                        loader,
+                    } => {
+                        tokio::spawn(async move {
+                            legacy_service
+                                .export_legacy_list(path, mod_ids, version, loader, event_tx)
                                 .await;
                         });
                     }
@@ -241,7 +290,10 @@ impl App {
             import_window_open: false,
             pending_import_list: None,
             import_name_input: String::new(),
-            active_action: ListAction::Import,
+            active_action: Import,
+            legacy_state: LegacyState::Idle,
+            pending_legacy_mods: None,
+            legacy_service,
         }
     }
 
@@ -370,6 +422,44 @@ impl App {
                         },
                     );
                 }
+                Event::LegacyListProgress {
+                    current,
+                    total,
+                    message,
+                } => {
+                    self.legacy_state = LegacyState::InProgress {
+                        current,
+                        total,
+                        message,
+                    };
+                }
+                Event::LegacyListComplete {
+                    successful,
+                    failed,
+                    warnings,
+                    is_import: is_importable,
+                } => {
+                    let successful_ids = successful.iter().map(|m| m.id.clone()).collect();
+                    self.pending_legacy_mods = Some(successful);
+                    self.legacy_state = LegacyState::Complete {
+                        successful: successful_ids,
+                        failed,
+                        warnings,
+                        is_import: is_importable,
+                    };
+                }
+                Event::LegacyListFailed {
+                    error,
+                    is_import: is_importable,
+                } => {
+                    self.pending_legacy_mods = None;
+                    self.legacy_state = LegacyState::Complete {
+                        successful: Vec::new(),
+                        failed: Vec::new(),
+                        warnings: vec![error],
+                        is_import: is_importable,
+                    };
+                }
             }
         }
     }
@@ -444,37 +534,51 @@ impl App {
     }
 
     fn export_current_list(&mut self) {
-        if let Some(current_list) = self.get_current_list() {
-            let list_id = current_list.id.clone();
-            let list_name = current_list.name.clone();
+        let export_info = self.get_current_list().map(|list| {
+            (
+                list.name.clone(),
+                list.mods
+                    .iter()
+                    .map(|m| m.mod_id.clone())
+                    .collect::<Vec<String>>(),
+                list.clone(),
+            )
+        });
 
-            if let Some(save_path) = FileDialog::new()
-                .add_filter("TOML Config", &["toml"])
-                .add_filter("Legacy Mod List", &["mods"])
-                .set_title("Export Mod List")
-                .set_file_name(&format!("{}.toml", list_name))
-                .save_file()
-            {
-                match save_path.extension().and_then(|s| s.to_str()) {
-                    Some("mods") => {
-                        let content = current_list
-                            .mods
-                            .iter()
-                            .map(|m| m.mod_id.as_str())
-                            .collect::<Vec<_>>()
-                            .join("\n");
+        let (list_name, mod_ids, current_list_obj) = match export_info {
+            Some(data) => data,
+            None => return,
+        };
 
-                        if let Err(e) = std::fs::write(&save_path, content) {
-                            log::warn!("Failed to export .mods file: {}", e);
-                        }
-                    }
-                    _ => {
-                        let cm = self.config_manager.clone();
-                        self.runtime_handle.spawn(async move {
-                            let source_path = cm.get_lists_dir().join(format!("{}.toml", list_id));
-                            let _ = tokio::fs::copy(&source_path, &save_path).await;
-                        });
-                    }
+        if let Some(save_path) = FileDialog::new()
+            .add_filter("TOML Config", &["toml"])
+            .add_filter("Legacy Mod List", &["mods"])
+            .set_title("Export Mod List")
+            .set_file_name(&format!("{}.toml", list_name))
+            .save_file()
+        {
+            match save_path.extension().and_then(|s| s.to_str()) {
+                Some("mods") => {
+                    self.legacy_state = LegacyState::InProgress {
+                        current: 0,
+                        total: mod_ids.len(),
+                        message: "Initializing export...".into(),
+                    };
+
+                    let _ = self.cmd_tx.try_send(Command::LegacyListExport {
+                        path: save_path,
+                        mod_ids,
+                        version: self.selected_version.clone(),
+                        loader: self.selected_loader.clone(),
+                    });
+                }
+                _ => {
+                    let runtime = self.runtime_handle.clone();
+                    runtime.spawn(async move {
+                        let toml_string =
+                            toml::to_string_pretty(&current_list_obj).unwrap_or_default();
+                        let _ = tokio::fs::write(save_path, toml_string).await;
+                    });
                 }
             }
         }
@@ -501,47 +605,6 @@ impl App {
             self.import_window_open = false;
             self.import_name_input.clear();
         }
-    }
-
-    fn import_legacy_list(&mut self, path: PathBuf) {
-        let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!("Failed to read .mods file: {}", e);
-                return;
-            }
-        };
-
-        let mod_ids: Vec<String> = content
-            .lines()
-            .map(|l| l.trim())
-            .filter(|l| !l.is_empty())
-            .map(|l| l.to_string())
-            .collect();
-
-        if mod_ids.is_empty() {
-            return;
-        }
-
-        if let Some(list) = self.get_current_list_mut() {
-            for mod_id in mod_ids {
-                if !list.mods.iter().any(|m| m.mod_id == mod_id) {
-                    list.mods.push(ModEntry {
-                        mod_id: mod_id.clone(),
-                        mod_name: mod_id.clone(), // Platzhalter, Details kommen später
-                        added_at: Utc::now(),
-                    });
-                }
-            }
-
-            let list_clone = list.clone();
-            let cm = self.config_manager.clone();
-            self.runtime_handle.spawn(async move {
-                let _ = cm.save_list(&list_clone).await;
-            });
-        }
-
-        self.invalidate_and_reload();
     }
 }
 
@@ -687,6 +750,149 @@ impl eframe::App for App {
             }
         }
 
+        if self.legacy_state != LegacyState::Idle {
+            let mut is_open = true;
+            let overlay = egui::Area::new(egui::Id::new("legacy_overlay"))
+                .order(egui::Order::Background)
+                .fixed_pos(egui::pos2(0.0, 0.0));
+
+            overlay.show(ctx, |ui| {
+                let screen_rect = ctx.screen_rect();
+                ui.painter()
+                    .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
+
+                if ui
+                    .interact(
+                        screen_rect,
+                        egui::Id::new("legacy_overlay_click"),
+                        egui::Sense::click(),
+                    )
+                    .clicked()
+                {
+                    if matches!(self.legacy_state, LegacyState::Complete { .. }) {
+                        is_open = false;
+                    }
+                }
+            });
+
+            let mut should_import = false;
+
+            let window_title = match &self.legacy_state {
+                LegacyState::InProgress { .. } => "Processing...",
+                _ => "Operation Complete",
+            };
+
+            egui::Window::new(window_title)
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .open(&mut is_open)
+                .show(ctx, |ui| {
+                    ui.set_min_width(300.0);
+
+                    match &self.legacy_state {
+                        LegacyState::InProgress {
+                            current,
+                            total,
+                            message,
+                        } => {
+                            let progress = if *total > 0 {
+                                *current as f32 / *total as f32
+                            } else {
+                                0.0
+                            };
+                            let current_val = *current;
+                            let total_val = *total;
+                            let msg = message.clone();
+
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(10.0);
+                                ui.add(egui::Spinner::new().size(32.0));
+                                ui.add_space(10.0);
+                                ui.label(msg);
+                                ui.add(
+                                    egui::ProgressBar::new(progress)
+                                        .text(format!("{}/{}", current_val, total_val)),
+                                );
+                                ui.add_space(10.0);
+                            });
+                        }
+                        LegacyState::Complete {
+                            successful,
+                            failed,
+                            warnings,
+                            is_import: is_import,
+                        } => {
+                            let success_count = successful.len();
+                            let fail_count = failed.len();
+                            let warn_count = warnings.len();
+                            let is_importable = self.pending_legacy_mods.is_some();
+
+                            ui.vertical(|ui| {
+                                ui.heading(if *is_import {
+                                    "Import Results"
+                                } else {
+                                    "Export Results"
+                                });
+                                ui.label(format!("✅ Success: {}", success_count));
+
+                                if fail_count > 0 {
+                                    ui.colored_label(
+                                        egui::Color32::LIGHT_RED,
+                                        format!("❌ Failed: {}", fail_count),
+                                    );
+                                }
+                                if warn_count > 0 {
+                                    ui.colored_label(
+                                        egui::Color32::GOLD,
+                                        format!("⚠️ Warnings: {}", warn_count),
+                                    );
+                                }
+
+                                if *is_import && is_importable && success_count > 0 {
+                                    ui.add_space(15.0);
+                                    ui.separator();
+                                    ui.add_space(10.0);
+                                    ui.horizontal(|ui| {
+                                        if ui.button("📥 Import into List").clicked() {
+                                            should_import = true;
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                        _ => {}
+                    }
+                });
+
+            if should_import {
+                if let Some(mods) = self.pending_legacy_mods.take() {
+                    let entries = mods
+                        .into_iter()
+                        .map(|m| ModEntry {
+                            mod_id: m.id,
+                            mod_name: m.name,
+                            added_at: Utc::now(),
+                        })
+                        .collect();
+
+                    self.pending_import_list = Some(ModList {
+                        id: format!("list_{}", Utc::now().timestamp()),
+                        name: "Imported List".to_string(),
+                        created_at: Utc::now(),
+                        mods: entries,
+                    });
+                    self.import_name_input = "Imported List".to_string();
+                    self.active_action = Import;
+                    self.import_window_open = true;
+                }
+                self.legacy_state = LegacyState::Idle;
+            } else if !is_open {
+                self.legacy_state = LegacyState::Idle;
+                self.pending_legacy_mods = None;
+            }
+        }
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Minecraft Mod Downloader");
@@ -766,7 +972,7 @@ impl eframe::App for App {
                     .clicked()
                 {
                     let new_list = ModList {
-                        id: format!("list_{}", Utc::now().timestamp()),
+                        id: format!("list_{}", chrono::Utc::now().timestamp()),
                         name: "New List".to_string(),
                         created_at: Utc::now(),
                         mods: Vec::new(),
@@ -805,7 +1011,16 @@ impl eframe::App for App {
                                 }
                             }
                             Some("mods") => {
-                                self.import_legacy_list(path);
+                                self.legacy_state = LegacyState::InProgress {
+                                    current: 0,
+                                    total: 0,
+                                    message: "Preparing export...".into(),
+                                };
+                                let _ = self.cmd_tx.try_send(Command::LegacyListImport {
+                                    path,
+                                    version: self.selected_version.clone(),
+                                    loader: self.selected_loader.clone(),
+                                });
                             }
                             _ => {}
                         }
