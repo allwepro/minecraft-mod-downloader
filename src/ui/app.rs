@@ -5,9 +5,16 @@ use chrono::Utc;
 use eframe::egui;
 use rfd::FileDialog;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
+
+#[derive(PartialEq)]
+pub enum ListAction {
+    Import,
+    Duplicate,
+}
 
 pub struct App {
     provider: Arc<dyn ModProvider>,
@@ -19,8 +26,9 @@ pub struct App {
     previous_version: String,
     previous_loader: String,
     mod_lists: Vec<ModList>,
-    current_list_id: String,
+    current_list_id: Option<String>,
     filtered_mods: Vec<ModEntry>,
+    list_search_query: String,
     search_query: String,
     selected_mod: Option<usize>,
     download_progress: HashMap<String, f32>,
@@ -39,6 +47,10 @@ pub struct App {
     download_dir: String,
     _runtime: tokio::runtime::Runtime,
     runtime_handle: tokio::runtime::Handle,
+    import_window_open: bool,
+    pending_import_list: Option<ModList>,
+    import_name_input: String,
+    active_action: ListAction,
 }
 
 impl App {
@@ -50,46 +62,60 @@ impl App {
         let provider: Arc<dyn ModProvider> = Arc::new(ModrinthProvider::new());
         let provider_clone = provider.clone();
 
+        let connection_limiter = ConnectionLimiter::new(5);
+        let limiter_clone = connection_limiter.clone();
+
         runtime_handle.spawn(async move {
             while let Some(cmd) = cmd_rx.recv().await {
                 let provider = provider_clone.clone();
                 let event_tx = event_tx.clone();
+                let limiter = limiter_clone.clone();
 
-                tokio::spawn(async move {
-                    match cmd {
-                        Command::SearchMods {
-                            query,
-                            version,
-                            loader,
-                        } => {
+                match cmd {
+                    Command::SearchMods {
+                        query,
+                        version,
+                        loader,
+                    } => {
+                        tokio::spawn(async move {
+                            let _permit = limiter.acquire(1).await;
                             if let Ok(results) =
                                 provider.search_mods(&query, &version, &loader).await
                             {
                                 let _ = event_tx.send(Event::SearchResults(results)).await;
                             }
-                        }
-                        Command::FetchModDetails { mod_id, version, loader } => {
+                        });
+                    }
+                    Command::FetchModDetails {
+                        mod_id,
+                        version,
+                        loader,
+                    } => {
+                        tokio::spawn(async move {
+                            let _permit = limiter.acquire(1).await;
                             match provider.fetch_mod_details(&mod_id, &version, &loader).await {
                                 Ok(details) => {
                                     let _ = event_tx.send(Event::ModDetails(details)).await;
                                 }
                                 Err(e) => {
                                     log::warn!("Failed to fetch mod details for {}: {}", mod_id, e);
-                                    let _ = event_tx
-                                        .send(Event::ModDetailsFailed { mod_id })
-                                        .await;
+                                    let _ = event_tx.send(Event::ModDetailsFailed { mod_id }).await;
                                 }
                             }
-                        }
-                        Command::DownloadMod {
-                            mod_info,
-                            download_dir,
-                        } => {
+                        });
+                    }
+                    Command::DownloadMod {
+                        mod_info,
+                        download_dir,
+                    } => {
+                        tokio::spawn(async move {
+                            let _permit = limiter.acquire(3).await;
+
                             let mod_id = mod_info.id.clone();
                             let filename = format!("{}.jar", mod_info.name.replace(" ", "_"));
                             let destination = std::path::Path::new(&download_dir).join(&filename);
 
-                            let event_tx_progress = event_tx.clone();
+                            let tx_progress = event_tx.clone();
                             let mod_id_clone = mod_id.clone();
 
                             let result = provider
@@ -97,12 +123,10 @@ impl App {
                                     &mod_info.download_url,
                                     &destination,
                                     Box::new(move |progress| {
-                                        let _ = event_tx_progress.try_send(
-                                            Event::DownloadProgress {
-                                                mod_id: mod_id_clone.clone(),
-                                                progress,
-                                            },
-                                        );
+                                        let _ = tx_progress.try_send(Event::DownloadProgress {
+                                            mod_id: mod_id_clone.clone(),
+                                            progress,
+                                        });
                                     }),
                                 )
                                 .await;
@@ -113,17 +137,24 @@ impl App {
                                     success: result.is_ok(),
                                 })
                                 .await;
-                        }
+                        });
                     }
-                });
+                }
             }
         });
 
-        let config_manager = Arc::new(
-            ConfigManager::new().expect("Failed to create config manager"),
-        );
+        let config_manager =
+            Arc::new(ConfigManager::new().expect("Failed to create config manager"));
 
-        let (selected_version, selected_loader, download_dir, mut mod_lists, current_list_id, minecraft_versions, mod_loaders) = {
+        let (
+            selected_version,
+            selected_loader,
+            download_dir,
+            mod_lists,
+            current_list_id,
+            minecraft_versions,
+            mod_loaders,
+        ) = {
             let cm = config_manager.clone();
             let prov = provider.clone();
 
@@ -131,44 +162,22 @@ impl App {
                 let _ = cm.ensure_dirs().await;
 
                 let config = if cm.config_exists() {
-                    cm.load_config().await.unwrap_or_else(|_| {
-                        runtime_handle.block_on(cm.create_default_config()).unwrap()
-                    })
+                    match cm.load_config().await {
+                        Ok(cfg) => cfg,
+                        Err(_) => cm.create_default_config().await.unwrap(),
+                    }
                 } else {
                     cm.create_default_config().await.unwrap()
                 };
 
-                let mut lists = match cm.load_all_lists().await {
-                    Ok(lists) => {
-                        if lists.is_empty() {
-                            let default_list = ModList {
-                                id: "main".to_string(),
-                                name: "My Mods".to_string(),
-                                created_at: Utc::now(),
-                                mods: Vec::new(),
-                            };
-                            let _ = cm.save_list(&default_list).await;
-                            vec![default_list]
-                        } else {
-                            lists
-                        }
-                    }
-                    Err(_) => {
-                        let default_list = ModList {
-                            id: "main".to_string(),
-                            name: "My Mods".to_string(),
-                            created_at: Utc::now(),
-                            mods: Vec::new(),
-                        };
-                        vec![default_list]
-                    }
+                let lists = match cm.load_all_lists().await {
+                    Ok(lists) => lists,
+                    Err(_) => Vec::new(),
                 };
 
-                let current_list_id = if lists.iter().any(|l| l.id == config.current_list_id) {
-                    config.current_list_id.clone()
-                } else {
-                    lists.first().unwrap().id.clone()
-                };
+                let current_list_id = config
+                    .current_list_id
+                    .filter(|id| lists.iter().any(|l| &l.id == id));
 
                 let versions = prov.get_minecraft_versions().await.unwrap_or_else(|_| {
                     vec![MinecraftVersion {
@@ -210,6 +219,7 @@ impl App {
             mod_lists,
             current_list_id,
             filtered_mods: Vec::new(),
+            list_search_query: String::new(),
             search_query: String::new(),
             selected_mod: None,
             download_progress: HashMap::new(),
@@ -228,6 +238,10 @@ impl App {
             download_dir,
             _runtime: runtime,
             runtime_handle,
+            import_window_open: false,
+            pending_import_list: None,
+            import_name_input: String::new(),
+            active_action: ListAction::Import,
         }
     }
 
@@ -248,13 +262,16 @@ impl App {
     }
 
     fn get_current_list(&self) -> Option<&ModList> {
-        self.mod_lists.iter().find(|l| l.id == self.current_list_id)
+        self.current_list_id
+            .as_ref()
+            .and_then(|id| self.mod_lists.iter().find(|l| &l.id == id))
     }
 
     fn get_current_list_mut(&mut self) -> Option<&mut ModList> {
-        self.mod_lists
-            .iter_mut()
-            .find(|l| l.id == self.current_list_id)
+        let current_id = self.current_list_id.clone();
+        current_id
+            .as_ref()
+            .and_then(|id| self.mod_lists.iter_mut().find(|l| &l.id == id))
     }
 
     fn filter_mods(&mut self) {
@@ -266,12 +283,14 @@ impl App {
                 .filter(|entry| {
                     entry.mod_name.to_lowercase().contains(&query)
                         || self
-                        .get_mod_details(&entry.mod_id)
-                        .map(|m| m.description.to_lowercase().contains(&query))
-                        .unwrap_or(false)
+                            .get_mod_details(&entry.mod_id)
+                            .map(|m| m.description.to_lowercase().contains(&query))
+                            .unwrap_or(false)
                 })
                 .cloned()
                 .collect();
+        } else {
+            self.filtered_mods.clear();
         }
     }
 
@@ -306,7 +325,7 @@ impl App {
 
     fn start_download(&mut self, mod_id: &str) {
         self.download_status
-            .insert(mod_id.to_string(), DownloadStatus::Downloading);
+            .insert(mod_id.to_string(), DownloadStatus::Queued);
         self.download_progress.insert(mod_id.to_string(), 0.0);
 
         if let Some(mod_info) = self.get_mod_details(mod_id) {
@@ -325,7 +344,9 @@ impl App {
                 }
                 Event::ModDetails(mod_info) => {
                     let mod_id = mod_info.id.clone();
-                    self.mod_cache.blocking_lock().insert(mod_id.clone(), mod_info);
+                    self.mod_cache
+                        .blocking_lock()
+                        .insert(mod_id.clone(), mod_info);
                     self.mods_being_loaded.remove(&mod_id);
                 }
                 Event::ModDetailsFailed { mod_id } => {
@@ -333,6 +354,10 @@ impl App {
                     self.mods_failed_loading.insert(mod_id);
                 }
                 Event::DownloadProgress { mod_id, progress } => {
+                    if progress > 0.0 {
+                        self.download_status
+                            .insert(mod_id.clone(), DownloadStatus::Downloading);
+                    }
                     self.download_progress.insert(mod_id, progress);
                 }
                 Event::DownloadComplete { mod_id, success } => {
@@ -407,16 +432,10 @@ impl App {
     }
 
     fn delete_current_list(&mut self) {
-        if self.mod_lists.len() > 1 {
-            let list_id = self.current_list_id.clone();
+        if let Some(list_id) = self.current_list_id.clone() {
             self.mod_lists.retain(|l| l.id != list_id);
-
-            if let Some(first_list) = self.mod_lists.first() {
-                self.current_list_id = first_list.id.clone();
-            }
-
+            self.current_list_id = None;
             self.selected_mod = None;
-
             let cm = self.config_manager.clone();
             self.runtime_handle.spawn(async move {
                 let _ = cm.delete_list(&list_id).await;
@@ -424,45 +443,67 @@ impl App {
         }
     }
 
-    fn share_current_list(&mut self) {
-        let Some(current_list) = self.get_current_list() else {
-            return;
-        };
+    fn export_current_list(&mut self) {
+        if let Some(current_list) = self.get_current_list() {
+            let list_id = current_list.id.clone();
+            let list_name = current_list.name.clone();
 
-        let default_name = format!("{}.mods", current_list.name);
+            if let Some(save_path) = FileDialog::new()
+                .add_filter("TOML Config", &["toml"])
+                .add_filter("Legacy Mod List", &["mods"])
+                .set_title("Export Mod List")
+                .set_file_name(&format!("{}.toml", list_name))
+                .save_file()
+            {
+                match save_path.extension().and_then(|s| s.to_str()) {
+                    Some("mods") => {
+                        let content = current_list
+                            .mods
+                            .iter()
+                            .map(|m| m.mod_id.as_str())
+                            .collect::<Vec<_>>()
+                            .join("\n");
 
-        let Some(save_path) = FileDialog::new()
-            .set_title("Export Mod List")
-            .set_file_name(&default_name)
-            .add_filter("Mod List", &["mods"])
-            .save_file()
-        else {
-            return;
-        };
-
-        // Eine Mod-ID pro Zeile
-        let content = current_list
-            .mods
-            .iter()
-            .map(|m| m.mod_id.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        if let Err(e) = std::fs::write(&save_path, content) {
-            log::warn!("Failed to export .mods file: {}", e);
+                        if let Err(e) = std::fs::write(&save_path, content) {
+                            log::warn!("Failed to export .mods file: {}", e);
+                        }
+                    }
+                    _ => {
+                        let cm = self.config_manager.clone();
+                        self.runtime_handle.spawn(async move {
+                            let source_path = cm.get_lists_dir().join(format!("{}.toml", list_id));
+                            let _ = tokio::fs::copy(&source_path, &save_path).await;
+                        });
+                    }
+                }
+            }
         }
     }
 
+    fn finalize_import(&mut self) {
+        if let Some(mut list) = self.pending_import_list.take() {
+            list.id = format!("list_{}", chrono::Utc::now().timestamp_millis());
+            list.name = self.import_name_input.trim().to_string();
 
-    fn import_mod_list(&mut self) {
-        let Some(path) = FileDialog::new()
-            .set_title("Import Mod List")
-            .add_filter("Mod List", &["mods"])
-            .pick_file()
-        else {
-            return;
-        };
+            if list.name.is_empty() {
+                list.name = "Unnamed List".to_string();
+            }
 
+            let cm = self.config_manager.clone();
+            let list_to_save = list.clone();
+            self.runtime_handle.spawn(async move {
+                let _ = cm.save_list(&list_to_save).await;
+            });
+
+            self.current_list_id = Some(list.id.clone());
+            self.mod_lists.push(list);
+
+            self.import_window_open = false;
+            self.import_name_input.clear();
+        }
+    }
+
+    fn import_legacy_list(&mut self, path: PathBuf) {
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
             Err(e) => {
@@ -502,7 +543,6 @@ impl App {
 
         self.invalidate_and_reload();
     }
-
 }
 
 impl eframe::App for App {
@@ -512,10 +552,18 @@ impl eframe::App for App {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.settings_window_open = false;
             self.search_window_open = false;
+            self.import_window_open = false;
+            self.pending_import_list = None;
         }
 
         if self.search_window_open && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
             self.perform_search();
+        }
+
+        if self.import_window_open {
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                self.finalize_import();
+            }
         }
 
         if self.settings_window_open {
@@ -571,6 +619,74 @@ impl eframe::App for App {
             self.settings_window_open = open;
         }
 
+        if self.import_window_open && self.pending_import_list.is_some() {
+            let overlay_id = egui::Id::new("import_overlay");
+            let overlay = egui::Area::new(overlay_id)
+                .order(egui::Order::Background)
+                .fixed_pos(egui::pos2(0.0, 0.0));
+
+            overlay.show(ctx, |ui| {
+                let screen_rect = ctx.screen_rect();
+                ui.painter()
+                    .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
+
+                if ui
+                    .interact(screen_rect, overlay_id.with("click"), egui::Sense::click())
+                    .clicked()
+                {
+                    self.import_window_open = false;
+                    self.pending_import_list = None;
+                }
+            });
+
+            let mod_count = self
+                .pending_import_list
+                .as_ref()
+                .map(|l| l.mods.len())
+                .unwrap_or(0);
+
+            let title = match self.active_action {
+                ListAction::Import => "Import Mod List",
+                ListAction::Duplicate => "Duplicate Mod List",
+            };
+
+            let mut should_finalize = false;
+            let mut should_close = false;
+            let mut open = self.import_window_open;
+
+            egui::Window::new(title)
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    ui.label("List Name:");
+                    ui.text_edit_singleline(&mut self.import_name_input);
+
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new(format!("Contains {} mods", mod_count)).weak());
+
+                    ui.add_space(12.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Confirm").clicked() {
+                            should_finalize = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            should_close = true;
+                        }
+                    });
+                });
+
+            if should_close || !open || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.import_window_open = false;
+                self.pending_import_list = None;
+            } else if should_finalize
+                || (ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !self.show_rename_input)
+            {
+                self.finalize_import();
+            }
+        }
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Minecraft Mod Downloader");
@@ -582,11 +698,14 @@ impl eframe::App for App {
                     .show_ui(ui, |ui| {
                         let mut changed = false;
                         for version in &self.minecraft_versions {
-                            if ui.selectable_value(
-                                &mut self.selected_version,
-                                version.id.clone(),
-                                &version.name,
-                            ).changed() {
+                            if ui
+                                .selectable_value(
+                                    &mut self.selected_version,
+                                    version.id.clone(),
+                                    &version.name,
+                                )
+                                .changed()
+                            {
                                 changed = true;
                             }
                         }
@@ -601,11 +720,14 @@ impl eframe::App for App {
                     .show_ui(ui, |ui| {
                         let mut changed = false;
                         for loader in &self.mod_loaders {
-                            if ui.selectable_value(
-                                &mut self.selected_loader,
-                                loader.id.clone(),
-                                &loader.name,
-                            ).changed() {
+                            if ui
+                                .selectable_value(
+                                    &mut self.selected_loader,
+                                    loader.id.clone(),
+                                    &loader.name,
+                                )
+                                .changed()
+                            {
                                 changed = true;
                             }
                         }
@@ -620,81 +742,123 @@ impl eframe::App for App {
                     self.previous_loader = self.selected_loader.clone();
                 }
 
-                if ui.button("⚙ Settings").clicked() {
-                    self.settings_window_open = true;
-                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("⚙ Settings").clicked() {
+                        self.settings_window_open = true;
+                    }
+                });
             });
         });
 
         egui::SidePanel::left("sidebar").show(ctx, |ui| {
-            ui.heading("Mod Lists");
-            ui.separator();
+            ui.add_space(4.0);
+            ui.add(
+                egui::TextEdit::singleline(&mut self.list_search_query)
+                    .hint_text("🔍 Search mod lists...")
+                    .desired_width(ui.available_width()),
+            );
 
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for list in &self.mod_lists {
-                    let selected = self.current_list_id == list.id;
-                    if ui
-                        .selectable_label(selected, format!("{} ({})", list.name, list.mods.len()))
-                        .clicked()
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                let button_width = ui.available_width() - 35.0;
+                if ui
+                    .add_sized([button_width, 25.0], egui::Button::new("➕ New List"))
+                    .clicked()
+                {
+                    let new_list = ModList {
+                        id: format!("list_{}", Utc::now().timestamp()),
+                        name: "New List".to_string(),
+                        created_at: Utc::now(),
+                        mods: Vec::new(),
+                    };
+
+                    let cm = self.config_manager.clone();
+                    let list_to_save = new_list.clone();
+                    self.runtime_handle.spawn(async move {
+                        let _ = cm.save_list(&list_to_save).await;
+                    });
+
+                    self.current_list_id = Some(new_list.id.clone());
+                    self.mod_lists.push(new_list);
+                }
+
+                if ui
+                    .add_sized([25.0, 25.0], egui::Button::new("📥"))
+                    .on_hover_text("Import")
+                    .clicked()
+                {
+                    if let Some(path) = FileDialog::new()
+                        .add_filter("TOML Config", &["toml"])
+                        .add_filter("Legacy Mod List", &["mods"])
+                        .pick_file()
                     {
-                        self.current_list_id = list.id.clone();
-                        self.selected_mod = None;
+                        match path.extension().and_then(|s| s.to_str()) {
+                            Some("toml") => {
+                                if let Ok(content) = std::fs::read_to_string(path) {
+                                    if let Ok(list) = toml::from_str::<ModList>(&content) {
+                                        self.import_name_input =
+                                            format!("{} (Imported)", list.name);
+                                        self.pending_import_list = Some(list);
+                                        self.active_action = ListAction::Import;
+                                        self.import_window_open = true;
+                                    }
+                                }
+                            }
+                            Some("mods") => {
+                                self.import_legacy_list(path);
+                            }
+                            _ => {}
+                        }
                     }
                 }
             });
 
+            ui.add_space(4.0);
             ui.separator();
 
-            if ui.button("➕ New List").clicked() {
-                let new_list = ModList {
-                    id: format!("list_{}", chrono::Utc::now().timestamp()),
-                    name: "New List".to_string(),
-                    created_at: Utc::now(),
-                    mods: Vec::new(),
-                };
+            let filtered_lists: Vec<_> = self
+                .mod_lists
+                .iter()
+                .filter(|list| {
+                    self.list_search_query.is_empty()
+                        || list
+                            .name
+                            .to_lowercase()
+                            .contains(&self.list_search_query.to_lowercase())
+                })
+                .collect();
 
-                let cm = self.config_manager.clone();
-                let list_to_save = new_list.clone();
-                self.runtime_handle.spawn(async move {
-                    let _ = cm.save_list(&list_to_save).await;
-                });
-
-                self.mod_lists.push(new_list);
-            }
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for list in filtered_lists {
+                    let selected = self.current_list_id.as_ref() == Some(&list.id);
+                    if ui
+                        .selectable_label(selected, format!("{} ({})", list.name, list.mods.len()))
+                        .clicked()
+                    {
+                        if selected {
+                            self.current_list_id = None;
+                        } else {
+                            self.current_list_id = Some(list.id.clone());
+                        }
+                        self.selected_mod = None;
+                    }
+                }
+            });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            if self.current_list_id.is_none() {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(100.0);
+                    ui.heading("No list selected");
+                    ui.label("Select a list from the sidebar or create a new one");
+                });
+                return;
+            }
+
+            let can_interact = self.current_list_id.is_some();
+
             ui.horizontal(|ui| {
-                if ui.button("⬇ Download All").clicked() {
-                    let mods_to_download: Vec<String> = self
-                        .filtered_mods
-                        .iter()
-                        .filter(|entry| {
-                            !self.is_mod_loading(&entry.mod_id)
-                                && self
-                                .download_status
-                                .get(&entry.mod_id)
-                                .map(|s| {
-                                    matches!(s, DownloadStatus::Idle | DownloadStatus::Failed)
-                                })
-                                .unwrap_or(true)
-                        })
-                        .map(|e| e.mod_id.clone())
-                        .collect();
-
-                    for mod_id in mods_to_download {
-                        self.start_download(&mod_id);
-                    }
-                }
-
-                if ui.button("📤 Share").clicked() {
-                    self.share_current_list();
-                }
-
-                if ui.button("📥 Import").clicked() {
-                    self.import_mod_list();
-                }
-
                 if self.show_rename_input {
                     ui.text_edit_singleline(&mut self.rename_list_input);
                     if ui.button("✔").clicked() {
@@ -713,17 +877,91 @@ impl eframe::App for App {
                         self.show_rename_input = false;
                     }
                 } else {
-                    if ui.button("✏ Rename").clicked() {
+                    if ui
+                        .add_enabled(can_interact, egui::Button::new("✏ Rename"))
+                        .clicked()
+                    {
                         self.show_rename_input = true;
                         if let Some(list) = self.get_current_list() {
                             self.rename_list_input = list.name.clone();
                         }
                     }
-                    if ui.button("🗑 Delete").clicked() {
+
+                    if ui
+                        .add_enabled(can_interact, egui::Button::new("👥 Duplicate"))
+                        .clicked()
+                    {
+                        let list_to_dup = self.get_current_list().cloned();
+
+                        if let Some(list) = list_to_dup {
+                            self.import_name_input = format!("{} (Copy)", list.name);
+                            self.pending_import_list = Some(list);
+                            self.active_action = ListAction::Duplicate;
+                            self.import_window_open = true;
+                        }
+                    }
+
+                    if ui
+                        .add_enabled(can_interact, egui::Button::new("🗑 Delete"))
+                        .clicked()
+                    {
                         self.delete_current_list();
                     }
                 }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add_enabled(can_interact, egui::Button::new("📤 Export"))
+                        .clicked()
+                    {
+                        self.export_current_list();
+                    }
+                });
             });
+
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(can_interact, egui::Button::new("➕ Add Mod"))
+                    .clicked()
+                {
+                    self.search_window_open = true;
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let mods_to_download: Vec<String> = self
+                        .filtered_mods
+                        .iter()
+                        .filter(|entry| {
+                            !self.is_mod_loading(&entry.mod_id)
+                                && self
+                                    .download_status
+                                    .get(&entry.mod_id)
+                                    .map(|s| {
+                                        matches!(s, DownloadStatus::Idle | DownloadStatus::Failed)
+                                    })
+                                    .unwrap_or(true)
+                                && self.check_mod_compatibility(&entry.mod_id).unwrap_or(false)
+                        })
+                        .map(|e| e.mod_id.clone())
+                        .collect();
+
+                    let has_downloadable = !mods_to_download.is_empty();
+                    if ui
+                        .add_enabled(
+                            can_interact && has_downloadable,
+                            egui::Button::new("⬇ Download All"),
+                        )
+                        .clicked()
+                    {
+                        for mod_id in mods_to_download {
+                            self.start_download(&mod_id);
+                        }
+                    }
+                });
+            });
+
             ui.separator();
 
             if let Some(list) = self.get_current_list() {
@@ -731,7 +969,7 @@ impl eframe::App for App {
                     ui.vertical_centered(|ui| {
                         ui.add_space(50.0);
                         ui.heading("No mods in this list");
-                        ui.label("Click '+' below to add mods");
+                        ui.label("Click 'Add Mod' above to get started");
                     });
                 }
 
@@ -784,15 +1022,15 @@ impl eframe::App for App {
                                     match status {
                                         DownloadStatus::Idle => {
                                             let button = egui::Button::new("Download");
-                                            let enabled = !is_loading && !has_failed && compatibility.unwrap_or(false);
-                                            let mut response =
-                                                ui.add_enabled(enabled, button);
+                                            let enabled = !is_loading
+                                                && !has_failed
+                                                && compatibility.unwrap_or(false);
+                                            let mut response = ui.add_enabled(enabled, button);
 
                                             if is_loading {
-                                                response = response
-                                                    .on_disabled_hover_text(
-                                                        "Loading mod details...",
-                                                    );
+                                                response = response.on_disabled_hover_text(
+                                                    "Loading mod details...",
+                                                );
                                             } else if has_failed {
                                                 response = response.on_disabled_hover_text(
                                                     "Failed to load mod details",
@@ -802,6 +1040,13 @@ impl eframe::App for App {
                                             if response.clicked() {
                                                 self.start_download(mod_id);
                                             }
+                                        }
+                                        DownloadStatus::Queued => {
+                                            ui.add(
+                                                egui::ProgressBar::new(0.0)
+                                                    .text("Waiting...")
+                                                    .desired_width(80.0),
+                                            );
                                         }
                                         DownloadStatus::Downloading => {
                                             let progress = self
@@ -829,12 +1074,7 @@ impl eframe::App for App {
                                 },
                             );
                         });
-
                         ui.separator();
-                    }
-
-                    if ui.selectable_label(false, "➕ Add Mod...").clicked() {
-                        self.search_window_open = true;
                     }
                 });
 
@@ -845,88 +1085,95 @@ impl eframe::App for App {
         });
 
         if self.search_window_open {
-            let overlay = egui::Area::new(egui::Id::new("search_overlay"))
-                .order(egui::Order::Background)
-                .fixed_pos(egui::pos2(0.0, 0.0));
+            if self.current_list_id.is_none() {
+                self.search_window_open = false;
+            } else {
+                let overlay = egui::Area::new(egui::Id::new("search_overlay"))
+                    .order(egui::Order::Background)
+                    .fixed_pos(egui::pos2(0.0, 0.0));
 
-            overlay.show(ctx, |ui| {
-                let screen_rect = ctx.screen_rect();
-                ui.painter()
-                    .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
-
-                if ui
-                    .interact(
+                overlay.show(ctx, |ui| {
+                    let screen_rect = ctx.screen_rect();
+                    ui.painter().rect_filled(
                         screen_rect,
-                        egui::Id::new("search_overlay_click"),
-                        egui::Sense::click(),
-                    )
-                    .clicked()
-                {
-                    self.search_window_open = false;
-                }
-            });
+                        0.0,
+                        egui::Color32::from_black_alpha(128),
+                    );
 
-            let mut open = self.search_window_open;
-            egui::Window::new("Search Mods")
-                .collapsible(false)
-                .resizable(true)
-                .default_size([600.0, 400.0])
-                .open(&mut open)
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.search_window_query)
-                                .hint_text("Search mod name or description...")
-                                .desired_width(400.0),
-                        );
-                        if ui.button("Search").clicked() {
-                            self.perform_search();
-                        }
-                    });
-                    ui.separator();
-
-                    let mut mod_to_add = None;
-
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        if self.search_window_results.is_empty() {
-                            ui.label(if self.search_window_query.is_empty() {
-                                "Enter a search query"
-                            } else {
-                                "No mods found"
-                            });
-                        } else {
-                            for mod_info in &self.search_window_results {
-                                ui.horizontal(|ui| {
-                                    ui.vertical(|ui| {
-                                        ui.label(&mod_info.name);
-                                        ui.add(
-                                            egui::Label::new(&mod_info.description)
-                                                .wrap_mode(egui::TextWrapMode::Wrap),
-                                        );
-                                        ui.label(format!(
-                                            "👤 {} | ⬇ {}",
-                                            mod_info.author, mod_info.download_count
-                                        ));
-                                    });
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            if ui.button("Add").clicked() {
-                                                mod_to_add = Some(mod_info.clone());
-                                            }
-                                        },
-                                    );
-                                });
-                                ui.separator();
-                            }
-                        }
-                    });
-
-                    if let Some(mod_info) = mod_to_add {
-                        self.add_mod_to_current_list(mod_info);
+                    if ui
+                        .interact(
+                            screen_rect,
+                            egui::Id::new("search_overlay_click"),
+                            egui::Sense::click(),
+                        )
+                        .clicked()
+                    {
+                        self.search_window_open = false;
                     }
                 });
-            self.search_window_open = open;
+
+                let mut open = self.search_window_open;
+                egui::Window::new("Search Mods")
+                    .collapsible(false)
+                    .resizable(true)
+                    .default_size([600.0, 400.0])
+                    .open(&mut open)
+                    .show(ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.search_window_query)
+                                    .hint_text("Search mod name or description...")
+                                    .desired_width(400.0),
+                            );
+                            if ui.button("Search").clicked() {
+                                self.perform_search();
+                            }
+                        });
+                        ui.separator();
+
+                        let mut mod_to_add = None;
+
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            if self.search_window_results.is_empty() {
+                                ui.label(if self.search_window_query.is_empty() {
+                                    "Enter a search query"
+                                } else {
+                                    "No mods found"
+                                });
+                            } else {
+                                for mod_info in &self.search_window_results {
+                                    ui.horizontal(|ui| {
+                                        ui.vertical(|ui| {
+                                            ui.label(&mod_info.name);
+                                            ui.add(
+                                                egui::Label::new(&mod_info.description)
+                                                    .wrap_mode(egui::TextWrapMode::Wrap),
+                                            );
+                                            ui.label(format!(
+                                                "👤 {} | ⬇ {}",
+                                                mod_info.author, mod_info.download_count
+                                            ));
+                                        });
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui.button("Add").clicked() {
+                                                    mod_to_add = Some(mod_info.clone());
+                                                }
+                                            },
+                                        );
+                                    });
+                                    ui.separator();
+                                }
+                            }
+                        });
+
+                        if let Some(mod_info) = mod_to_add {
+                            self.add_mod_to_current_list(mod_info);
+                        }
+                    });
+                self.search_window_open = open;
+            }
         }
 
         ctx.request_repaint_after(std::time::Duration::from_millis(50));
@@ -946,6 +1193,10 @@ impl eframe::App for App {
             self.runtime_handle.block_on(async {
                 let _ = cm.save_config(&config).await;
                 let _ = cm.save_list(&list).await;
+            });
+        } else {
+            self.runtime_handle.block_on(async {
+                let _ = cm.save_config(&config).await;
             });
         }
     }

@@ -1,10 +1,12 @@
-pub mod mod_src;
-
-pub use mod_src::ModProvider;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
+
+pub mod mod_src;
+
+pub use mod_src::ModProvider;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModInfo {
@@ -22,6 +24,7 @@ pub struct ModInfo {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DownloadStatus {
     Idle,
+    Queued,
     Downloading,
     Complete,
     Failed,
@@ -58,7 +61,7 @@ pub struct ModList {
 pub struct AppConfig {
     pub selected_version: String,
     pub selected_loader: String,
-    pub current_list_id: String,
+    pub current_list_id: Option<String>,
     pub download_dir: String,
 }
 
@@ -83,14 +86,8 @@ pub enum Event {
     SearchResults(Vec<ModInfo>),
     ModDetails(ModInfo),
     ModDetailsFailed { mod_id: String },
-    DownloadProgress {
-        mod_id: String,
-        progress: f32,
-    },
-    DownloadComplete {
-        mod_id: String,
-        success: bool,
-    },
+    DownloadProgress { mod_id: String, progress: f32 },
+    DownloadComplete { mod_id: String, success: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -165,7 +162,27 @@ impl ModCache {
     }
 
     pub fn clear_expired(&mut self) {
-        self.cache
-            .retain(|_, v| !v.is_expired(self.max_age_hours));
+        self.cache.retain(|_, v| !v.is_expired(self.max_age_hours));
+    }
+}
+
+#[derive(Clone)]
+pub struct ConnectionLimiter {
+    semaphore: Arc<Semaphore>,
+}
+
+impl ConnectionLimiter {
+    pub fn new(max_connections: usize) -> Self {
+        Self {
+            semaphore: Arc::new(Semaphore::new(max_connections)),
+        }
+    }
+
+    pub async fn acquire(&self, slots: u32) -> tokio::sync::OwnedSemaphorePermit {
+        self.semaphore
+            .clone()
+            .acquire_many_owned(slots)
+            .await
+            .expect("Semaphore closed")
     }
 }

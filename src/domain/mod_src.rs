@@ -17,9 +17,7 @@ pub trait ModProvider: Send + Sync {
         loader: &str,
     ) -> anyhow::Result<ModInfo>;
 
-    async fn get_minecraft_versions(
-        &self,
-    ) -> anyhow::Result<Vec<MinecraftVersion>>;
+    async fn get_minecraft_versions(&self) -> anyhow::Result<Vec<MinecraftVersion>>;
 
     async fn get_mod_loaders(&self) -> anyhow::Result<Vec<ModLoader>>;
 
