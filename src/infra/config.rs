@@ -89,7 +89,7 @@ impl ConfigManager {
         let config = AppConfig {
             selected_version: "1.21.11".to_string(),
             selected_loader: "fabric".to_string(),
-            current_list_id: "main".to_string(),
+            current_list_id: None,
             download_dir: default_download_dir,
         };
         self.save_config(&config).await?;
