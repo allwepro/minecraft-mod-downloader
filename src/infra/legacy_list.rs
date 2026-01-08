@@ -1,43 +1,16 @@
-use crate::domain::{ConnectionLimiter, Event, ModProvider};
+use crate::domain::{Event, ModInfo, ModService};
 use anyhow::Result;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
-
-#[derive(Default)]
-pub struct SlugCache {
-    slug_to_id: HashMap<String, String>,
-    id_to_slug: HashMap<String, String>,
-}
-
-impl SlugCache {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn get_id(&self, slug: &str) -> Option<&str> {
-        self.slug_to_id.get(slug).map(|s| s.as_str())
-    }
-
-    pub fn get_slug(&self, id: &str) -> Option<&str> {
-        self.id_to_slug.get(id).map(|s| s.as_str())
-    }
-
-    pub fn insert(&mut self, slug: String, id: String) {
-        self.slug_to_id.insert(slug.clone(), id.clone());
-        self.id_to_slug.insert(id, slug);
-    }
-}
+use tokio::sync::mpsc;
 
 pub struct LegacyListService {
-    pub provider: Arc<dyn ModProvider>,
-    pub limiter: Arc<ConnectionLimiter>,
+    mod_service: Arc<ModService>,
 }
 
 impl LegacyListService {
-    pub fn new(provider: Arc<dyn ModProvider>, limiter: Arc<ConnectionLimiter>) -> Self {
-        Self { provider, limiter }
+    pub fn new(mod_service: Arc<ModService>) -> Self {
+        Self { mod_service }
     }
 
     pub async fn import_legacy_list(
@@ -80,13 +53,14 @@ impl LegacyListService {
                 })
                 .await;
 
-            let _permit = self.limiter.acquire(1).await;
             match self
-                .provider
-                .fetch_mod_details(slug, &version, &loader)
+                .mod_service
+                .get_mod_by_slug(slug, &version, &loader)
                 .await
             {
-                Ok(mod_info) => successful_mods.push(mod_info),
+                Ok(info) => {
+                    successful_mods.push(info);
+                }
                 Err(e) => {
                     log::warn!("Failed to resolve slug '{}': {}", slug, e);
                     failed.push(slug.clone());
@@ -126,18 +100,18 @@ impl LegacyListService {
                 })
                 .await;
 
-            let _permit = self.limiter.acquire(1).await;
             match self
-                .provider
-                .fetch_mod_details(mod_id, &version, &loader)
+                .mod_service
+                .get_mod_by_id(mod_id, &version, &loader)
                 .await
             {
                 Ok(mod_info) => {
-                    if mod_info.slug.is_empty() {
+                    let info_ref = mod_info.as_ref();
+                    if info_ref.slug.is_empty() {
                         warnings.push(format!("Mod '{}' has no slug, skipping", mod_id));
                         failed.push(mod_id.clone());
                     } else {
-                        slugs.push(mod_info.slug.clone());
+                        slugs.push(info_ref.slug.clone());
                         successful_mods.push(mod_info);
                     }
                 }

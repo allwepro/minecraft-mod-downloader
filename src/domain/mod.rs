@@ -8,6 +8,10 @@ pub mod mod_src;
 
 pub use mod_src::ModProvider;
 
+pub mod mod_service;
+
+pub use mod_service::ModService;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModInfo {
     pub id: String,
@@ -78,7 +82,7 @@ pub enum Command {
         loader: String,
     },
     DownloadMod {
-        mod_info: ModInfo,
+        mod_info: Arc<ModInfo>,
         download_dir: String,
     },
     LegacyListImport {
@@ -95,8 +99,8 @@ pub enum Command {
 }
 
 pub enum Event {
-    SearchResults(Vec<ModInfo>),
-    ModDetails(ModInfo),
+    SearchResults(Vec<Arc<ModInfo>>),
+    ModDetails(Arc<ModInfo>),
     ModDetailsFailed {
         mod_id: String,
     },
@@ -114,7 +118,7 @@ pub enum Event {
         message: String,
     },
     LegacyListComplete {
-        successful: Vec<ModInfo>,
+        successful: Vec<Arc<ModInfo>>,
         failed: Vec<String>,
         warnings: Vec<String>,
         is_import: bool,
@@ -126,13 +130,13 @@ pub enum Event {
 }
 
 #[derive(Clone, Debug)]
-pub struct CachedModInfo {
-    pub info: ModInfo,
+struct CachedModInfo {
+    pub info: Arc<ModInfo>,
     pub cached_at: DateTime<Utc>,
 }
 
 impl CachedModInfo {
-    pub fn new(info: ModInfo) -> Self {
+    pub fn new(info: Arc<ModInfo>) -> Self {
         Self {
             info,
             cached_at: Utc::now(),
@@ -146,22 +150,25 @@ impl CachedModInfo {
     }
 }
 
-pub struct ModCache {
-    pub cache: HashMap<String, CachedModInfo>,
+#[derive(Clone)]
+pub struct ModInfoPool {
+    cache: HashMap<String, CachedModInfo>,
+    slug_to_id: HashMap<String, String>,
     max_size: usize,
     max_age_hours: i64,
 }
 
-impl ModCache {
+impl ModInfoPool {
     pub fn new(max_size: usize, max_age_hours: i64) -> Self {
         Self {
             cache: HashMap::new(),
+            slug_to_id: HashMap::new(),
             max_size,
             max_age_hours,
         }
     }
 
-    pub fn get(&self, mod_id: &str) -> Option<ModInfo> {
+    pub fn get(&self, mod_id: &str) -> Option<Arc<ModInfo>> {
         self.cache.get(mod_id).and_then(|cached| {
             if cached.is_expired(self.max_age_hours) {
                 None
@@ -171,11 +178,32 @@ impl ModCache {
         })
     }
 
-    pub fn insert(&mut self, mod_id: String, info: ModInfo) {
+    pub fn get_by_slug(&self, slug: &str) -> Option<Arc<ModInfo>> {
+        self.slug_to_id.get(slug).and_then(|id| self.get(id))
+    }
+
+    pub fn insert(&mut self, info: ModInfo) -> Arc<ModInfo> {
+        let id = info.id.clone();
+        let slug = info.slug.clone();
+        let arc_info = Arc::new(info);
+
+        if !slug.is_empty() {
+            self.slug_to_id.insert(slug, id.clone());
+        }
+
+        if let Some(existing) = self.cache.get(&id) {
+            if !existing.is_expired(self.max_age_hours) {
+                return existing.info.clone();
+            }
+        }
+
         if self.cache.len() >= self.max_size {
             self.evict_oldest();
         }
-        self.cache.insert(mod_id, CachedModInfo::new(info));
+
+        self.cache
+            .insert(id.clone(), CachedModInfo::new(arc_info.clone()));
+        arc_info
     }
 
     pub fn contains_valid(&self, mod_id: &str) -> bool {
@@ -185,6 +213,11 @@ impl ModCache {
             .unwrap_or(false)
     }
 
+    pub fn clear(&mut self) {
+        self.cache.clear();
+        self.slug_to_id.clear();
+    }
+
     fn evict_oldest(&mut self) {
         if let Some(oldest_key) = self
             .cache
@@ -192,7 +225,9 @@ impl ModCache {
             .min_by_key(|(_, v)| v.cached_at)
             .map(|(k, _)| k.clone())
         {
-            self.cache.remove(&oldest_key);
+            if let Some(cached) = self.cache.remove(&oldest_key) {
+                self.slug_to_id.remove(&cached.info.slug);
+            }
         }
     }
 
