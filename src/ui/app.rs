@@ -85,20 +85,17 @@ impl App {
         let connection_limiter = Arc::new(ConnectionLimiter::new(5));
         let limiter_clone = connection_limiter.clone();
 
-            let mod_pool = Arc::new(Mutex::new(ModInfoPool::new(500, 1)));
-
+        let mod_pool = Arc::new(Mutex::new(ModInfoPool::new(500, 1)));
         let pool_clone_for_spawn = mod_pool.clone();
 
-
-
         let mod_service = Arc::new(ModService::new(
-
             provider_clone.clone(),
-
             connection_limiter,
-
             pool_clone_for_spawn.clone(),
         ));
+        let mod_service_for_spawn = mod_service.clone();
+
+        let legacy_service = Arc::new(LegacyListService::new(mod_service.clone()));
         let legacy_service_for_spawn = legacy_service.clone();
 
         runtime_handle.spawn(async move {
@@ -107,6 +104,7 @@ impl App {
                 let event_tx = event_tx.clone();
                 let limiter = limiter_clone.clone();
                 let legacy_service = legacy_service_for_spawn.clone();
+                let mod_service = mod_service_for_spawn.clone();
 
                 match cmd {
                     Command::SearchMods {
@@ -116,10 +114,14 @@ impl App {
                     } => {
                         tokio::spawn(async move {
                             let _permit = limiter.acquire(1).await;
+
                             if let Ok(results) =
                                 provider.search_mods(&query, &version, &loader).await
                             {
-                                let _ = event_tx.send(Event::SearchResults(results)).await;
+                                let cached_results =
+                                    mod_service.cache_search_results(results).await;
+
+                                let _ = event_tx.send(Event::SearchResults(cached_results)).await;
                             }
                         });
                     }
@@ -129,10 +131,9 @@ impl App {
                         loader,
                     } => {
                         tokio::spawn(async move {
-                            let _permit = limiter.acquire(1).await;
-                            match provider.fetch_mod_details(&mod_id, &version, &loader).await {
-                                Ok(details) => {
-                                    let _ = event_tx.send(Event::ModDetails(details)).await;
+                            match mod_service.get_mod_by_id(&mod_id, &version, &loader).await {
+                                Ok(info) => {
+                                    let _ = event_tx.send(Event::ModDetails(info)).await;
                                 }
                                 Err(e) => {
                                     log::warn!("Failed to fetch mod details for {}: {}", mod_id, e);
@@ -265,10 +266,8 @@ impl App {
             })
         };
 
-        let mod_cache = Arc::new(Mutex::new(ModCache::new(500, 1)));
-
         Self {
-            provider,
+            mod_service,
             config_manager,
             minecraft_versions,
             mod_loaders,
@@ -292,7 +291,6 @@ impl App {
             rename_list_input: String::new(),
             show_rename_input: false,
             settings_window_open: false,
-            mod_cache,
             mods_being_loaded: HashSet::new(),
             mods_failed_loading: HashSet::new(),
             download_dir,
@@ -309,7 +307,7 @@ impl App {
     }
 
     fn invalidate_and_reload(&mut self) {
-        self.mod_cache.blocking_lock().cache.clear();
+        self.mod_service.clear_cache();
         self.mods_being_loaded.clear();
         self.mods_failed_loading.clear();
 
@@ -357,8 +355,8 @@ impl App {
         }
     }
 
-    fn get_mod_details(&self, mod_id: &str) -> Option<ModInfo> {
-        self.mod_cache.blocking_lock().get(mod_id)
+    fn get_mod_details(&self, mod_id: &str) -> Option<Arc<ModInfo>> {
+        self.mod_service.get_cached_mod_blocking(mod_id)
     }
 
     fn is_mod_loading(&self, mod_id: &str) -> bool {
@@ -369,12 +367,11 @@ impl App {
         if self.mods_being_loaded.contains(mod_id) {
             return;
         }
-
         if self.mods_failed_loading.contains(mod_id) {
             return;
         }
 
-        if self.mod_cache.blocking_lock().contains_valid(mod_id) {
+        if self.mod_service.contains_valid_blocking(mod_id) {
             return;
         }
 
@@ -407,9 +404,6 @@ impl App {
                 }
                 Event::ModDetails(mod_info) => {
                     let mod_id = mod_info.id.clone();
-                    self.mod_cache
-                        .blocking_lock()
-                        .insert(mod_id.clone(), mod_info);
                     self.mods_being_loaded.remove(&mod_id);
                 }
                 Event::ModDetailsFailed { mod_id } => {
@@ -512,7 +506,7 @@ impl App {
         }
     }
 
-    fn add_mod_to_current_list(&mut self, mod_info: ModInfo) {
+    fn add_mod_to_current_list(&mut self, mod_info: Arc<ModInfo>) {
         if let Some(current_list) = self.get_current_list_mut() {
             if !current_list.mods.iter().any(|e| e.mod_id == mod_info.id) {
                 current_list.mods.push(ModEntry {
@@ -522,9 +516,6 @@ impl App {
                 });
                 self.download_status
                     .insert(mod_info.id.clone(), DownloadStatus::Idle);
-                self.mod_cache
-                    .blocking_lock()
-                    .insert(mod_info.id.clone(), mod_info);
             }
         }
         self.search_window_open = false;
@@ -634,10 +625,8 @@ impl eframe::App for App {
             self.perform_search();
         }
 
-        if self.import_window_open {
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                self.finalize_import();
-            }
+        if self.import_window_open && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            self.finalize_import();
         }
 
         if self.settings_window_open {
@@ -881,8 +870,8 @@ impl eframe::App for App {
                     let entries = mods
                         .into_iter()
                         .map(|m| ModEntry {
-                            mod_id: m.id,
-                            mod_name: m.name,
+                            mod_id: m.id.clone(),
+                            mod_name: m.name.clone(),
                             added_at: Utc::now(),
                         })
                         .collect();
@@ -1005,8 +994,7 @@ impl eframe::App for App {
                     .clicked()
                 {
                     if let Some(path) = FileDialog::new()
-                        .add_filter("TOML Config", &["toml"])
-                        .add_filter("Legacy Mod List", &["mods"])
+                        .add_filter("Mod List Files", &["toml", "mods"])
                         .pick_file()
                     {
                         match path.extension().and_then(|s| s.to_str()) {
