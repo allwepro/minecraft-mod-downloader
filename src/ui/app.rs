@@ -79,20 +79,10 @@ impl App {
         let (cmd_tx, mut cmd_rx) = mpsc::channel::<Command>(100);
         let (event_tx, event_rx) = mpsc::channel::<Event>(100);
 
-        let provider: Arc<dyn ModProvider> = Arc::new(ModrinthProvider::new());
-        let provider_clone = provider.clone();
+        let api_service = Arc::new(ApiService::new());
+        let api_service_for_spawn = api_service.clone();
 
-        let connection_limiter = Arc::new(ConnectionLimiter::new(5));
-        let limiter_clone = connection_limiter.clone();
-
-        let mod_pool = Arc::new(Mutex::new(ModInfoPool::new(500, 1)));
-        let pool_clone_for_spawn = mod_pool.clone();
-
-        let mod_service = Arc::new(ModService::new(
-            provider_clone.clone(),
-            connection_limiter,
-            pool_clone_for_spawn.clone(),
-        ));
+        let mod_service = Arc::new(ModService::new(api_service.clone()));
         let mod_service_for_spawn = mod_service.clone();
 
         let legacy_service = Arc::new(LegacyListService::new(mod_service.clone()));
@@ -100,11 +90,10 @@ impl App {
 
         runtime_handle.spawn(async move {
             while let Some(cmd) = cmd_rx.recv().await {
-                let provider = provider_clone.clone();
                 let event_tx = event_tx.clone();
-                let limiter = limiter_clone.clone();
-                let legacy_service = legacy_service_for_spawn.clone();
-                let mod_service = mod_service_for_spawn.clone();
+                let api_svc = api_service_for_spawn.clone();
+                let legacy_svc = legacy_service_for_spawn.clone();
+                let mod_svc = mod_service_for_spawn.clone();
 
                 match cmd {
                     Command::SearchMods {
@@ -113,13 +102,14 @@ impl App {
                         loader,
                     } => {
                         tokio::spawn(async move {
-                            let _permit = limiter.acquire(1).await;
+                            let _permit = api_svc.limiter.acquire(1).await;
 
-                            if let Ok(results) =
-                                provider.search_mods(&query, &version, &loader).await
+                            if let Ok(results) = api_svc
+                                .provider
+                                .search_mods(&query, &version, &loader)
+                                .await
                             {
-                                let cached_results =
-                                    mod_service.cache_search_results(results).await;
+                                let cached_results = mod_svc.cache_search_results(results).await;
 
                                 let _ = event_tx.send(Event::SearchResults(cached_results)).await;
                             }
@@ -131,7 +121,7 @@ impl App {
                         loader,
                     } => {
                         tokio::spawn(async move {
-                            match mod_service.get_mod_by_id(&mod_id, &version, &loader).await {
+                            match mod_svc.get_mod_by_id(&mod_id, &version, &loader).await {
                                 Ok(info) => {
                                     let _ = event_tx.send(Event::ModDetails(info)).await;
                                 }
@@ -147,7 +137,7 @@ impl App {
                         download_dir,
                     } => {
                         tokio::spawn(async move {
-                            let _permit = limiter.acquire(3).await;
+                            let _permit = api_svc.limiter.acquire(3).await;
 
                             let mod_id = mod_info.id.clone();
                             let filename = format!("{}.jar", mod_info.name.replace(" ", "_"));
@@ -156,7 +146,8 @@ impl App {
                             let tx_progress = event_tx.clone();
                             let mod_id_clone = mod_id.clone();
 
-                            let result = provider
+                            let result = api_svc
+                                .provider
                                 .download_mod(
                                     &mod_info.download_url,
                                     &destination,
@@ -183,7 +174,7 @@ impl App {
                         loader,
                     } => {
                         tokio::spawn(async move {
-                            legacy_service
+                            legacy_svc
                                 .import_legacy_list(path, version, loader, event_tx)
                                 .await;
                         });
@@ -195,7 +186,7 @@ impl App {
                         loader,
                     } => {
                         tokio::spawn(async move {
-                            legacy_service
+                            legacy_svc
                                 .export_legacy_list(path, mod_ids, version, loader, event_tx)
                                 .await;
                         });
@@ -217,7 +208,7 @@ impl App {
             mod_loaders,
         ) = {
             let cm = config_manager.clone();
-            let prov = provider.clone();
+            let prov = api_service.provider.clone();
 
             runtime_handle.block_on(async {
                 let _ = cm.ensure_dirs().await;
