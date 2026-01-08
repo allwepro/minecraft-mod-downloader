@@ -1,5 +1,7 @@
 use crate::adapters::ModrinthProvider;
 use crate::domain::*;
+use crate::domain::{AppConfig, ModList, ModService};
+use crate::infra::LegacyListService;
 use crate::infra::*;
 use crate::ui::app::ListAction::Import;
 use chrono::Utc;
@@ -33,7 +35,7 @@ enum LegacyState {
 }
 
 pub struct App {
-    provider: Arc<dyn ModProvider>,
+    mod_service: Arc<ModService>,
     config_manager: Arc<ConfigManager>,
     minecraft_versions: Vec<MinecraftVersion>,
     mod_loaders: Vec<ModLoader>,
@@ -53,11 +55,10 @@ pub struct App {
     event_rx: mpsc::Receiver<Event>,
     search_window_open: bool,
     search_window_query: String,
-    search_window_results: Vec<ModInfo>,
+    search_window_results: Vec<Arc<ModInfo>>,
     rename_list_input: String,
     show_rename_input: bool,
     settings_window_open: bool,
-    mod_cache: Arc<Mutex<ModCache>>,
     mods_being_loaded: HashSet<String>,
     mods_failed_loading: HashSet<String>,
     download_dir: String,
@@ -68,7 +69,7 @@ pub struct App {
     import_name_input: String,
     active_action: ListAction,
     legacy_state: LegacyState,
-    pending_legacy_mods: Option<Vec<ModInfo>>,
+    pending_legacy_mods: Option<Vec<Arc<ModInfo>>>,
     legacy_service: Arc<LegacyListService>,
 }
 
@@ -84,9 +85,19 @@ impl App {
         let connection_limiter = Arc::new(ConnectionLimiter::new(5));
         let limiter_clone = connection_limiter.clone();
 
-        let legacy_service = Arc::new(LegacyListService::new(
-            provider.clone(),
-            connection_limiter.clone(),
+            let mod_pool = Arc::new(Mutex::new(ModInfoPool::new(500, 1)));
+
+        let pool_clone_for_spawn = mod_pool.clone();
+
+
+
+        let mod_service = Arc::new(ModService::new(
+
+            provider_clone.clone(),
+
+            connection_limiter,
+
+            pool_clone_for_spawn.clone(),
         ));
         let legacy_service_for_spawn = legacy_service.clone();
 
