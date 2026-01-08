@@ -1,10 +1,43 @@
-/*
-initialize logging
-initialize GUI framework (Egui/Iced)
-build appstate
-wire dependencies: repo, downloader, service
- */
+mod adapters;
+mod domain;
+mod infra;
+mod ui;
 
-fn main() {
-    println!("Hello World!");
+use eframe::NativeOptions;
+use egui::IconData;
+use tokio::runtime::Runtime;
+use ui::App;
+
+fn main() -> eframe::Result<()> {
+    env_logger::init();
+
+    let runtime = Runtime::new().expect("Failed to create Tokio runtime");
+
+    let icon_path = "assets/icon.png";
+    let image = image::open(icon_path).expect("Failed to open image");
+    let image_rgba = image.to_rgba8();
+    let (width, height) = image_rgba.dimensions();
+
+    let icon_data = IconData {
+        rgba: image_rgba.into_raw(),
+        width,
+        height,
+    };
+
+    let options = NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1200.0, 700.0])
+            .with_title("Minecraft Mod Downloader")
+            .with_icon(icon_data),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "Minecraft Mod Downloader",
+        options,
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::new(App::new(cc, runtime)) as Box<dyn eframe::App>)
+        }),
+    )
 }
