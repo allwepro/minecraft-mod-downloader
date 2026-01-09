@@ -1,0 +1,866 @@
+use crate::app::AppState;
+use eframe::egui;
+use rfd::FileDialog;
+
+use crate::app::app_state::{LegacyState, ListAction};
+use crate::domain::{DownloadStatus, ModEntry, ModList};
+
+pub struct App {
+    state: AppState,
+    list_search_query: String,
+    search_query: String,
+    selected_mod: Option<usize>,
+    search_window_open: bool,
+    search_window_query: String,
+    rename_list_input: String,
+    show_rename_input: bool,
+    settings_window_open: bool,
+    import_window_open: bool,
+    import_name_input: String,
+    active_action: ListAction,
+    pending_import_list: Option<ModList>,
+}
+
+impl App {
+    pub fn new(_cc: &eframe::CreationContext<'_>, runtime: tokio::runtime::Runtime) -> Self {
+        let state = AppState::new(runtime);
+
+        Self {
+            state,
+            list_search_query: String::new(),
+            search_query: String::new(),
+            selected_mod: None,
+            search_window_open: false,
+            search_window_query: String::new(),
+            rename_list_input: String::new(),
+            show_rename_input: false,
+            settings_window_open: false,
+            import_window_open: false,
+            import_name_input: String::new(),
+            active_action: ListAction::Import,
+            pending_import_list: None,
+        }
+    }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.state.process_events();
+
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.settings_window_open = false;
+            self.search_window_open = false;
+            self.import_window_open = false;
+            self.pending_import_list = None;
+        }
+
+        if self.search_window_open && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            self.state.perform_search(&self.search_window_query);
+        }
+
+        if self.import_window_open && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            self.finalize_import_logic();
+        }
+
+        self.draw_settings_window(ctx);
+        self.draw_import_window(ctx);
+        self.draw_legacy_window(ctx);
+        self.draw_top_panel(ctx);
+        self.draw_sidebar(ctx);
+        self.draw_main_panel(ctx);
+        self.draw_search_window(ctx);
+
+        ctx.request_repaint_after(std::time::Duration::from_millis(50));
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.state.persist_config_on_exit();
+    }
+}
+
+impl App {
+    fn draw_settings_window(&mut self, ctx: &egui::Context) {
+        if !self.settings_window_open {
+            return;
+        }
+
+        let overlay = egui::Area::new(egui::Id::new("settings_overlay"))
+            .order(egui::Order::Background)
+            .fixed_pos(egui::pos2(0.0, 0.0));
+
+        overlay.show(ctx, |ui| {
+            let screen_rect = ctx.screen_rect();
+            ui.painter()
+                .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
+
+            if ui
+                .interact(
+                    screen_rect,
+                    egui::Id::new("settings_overlay_click"),
+                    egui::Sense::click(),
+                )
+                .clicked()
+            {
+                self.settings_window_open = false;
+            }
+        });
+
+        let mut open = self.settings_window_open;
+        egui::Window::new("Settings")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.label("Download Directory:");
+                ui.horizontal(|ui| {
+                    let mut dir = self.state.download_dir.clone();
+                    ui.text_edit_singleline(&mut dir);
+                    if ui.button("Browse...").clicked() {
+                        if let Some(path) = FileDialog::new()
+                            .set_title("Select Download Directory")
+                            .pick_folder()
+                        {
+                            self.state
+                                .update_download_dir(path.to_string_lossy().to_string());
+                        }
+                    }
+                });
+            });
+        self.settings_window_open = open;
+    }
+
+    fn draw_import_window(&mut self, ctx: &egui::Context) {
+        if !(self.import_window_open && self.pending_import_list.is_some()) {
+            return;
+        }
+
+        let overlay_id = egui::Id::new("import_overlay");
+        let overlay = egui::Area::new(overlay_id)
+            .order(egui::Order::Background)
+            .fixed_pos(egui::pos2(0.0, 0.0));
+
+        overlay.show(ctx, |ui| {
+            let screen_rect = ctx.screen_rect();
+            ui.painter()
+                .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
+
+            if ui
+                .interact(screen_rect, overlay_id.with("click"), egui::Sense::click())
+                .clicked()
+            {
+                self.import_window_open = false;
+                self.pending_import_list = None;
+            }
+        });
+
+        let mod_count = self
+            .pending_import_list
+            .as_ref()
+            .map(|l| l.mods.len())
+            .unwrap_or(0);
+
+        let title = match self.active_action {
+            ListAction::Import => "Import Mod List",
+            ListAction::Duplicate => "Duplicate Mod List",
+        };
+
+        let mut should_finalize = false;
+        let mut should_close = false;
+        let mut open = self.import_window_open;
+
+        egui::Window::new(title)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.label("List Name:");
+                ui.text_edit_singleline(&mut self.import_name_input);
+
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new(format!("Contains {} mods", mod_count)).weak());
+
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    if ui.button("Confirm").clicked() {
+                        should_finalize = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        should_close = true;
+                    }
+                });
+            });
+
+        if should_close || !open || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.import_window_open = false;
+            self.pending_import_list = None;
+        } else if should_finalize
+            || (ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !self.show_rename_input)
+        {
+            self.finalize_import_logic();
+        }
+    }
+
+    fn finalize_import_logic(&mut self) {
+        if let Some(mut list) = self.pending_import_list.take() {
+            list.id = format!("list_{}", chrono::Utc::now().timestamp_millis());
+            list.name = self.import_name_input.trim().to_string();
+
+            if list.name.is_empty() {
+                list.name = "Unnamed List".to_string();
+            }
+
+            self.state.finalize_import(list);
+
+            self.import_window_open = false;
+            self.import_name_input.clear();
+        }
+    }
+
+    fn draw_legacy_window(&mut self, ctx: &egui::Context) {
+        if self.state.legacy_state == LegacyState::Idle {
+            return;
+        }
+
+        let mut is_open = true;
+        let overlay = egui::Area::new(egui::Id::new("legacy_overlay"))
+            .order(egui::Order::Background)
+            .fixed_pos(egui::pos2(0.0, 0.0));
+
+        overlay.show(ctx, |ui| {
+            let screen_rect = ctx.screen_rect();
+            ui.painter()
+                .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
+
+            if ui
+                .interact(
+                    screen_rect,
+                    egui::Id::new("legacy_overlay_click"),
+                    egui::Sense::click(),
+                )
+                .clicked()
+            {
+                if matches!(self.state.legacy_state, LegacyState::Complete { .. }) {
+                    is_open = false;
+                }
+            }
+        });
+
+        let mut should_import = false;
+
+        let window_title = match &self.state.legacy_state {
+            LegacyState::InProgress { .. } => "Processing...",
+            _ => "Operation Complete",
+        };
+
+        egui::Window::new(window_title)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .open(&mut is_open)
+            .show(ctx, |ui| {
+                ui.set_min_width(300.0);
+
+                match &self.state.legacy_state {
+                    LegacyState::InProgress {
+                        current,
+                        total,
+                        message,
+                    } => {
+                        let progress = if *total > 0 {
+                            *current as f32 / *total as f32
+                        } else {
+                            0.0
+                        };
+                        let current_val = *current;
+                        let total_val = *total;
+                        let msg = message.clone();
+
+                        ui.vertical_centered(|ui| {
+                            ui.add_space(10.0);
+                            ui.add(egui::Spinner::new().size(32.0));
+                            ui.add_space(10.0);
+                            ui.label(msg);
+                            ui.add(
+                                egui::ProgressBar::new(progress)
+                                    .text(format!("{}/{}", current_val, total_val)),
+                            );
+                            ui.add_space(10.0);
+                        });
+                    }
+                    LegacyState::Complete {
+                        successful,
+                        failed,
+                        warnings,
+                        is_import,
+                    } => {
+                        let success_count = successful.len();
+                        let fail_count = failed.len();
+                        let warn_count = warnings.len();
+                        let is_importable = self.state.pending_legacy_mods.is_some();
+
+                        ui.vertical(|ui| {
+                            ui.heading(if *is_import {
+                                "Import Results"
+                            } else {
+                                "Export Results"
+                            });
+                            ui.label(format!("✅ Success: {}", success_count));
+
+                            if fail_count > 0 {
+                                ui.colored_label(
+                                    egui::Color32::LIGHT_RED,
+                                    format!("❌ Failed: {}", fail_count),
+                                );
+                            }
+                            if warn_count > 0 {
+                                ui.colored_label(
+                                    egui::Color32::GOLD,
+                                    format!("⚠️ Warnings: {}", warn_count),
+                                );
+                            }
+
+                            if *is_import && is_importable && success_count > 0 {
+                                ui.add_space(15.0);
+                                ui.separator();
+                                ui.add_space(10.0);
+                                ui.horizontal(|ui| {
+                                    if ui.button("📥 Import into List").clicked() {
+                                        should_import = true;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    _ => {}
+                }
+            });
+
+        if should_import {
+            if let Some(mods) = self.state.pending_legacy_mods.take() {
+                let entries = mods
+                    .into_iter()
+                    .map(|m| ModEntry {
+                        mod_id: m.id.clone(),
+                        mod_name: m.name.clone(),
+                        added_at: chrono::Utc::now(),
+                    })
+                    .collect();
+
+                self.pending_import_list = Some(ModList {
+                    id: format!("list_{}", chrono::Utc::now().timestamp()),
+                    name: "Imported List".to_string(),
+                    created_at: chrono::Utc::now(),
+                    mods: entries,
+                });
+                self.import_name_input = "Imported List".to_string();
+                self.active_action = ListAction::Import;
+                self.import_window_open = true;
+            }
+            self.state.legacy_state = LegacyState::Idle;
+        } else if !is_open {
+            self.state.legacy_state = LegacyState::Idle;
+            self.state.pending_legacy_mods = None;
+        }
+    }
+
+    fn draw_top_panel(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.heading("Minecraft Mod Downloader");
+                ui.separator();
+
+                ui.label("Version:");
+                let version_changed = egui::ComboBox::from_id_salt("version_selector")
+                    .selected_text(&self.state.selected_version)
+                    .show_ui(ui, |ui| {
+                        let mut changed = false;
+                        for version in &self.state.minecraft_versions {
+                            if ui
+                                .selectable_value(
+                                    &mut self.state.selected_version,
+                                    version.id.clone(),
+                                    &version.name,
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
+                        }
+                        changed
+                    })
+                    .inner
+                    .unwrap_or(false);
+
+                ui.label("Loader:");
+                let loader_changed = egui::ComboBox::from_id_salt("loader_selector")
+                    .selected_text(&self.state.selected_loader)
+                    .show_ui(ui, |ui| {
+                        let mut changed = false;
+                        for loader in &self.state.mod_loaders {
+                            if ui
+                                .selectable_value(
+                                    &mut self.state.selected_loader,
+                                    loader.id.clone(),
+                                    &loader.name,
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
+                        }
+                        changed
+                    })
+                    .inner
+                    .unwrap_or(false);
+
+                if version_changed || loader_changed {
+                    self.state.invalidate_and_reload();
+                    self.state.previous_version = self.state.selected_version.clone();
+                    self.state.previous_loader = self.state.selected_loader.clone();
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("⚙ Settings").clicked() {
+                        self.settings_window_open = true;
+                    }
+                });
+            });
+        });
+    }
+
+    fn draw_sidebar(&mut self, ctx: &egui::Context) {
+        egui::SidePanel::left("sidebar").show(ctx, |ui| {
+            ui.add_space(4.0);
+            ui.add(
+                egui::TextEdit::singleline(&mut self.list_search_query)
+                    .hint_text("🔍 Search mod lists...")
+                    .desired_width(ui.available_width()),
+            );
+
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                let button_width = ui.available_width() - 35.0;
+                if ui
+                    .add_sized([button_width, 25.0], egui::Button::new("➕ New List"))
+                    .clicked()
+                {
+                    self.state.create_new_list();
+                }
+
+                if ui
+                    .add_sized([25.0, 25.0], egui::Button::new("📥"))
+                    .on_hover_text("Import")
+                    .clicked()
+                {
+                    if let Some(path) = FileDialog::new()
+                        .add_filter("Mod List Files", &["toml", "mods"])
+                        .pick_file()
+                    {
+                        match path.extension().and_then(|s| s.to_str()) {
+                            Some("toml") => {
+                                if let Ok(content) = std::fs::read_to_string(path) {
+                                    if let Ok(list) = toml::from_str::<ModList>(&content) {
+                                        self.import_name_input =
+                                            format!("{} (Imported)", list.name);
+                                        self.pending_import_list = Some(list);
+                                        self.active_action = ListAction::Import;
+                                        self.import_window_open = true;
+                                    }
+                                }
+                            }
+                            Some("mods") => {
+                                self.state.start_legacy_import(path);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            });
+
+            ui.add_space(4.0);
+            ui.separator();
+
+            let filtered_lists: Vec<_> = self
+                .state
+                .mod_lists
+                .iter()
+                .filter(|list| {
+                    self.list_search_query.is_empty()
+                        || list
+                            .name
+                            .to_lowercase()
+                            .contains(&self.list_search_query.to_lowercase())
+                })
+                .collect();
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for list in filtered_lists {
+                    let selected = self.state.current_list_id.as_ref() == Some(&list.id);
+                    if ui
+                        .selectable_label(selected, format!("{} ({})", list.name, list.mods.len()))
+                        .clicked()
+                    {
+                        if selected {
+                            self.state.current_list_id = None;
+                        } else {
+                            self.state.current_list_id = Some(list.id.clone());
+                        }
+                        self.selected_mod = None;
+                    }
+                }
+            });
+        });
+    }
+
+    fn draw_main_panel(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            if self.state.current_list_id.is_none() {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(100.0);
+                    ui.heading("No list selected");
+                    ui.label("Select a list from the sidebar or create a new one");
+                });
+                return;
+            }
+
+            let can_interact = self.state.current_list_id.is_some();
+
+            ui.horizontal(|ui| {
+                if self.show_rename_input {
+                    ui.text_edit_singleline(&mut self.rename_list_input);
+                    if ui.button("✔").clicked() {
+                        let new_name = self.rename_list_input.clone();
+                        let list_to_save = if let Some(list) = self.state.get_current_list_mut() {
+                            list.name = new_name;
+                            Some(list.clone())
+                        } else {
+                            None
+                        };
+
+                        if let Some(list) = list_to_save {
+                            self.state.save_list(&list);
+                        }
+                        self.show_rename_input = false;
+                    }
+                    if ui.button("❌").clicked() {
+                        self.show_rename_input = false;
+                    }
+                } else {
+                    if ui
+                        .add_enabled(can_interact, egui::Button::new("✏ Rename"))
+                        .clicked()
+                    {
+                        self.show_rename_input = true;
+                        if let Some(list) = self.state.get_current_list() {
+                            self.rename_list_input = list.name.clone();
+                        }
+                    }
+
+                    if ui
+                        .add_enabled(can_interact, egui::Button::new("👥 Duplicate"))
+                        .clicked()
+                    {
+                        if let Some(list) = self.state.get_current_list().cloned() {
+                            self.import_name_input = format!("{} (Copy)", list.name);
+                            self.pending_import_list = Some(list);
+                            self.active_action = ListAction::Duplicate;
+                            self.import_window_open = true;
+                        }
+                    }
+
+                    if ui
+                        .add_enabled(can_interact, egui::Button::new("🗑 Delete"))
+                        .clicked()
+                    {
+                        self.state.delete_current_list();
+                    }
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add_enabled(can_interact, egui::Button::new("📤 Export"))
+                        .clicked()
+                    {
+                        if let Some(list) = self.state.get_current_list() {
+                            if let Some(save_path) = FileDialog::new()
+                                .add_filter("TOML Config", &["toml"])
+                                .add_filter("Legacy Mod List", &["mods"])
+                                .set_title("Export Mod List")
+                                .set_file_name(&format!("{}.toml", list.name))
+                                .save_file()
+                            {
+                                self.state.export_current_list(save_path);
+                            }
+                        }
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(can_interact, egui::Button::new("➕ Add Mod"))
+                    .clicked()
+                {
+                    self.search_window_open = true;
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let filtered_mods = self.state.get_filtered_mods(&self.search_query);
+                    let mods_to_download: Vec<String> = filtered_mods
+                        .iter()
+                        .filter(|entry| {
+                            !self.state.mods_being_loaded.contains(&entry.mod_id)
+                                && self
+                                    .state
+                                    .download_status
+                                    .get(&entry.mod_id)
+                                    .map(|s| {
+                                        matches!(s, DownloadStatus::Idle | DownloadStatus::Failed)
+                                    })
+                                    .unwrap_or(true)
+                                && self
+                                    .state
+                                    .check_mod_compatibility(&entry.mod_id)
+                                    .unwrap_or(false)
+                        })
+                        .map(|e| e.mod_id.clone())
+                        .collect();
+
+                    let has_downloadable = !mods_to_download.is_empty();
+                    if ui
+                        .add_enabled(
+                            can_interact && has_downloadable,
+                            egui::Button::new("⬇ Download All"),
+                        )
+                        .clicked()
+                    {
+                        for mod_id in mods_to_download {
+                            self.state.start_download(&mod_id);
+                        }
+                    }
+                });
+            });
+
+            ui.separator();
+
+            if let Some(list) = self.state.get_current_list() {
+                if list.mods.is_empty() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(50.0);
+                        ui.heading("No mods in this list");
+                        ui.label("Click 'Add Mod' above to get started");
+                    });
+                }
+
+                let filtered_entries = self.state.get_filtered_mods(&self.search_query);
+                let mut delete_mod_id = None;
+
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for entry in &filtered_entries {
+                        let mod_id = &entry.mod_id;
+                        self.state.load_mod_details_if_needed(mod_id);
+
+                        let is_loading = self.state.mods_being_loaded.contains(mod_id);
+                        let has_failed = self.state.mods_failed_loading.contains(mod_id);
+                        let compatibility = self.state.check_mod_compatibility(mod_id);
+
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.label(&entry.mod_name);
+                                if let Some(mod_info) = self.state.get_mod_details(mod_id) {
+                                    ui.label(format!(
+                                        "v{} by {}",
+                                        mod_info.version, mod_info.author
+                                    ));
+                                } else if is_loading {
+                                    ui.label("⏳ Loading details...");
+                                } else if has_failed {
+                                    ui.colored_label(
+                                        egui::Color32::YELLOW,
+                                        "⚠ Failed to load details",
+                                    );
+                                } else {
+                                    ui.label("Details unavailable");
+                                }
+                                if let Some(false) = compatibility {
+                                    ui.colored_label(egui::Color32::RED, "❌ Incompatible");
+                                }
+                            });
+
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let status = self
+                                        .state
+                                        .download_status
+                                        .get(mod_id)
+                                        .copied()
+                                        .unwrap_or(DownloadStatus::Idle);
+
+                                    match status {
+                                        DownloadStatus::Idle => {
+                                            let button = egui::Button::new("Download");
+                                            let enabled = !is_loading
+                                                && !has_failed
+                                                && compatibility.unwrap_or(false);
+                                            let mut response = ui.add_enabled(enabled, button);
+
+                                            if is_loading {
+                                                response = response.on_disabled_hover_text(
+                                                    "Loading mod details...",
+                                                );
+                                            } else if has_failed {
+                                                response = response.on_disabled_hover_text(
+                                                    "Failed to load mod details",
+                                                );
+                                            }
+
+                                            if response.clicked() {
+                                                self.state.start_download(mod_id);
+                                            }
+                                        }
+                                        DownloadStatus::Queued => {
+                                            ui.add(
+                                                egui::ProgressBar::new(0.0)
+                                                    .text("Waiting...")
+                                                    .desired_width(80.0),
+                                            );
+                                        }
+                                        DownloadStatus::Downloading => {
+                                            let progress = self
+                                                .state
+                                                .download_progress
+                                                .get(mod_id)
+                                                .copied()
+                                                .unwrap_or(0.0);
+                                            ui.add(
+                                                egui::ProgressBar::new(progress)
+                                                    .text(format!("{:.0}%", progress * 100.0))
+                                                    .desired_width(80.0),
+                                            );
+                                        }
+                                        DownloadStatus::Complete => {
+                                            ui.label("✅");
+                                        }
+                                        DownloadStatus::Failed => {
+                                            ui.label("❌");
+                                        }
+                                    }
+
+                                    if ui.button("🗑").clicked() {
+                                        delete_mod_id = Some(mod_id.clone());
+                                    }
+                                },
+                            );
+                        });
+                        ui.separator();
+                    }
+                });
+
+                if let Some(mod_id) = delete_mod_id {
+                    self.state.delete_mod(&mod_id);
+                }
+            }
+        });
+    }
+
+    fn draw_search_window(&mut self, ctx: &egui::Context) {
+        if self.search_window_open {
+            if self.state.current_list_id.is_none() {
+                self.search_window_open = false;
+            } else {
+                let overlay = egui::Area::new(egui::Id::new("search_overlay"))
+                    .order(egui::Order::Background)
+                    .fixed_pos(egui::pos2(0.0, 0.0));
+
+                overlay.show(ctx, |ui| {
+                    let screen_rect = ctx.screen_rect();
+                    ui.painter().rect_filled(
+                        screen_rect,
+                        0.0,
+                        egui::Color32::from_black_alpha(128),
+                    );
+
+                    if ui
+                        .interact(
+                            screen_rect,
+                            egui::Id::new("search_overlay_click"),
+                            egui::Sense::click(),
+                        )
+                        .clicked()
+                    {
+                        self.search_window_open = false;
+                    }
+                });
+
+                let mut open = self.search_window_open;
+                egui::Window::new("Search Mods")
+                    .collapsible(false)
+                    .resizable(true)
+                    .default_size([600.0, 400.0])
+                    .open(&mut open)
+                    .show(ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.search_window_query)
+                                    .hint_text("Search mod name or description...")
+                                    .desired_width(400.0),
+                            );
+                            if ui.button("Search").clicked() {
+                                self.state.perform_search(&self.search_window_query);
+                            }
+                        });
+                        ui.separator();
+
+                        let mut mod_to_add = None;
+
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            if self.state.search_window_results.is_empty() {
+                                ui.label(if self.search_window_query.is_empty() {
+                                    "Enter a search query"
+                                } else {
+                                    "No mods found"
+                                });
+                            } else {
+                                for mod_info in &self.state.search_window_results {
+                                    ui.horizontal(|ui| {
+                                        ui.vertical(|ui| {
+                                            ui.label(&mod_info.name);
+                                            ui.add(
+                                                egui::Label::new(&mod_info.description)
+                                                    .wrap_mode(egui::TextWrapMode::Wrap),
+                                            );
+                                            ui.label(format!(
+                                                "👤 {} | ⬇ {}",
+                                                mod_info.author, mod_info.download_count
+                                            ));
+                                        });
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui.button("Add").clicked() {
+                                                    mod_to_add = Some(mod_info.clone());
+                                                }
+                                            },
+                                        );
+                                    });
+                                    ui.separator();
+                                }
+                            }
+                        });
+
+                        if let Some(mod_info) = mod_to_add {
+                            self.state.add_mod_to_current_list(mod_info);
+                            self.search_window_open = false;
+                            self.search_window_query.clear();
+                        }
+                    });
+                self.search_window_open = open;
+            }
+        }
+    }
+}
