@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-pub mod mod_src;
+pub mod mod_source;
 
-pub use mod_src::ModProvider;
+pub use mod_source::ModProvider;
 
 pub mod mod_service;
 

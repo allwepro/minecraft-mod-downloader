@@ -1,25 +1,20 @@
 use crate::domain::{ConnectionLimiter, ModInfo, ModInfoPool, ModProvider};
+use crate::infra::ApiService;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct ModService {
-    provider: Arc<dyn ModProvider>,
-    limiter: Arc<ConnectionLimiter>,
+    api_service: Arc<ApiService>,
     pool: Arc<Mutex<ModInfoPool>>,
 }
 
 impl ModService {
-    pub fn new(
-        provider: Arc<dyn ModProvider>,
-        limiter: Arc<ConnectionLimiter>,
-        pool: Arc<Mutex<ModInfoPool>>,
-    ) -> Self {
+    pub fn new(api_service: Arc<ApiService>) -> Self {
         Self {
-            provider,
-            limiter,
-            pool,
+            api_service,
+            pool: Arc::new(Mutex::new(ModInfoPool::new(500, 1))),
         }
     }
 
@@ -60,9 +55,10 @@ impl ModService {
             return Ok(info);
         }
 
-        let _permit = self.limiter.acquire(1).await;
+        let _permit = self.api_service.limiter.acquire(1).await;
 
         let details = self
+            .api_service
             .provider
             .fetch_mod_details(identifier, version, loader)
             .await?;
