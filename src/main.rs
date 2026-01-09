@@ -1,12 +1,12 @@
 mod adapters;
+mod app;
 mod domain;
 mod infra;
-mod ui;
 
+use app::App;
 use eframe::NativeOptions;
 use egui::IconData;
 use tokio::runtime::Runtime;
-use ui::App;
 
 fn main() -> eframe::Result<()> {
     env_logger::init();
