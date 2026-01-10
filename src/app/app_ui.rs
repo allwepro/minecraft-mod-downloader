@@ -3,6 +3,7 @@ use eframe::egui;
 use rfd::FileDialog;
 
 use crate::app::app_state::{LegacyState, ListAction};
+use crate::app::*;
 use crate::domain::{DownloadStatus, ModEntry, ModList};
 
 pub struct App {
@@ -19,6 +20,11 @@ pub struct App {
     import_name_input: String,
     active_action: ListAction,
     pending_import_list: Option<ModList>,
+    sort_menu_open: bool,
+    current_sort_mode: SortMode,
+    current_filter_mode: FilterMode,
+    current_order_mode: OrderMode,
+    sort_field_rect: egui::Rect,
 }
 
 impl App {
@@ -39,6 +45,11 @@ impl App {
             import_name_input: String::new(),
             active_action: ListAction::Import,
             pending_import_list: None,
+            sort_menu_open: false,
+            current_sort_mode: SortMode::Name,
+            current_order_mode: OrderMode::Ascending,
+            current_filter_mode: FilterMode::All,
+            sort_field_rect: egui::Rect::NOTHING,
         }
     }
 }
@@ -51,6 +62,7 @@ impl eframe::App for App {
             self.settings_window_open = false;
             self.search_window_open = false;
             self.import_window_open = false;
+            self.sort_menu_open = false;
             self.pending_import_list = None;
         }
 
@@ -60,6 +72,15 @@ impl eframe::App for App {
 
         if self.import_window_open && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
             self.finalize_import_logic();
+        }
+
+        if self.sort_menu_open && ctx.input(|i| i.pointer.any_click()) {
+            if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
+                if !self.sort_field_rect.contains(pos) {
+                    println!("Closed by external click");
+                    self.sort_menu_open = false;
+                }
+            }
         }
 
         self.draw_settings_window(ctx);
@@ -614,8 +635,25 @@ impl App {
                     self.search_window_open = true;
                 }
 
+                let sort_label = match self.current_order_mode {
+                    OrderMode::Ascending => "Sort ⬇",
+                    OrderMode::Descending => "Sort ⬆",
+                };
+                let sort_btn = ui
+                    .add_enabled(can_interact, egui::Button::new(sort_label))
+                    .on_hover_text("Sort and Filter");
+                if sort_btn.clicked() {
+                    self.sort_menu_open = !self.sort_menu_open;
+                }
+                self.sort_field_rect = sort_btn.rect;
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let filtered_mods = self.state.get_filtered_mods(&self.search_query);
+                    let filtered_mods = self.state.get_filtered_mods(
+                        &self.search_query,
+                        self.current_sort_mode,
+                        self.current_order_mode,
+                        self.current_filter_mode,
+                    );
                     let mods_to_download: Vec<String> = filtered_mods
                         .iter()
                         .filter(|entry| {
@@ -662,7 +700,12 @@ impl App {
                     });
                 }
 
-                let filtered_entries = self.state.get_filtered_mods(&self.search_query);
+                let filtered_entries = self.state.get_filtered_mods(
+                    &self.search_query,
+                    self.current_sort_mode,
+                    self.current_order_mode,
+                    self.current_filter_mode,
+                );
                 let mut delete_mod_id = None;
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -775,6 +818,111 @@ impl App {
                 }
             }
         });
+
+        if self.sort_menu_open {
+            let popup_pos = self.sort_field_rect.left_bottom() + egui::vec2(0.0, 5.0);
+
+            egui::Area::new(egui::Id::new("sort_menu"))
+                .order(egui::Order::Foreground)
+                .fixed_pos(popup_pos)
+                .show(ctx, |ui| {
+                    let popup = egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        ui.set_min_width(140.0);
+                        ui.vertical(|ui| {
+                            ui.label("Sort by:");
+                            if ui
+                                .selectable_value(
+                                    &mut self.current_sort_mode,
+                                    SortMode::Name,
+                                    "Name",
+                                )
+                                .clicked()
+                            {
+                                self.sort_menu_open = false;
+                            }
+                            if ui
+                                .selectable_value(
+                                    &mut self.current_sort_mode,
+                                    SortMode::DateAdded,
+                                    "Date Added",
+                                )
+                                .clicked()
+                            {
+                                self.sort_menu_open = false;
+                            }
+                            if ui
+                                .selectable_value(
+                                    &mut self.current_sort_mode,
+                                    SortMode::Compatibility,
+                                    "Compatibility",
+                                )
+                                .clicked()
+                            {
+                                self.sort_menu_open = false;
+                            }
+
+                            ui.separator();
+
+                            ui.label("Order:");
+                            if ui
+                                .selectable_value(
+                                    &mut self.current_order_mode,
+                                    OrderMode::Ascending,
+                                    "⬇ Ascending",
+                                )
+                                .clicked()
+                            {
+                                self.sort_menu_open = false;
+                            }
+                            if ui
+                                .selectable_value(
+                                    &mut self.current_order_mode,
+                                    OrderMode::Descending,
+                                    "⬆ Descending",
+                                )
+                                .clicked()
+                            {
+                                self.sort_menu_open = false;
+                            }
+
+                            ui.separator();
+
+                            ui.label("Filter:");
+                            if ui
+                                .selectable_value(
+                                    &mut self.current_filter_mode,
+                                    FilterMode::All,
+                                    "❔ None",
+                                )
+                                .clicked()
+                            {
+                                self.sort_menu_open = false;
+                            }
+                            if ui
+                                .selectable_value(
+                                    &mut self.current_filter_mode,
+                                    FilterMode::CompatibleOnly,
+                                    "✅ Compatible Only",
+                                )
+                                .clicked()
+                            {
+                                self.sort_menu_open = false;
+                            }
+                            if ui
+                                .selectable_value(
+                                    &mut self.current_filter_mode,
+                                    FilterMode::IncompatibleOnly,
+                                    "❌ Incompatible Only",
+                                )
+                                .clicked()
+                            {
+                                self.sort_menu_open = false;
+                            }
+                        });
+                    });
+                    self.sort_field_rect = popup.response.rect;
+                });
+        }
     }
 
     fn draw_search_window(&mut self, ctx: &egui::Context) {
