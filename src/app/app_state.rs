@@ -1,3 +1,4 @@
+use crate::app::*;
 use crate::domain::*;
 use crate::domain::{AppConfig, ModList, ModService};
 use crate::infra::LegacyListService;
@@ -351,21 +352,57 @@ impl AppState {
             .and_then(|id| self.mod_lists.iter_mut().find(|l| &l.id == id))
     }
 
-    pub fn get_filtered_mods(&self, query: &str) -> Vec<ModEntry> {
+    pub fn get_filtered_mods(
+        &self,
+        query: &str,
+        sort_mode: SortMode,
+        order_mode: OrderMode,
+        filter_mode: FilterMode,
+    ) -> Vec<ModEntry> {
         let query = query.to_lowercase();
+
         if let Some(current_list) = self.get_current_list() {
-            current_list
+            let mut mods: Vec<ModEntry> = current_list
                 .mods
                 .iter()
                 .filter(|entry| {
-                    entry.mod_name.to_lowercase().contains(&query)
+                    let matches_search = entry.mod_name.to_lowercase().contains(&query)
                         || self
                             .get_mod_details(&entry.mod_id)
                             .map(|m| m.description.to_lowercase().contains(&query))
-                            .unwrap_or(false)
+                            .unwrap_or(false);
+
+                    let matches_filter = match filter_mode {
+                        FilterMode::All => true,
+                        FilterMode::CompatibleOnly => {
+                            self.check_mod_compatibility(&entry.mod_id).unwrap_or(false)
+                        }
+                        FilterMode::IncompatibleOnly => self
+                            .check_mod_compatibility(&entry.mod_id)
+                            .map(|c| !c)
+                            .unwrap_or(false),
+                    };
+
+                    matches_search && matches_filter
                 })
                 .cloned()
-                .collect()
+                .collect();
+
+            mods.sort_by(|a, b| match sort_mode {
+                SortMode::Name => a.mod_name.cmp(&b.mod_name),
+                SortMode::DateAdded => a.added_at.cmp(&b.added_at),
+                SortMode::Compatibility => {
+                    let comp_a = self.check_mod_compatibility(&a.mod_id).unwrap_or(false);
+                    let comp_b = self.check_mod_compatibility(&b.mod_id).unwrap_or(false);
+                    comp_b.cmp(&comp_a)
+                }
+            });
+
+            if order_mode == OrderMode::Descending {
+                mods.reverse();
+            }
+
+            mods
         } else {
             Vec::new()
         }
