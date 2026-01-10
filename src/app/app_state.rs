@@ -22,6 +22,7 @@ pub enum LegacyState {
         message: String,
     },
     Complete {
+        suggested_name: String,
         successful: Vec<String>,
         failed: Vec<String>,
         warnings: Vec<String>,
@@ -304,6 +305,7 @@ impl AppState {
                     };
                 }
                 Event::LegacyListComplete {
+                    suggested_name,
                     successful,
                     failed,
                     warnings,
@@ -312,6 +314,7 @@ impl AppState {
                     let successful_ids = successful.iter().map(|m| m.id.clone()).collect();
                     self.pending_legacy_mods = Some(successful);
                     self.legacy_state = LegacyState::Complete {
+                        suggested_name,
                         successful: successful_ids,
                         failed,
                         warnings,
@@ -324,6 +327,7 @@ impl AppState {
                 } => {
                     self.pending_legacy_mods = None;
                     self.legacy_state = LegacyState::Complete {
+                        suggested_name: "".parse().unwrap(),
                         successful: Vec::new(),
                         failed: Vec::new(),
                         warnings: vec![error],

@@ -118,6 +118,7 @@ pub enum Event {
         message: String,
     },
     LegacyListComplete {
+        suggested_name: String,
         successful: Vec<Arc<ModInfo>>,
         failed: Vec<String>,
         warnings: Vec<String>,
