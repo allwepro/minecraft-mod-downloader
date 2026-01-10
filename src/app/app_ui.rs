@@ -254,6 +254,8 @@ impl App {
             _ => "Operation Complete",
         };
 
+        let mut suggested_name0 = String::new();
+
         egui::Window::new(window_title)
             .collapsible(false)
             .resizable(false)
@@ -290,6 +292,7 @@ impl App {
                         });
                     }
                     LegacyState::Complete {
+                        suggested_name,
                         successful,
                         failed,
                         warnings,
@@ -299,6 +302,8 @@ impl App {
                         let fail_count = failed.len();
                         let warn_count = warnings.len();
                         let is_importable = self.state.pending_legacy_mods.is_some();
+
+                        suggested_name0 = suggested_name.clone();
 
                         ui.vertical(|ui| {
                             ui.heading(if *is_import {
@@ -350,11 +355,11 @@ impl App {
 
                 self.pending_import_list = Some(ModList {
                     id: format!("list_{}", chrono::Utc::now().timestamp()),
-                    name: "Imported List".to_string(),
+                    name: suggested_name0.clone(),
                     created_at: chrono::Utc::now(),
                     mods: entries,
                 });
-                self.import_name_input = "Imported List".to_string();
+                self.import_name_input = suggested_name0.clone();
                 self.active_action = ListAction::Import;
                 self.import_window_open = true;
             }
@@ -455,7 +460,8 @@ impl App {
                     .clicked()
                 {
                     if let Some(path) = FileDialog::new()
-                        .add_filter("Mod List Files", &["toml", "mods"])
+                        .add_filter("Mod List", &["toml"])
+                        .add_filter("Legacy Mod List", &["mods", "all-mods", "queue-mods"])
                         .pick_file()
                     {
                         match path.extension().and_then(|s| s.to_str()) {
@@ -585,8 +591,8 @@ impl App {
                     {
                         if let Some(list) = self.state.get_current_list() {
                             if let Some(save_path) = FileDialog::new()
-                                .add_filter("TOML Config", &["toml"])
-                                .add_filter("Legacy Mod List", &["mods"])
+                                .add_filter("Mod List", &["toml"])
+                                .add_filter("Legacy Mod List", &["mods", "all-mods", "queue-mods"])
                                 .set_title("Export Mod List")
                                 .set_file_name(&format!("{}.toml", list.name))
                                 .save_file()
@@ -670,7 +676,10 @@ impl App {
 
                         ui.horizontal(|ui| {
                             ui.vertical(|ui| {
-                                ui.label(&entry.mod_name);
+                                ui.hyperlink_to(
+                                    &entry.mod_name,
+                                    format!("https://modrinth.com/project/{}", entry.mod_id),
+                                );
                                 if let Some(mod_info) = self.state.get_mod_details(mod_id) {
                                     ui.label(format!(
                                         "v{} by {}",
@@ -829,7 +838,13 @@ impl App {
                                 for mod_info in &self.state.search_window_results {
                                     ui.horizontal(|ui| {
                                         ui.vertical(|ui| {
-                                            ui.label(&mod_info.name);
+                                            ui.hyperlink_to(
+                                                &mod_info.name,
+                                                format!(
+                                                    "https://modrinth.com/project/{}",
+                                                    mod_info.slug
+                                                ),
+                                            );
                                             ui.add(
                                                 egui::Label::new(&mod_info.description)
                                                     .wrap_mode(egui::TextWrapMode::Wrap),
