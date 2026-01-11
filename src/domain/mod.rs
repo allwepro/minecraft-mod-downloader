@@ -13,8 +13,10 @@ pub mod mod_service;
 pub use mod_service::ModService;
 
 pub mod launcher;
+pub mod launcher_service;
 
 pub use launcher::{JavaInstallation, LaunchConfig, LaunchProfile, LaunchResult, MinecraftInstallation};
+pub use launcher_service::LauncherService;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModInfo {
