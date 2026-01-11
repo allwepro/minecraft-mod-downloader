@@ -6,6 +6,7 @@ mod infra;
 use app::App;
 use eframe::NativeOptions;
 use egui::IconData;
+use image::DynamicImage;
 use tokio::runtime::Runtime;
 
 fn main() -> eframe::Result<()> {
@@ -13,8 +14,9 @@ fn main() -> eframe::Result<()> {
 
     let runtime = Runtime::new().expect("Failed to create Tokio runtime");
 
+    let fallback = DynamicImage::new_rgba8(64, 64);
     let icon_path = "assets/icon.png";
-    let image = image::open(icon_path).expect("Failed to open image");
+    let image = image::open(icon_path).unwrap_or_else(|_| fallback.clone());
     let image_rgba = image.to_rgba8();
     let (width, height) = image_rgba.dimensions();
 

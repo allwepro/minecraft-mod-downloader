@@ -24,6 +24,7 @@ pub struct App {
     current_filter_mode: FilterMode,
     current_order_mode: OrderMode,
     sort_field_rect: egui::Rect,
+    show_archived: bool,
 }
 
 impl App {
@@ -49,6 +50,7 @@ impl App {
             current_order_mode: OrderMode::Ascending,
             current_filter_mode: FilterMode::All,
             sort_field_rect: egui::Rect::NOTHING,
+            show_archived: false,
         }
     }
 }
@@ -77,7 +79,6 @@ impl eframe::App for App {
         if self.sort_menu_open && ctx.input(|i| i.pointer.any_click()) {
             if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
                 if !self.sort_field_rect.contains(pos) {
-                    println!("Closed by external click");
                     self.sort_menu_open = false;
                 }
             }
@@ -371,6 +372,7 @@ impl App {
                         mod_id: m.id.clone(),
                         mod_name: m.name.clone(),
                         added_at: chrono::Utc::now(),
+                        archived: false,
                     })
                     .collect();
 
@@ -516,9 +518,9 @@ impl App {
                 .filter(|list| {
                     self.list_search_query.is_empty()
                         || list
-                        .name
-                        .to_lowercase()
-                        .contains(&self.list_search_query.to_lowercase())
+                            .name
+                            .to_lowercase()
+                            .contains(&self.list_search_query.to_lowercase())
                 })
                 .collect();
 
@@ -659,17 +661,17 @@ impl App {
                         .filter(|entry| {
                             !self.state.mods_being_loaded.contains(&entry.mod_id)
                                 && self
-                                .state
-                                .download_status
-                                .get(&entry.mod_id)
-                                .map(|s| {
-                                    matches!(s, DownloadStatus::Idle | DownloadStatus::Failed)
-                                })
-                                .unwrap_or(true)
+                                    .state
+                                    .download_status
+                                    .get(&entry.mod_id)
+                                    .map(|s| {
+                                        matches!(s, DownloadStatus::Idle | DownloadStatus::Failed)
+                                    })
+                                    .unwrap_or(true)
                                 && self
-                                .state
-                                .check_mod_compatibility(&entry.mod_id)
-                                .unwrap_or(false)
+                                    .state
+                                    .check_mod_compatibility(&entry.mod_id)
+                                    .unwrap_or(false)
                         })
                         .map(|e| e.mod_id.clone())
                         .collect();
@@ -700,33 +702,53 @@ impl App {
                     });
                 }
 
+                let list_name = list.name.clone();
+
                 let filtered_entries = self.state.get_filtered_mods(
                     &self.search_query,
                     self.current_sort_mode,
                     self.current_order_mode,
                     self.current_filter_mode,
                 );
+
+                let active_mods: Vec<_> = filtered_entries.iter().filter(|e| !e.archived).collect();
+                let archived_mods: Vec<_> =
+                    filtered_entries.iter().filter(|e| e.archived).collect();
+
+                let mut toggle_archive_id = None;
                 let mut delete_mod_id = None;
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    for entry in &filtered_entries {
+                    let mut render_mod_entry = |ui: &mut egui::Ui, entry: &ModEntry| {
                         let mod_id = &entry.mod_id;
                         self.state.load_mod_details_if_needed(mod_id);
 
                         let is_loading = self.state.mods_being_loaded.contains(mod_id);
                         let has_failed = self.state.mods_failed_loading.contains(mod_id);
                         let compatibility = self.state.check_mod_compatibility(mod_id);
+                        let is_archived = entry.archived;
 
                         ui.horizontal(|ui| {
-                            if let Some(mod_info) = self.state.get_mod_details(mod_id) && !mod_info.icon_url.is_empty() && let Some(handle) = self.state.icon_service.get(&mod_info.icon_url) {
-                                ui.add(egui::Image::from_texture(handle).fit_to_exact_size(egui::vec2(32.0, 32.0)));
+                            if let Some(mod_info) = self.state.get_mod_details(mod_id)
+                                && !mod_info.icon_url.is_empty()
+                                && let Some(handle) =
+                                    self.state.icon_service.get(&mod_info.icon_url)
+                            {
+                                ui.add(
+                                    egui::Image::from_texture(handle)
+                                        .fit_to_exact_size(egui::vec2(32.0, 32.0)),
+                                );
                             } else {
                                 ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
                             }
                             ui.add_space(4.0);
                             ui.vertical(|ui| {
+                                let mut name_text = egui::RichText::new(&entry.mod_name);
+                                if is_archived {
+                                    name_text = name_text.weak();
+                                }
                                 ui.hyperlink_to(
-                                    &entry.mod_name,
+                                    name_text,
                                     format!("https://modrinth.com/project/{}", entry.mod_id),
                                 );
                                 if let Some(mod_info) = self.state.get_mod_details(mod_id) {
@@ -761,24 +783,26 @@ impl App {
 
                                     match status {
                                         DownloadStatus::Idle => {
-                                            let button = egui::Button::new("Download");
-                                            let enabled = !is_loading
-                                                && !has_failed
-                                                && compatibility.unwrap_or(false);
-                                            let mut response = ui.add_enabled(enabled, button);
+                                            if !is_archived {
+                                                let button = egui::Button::new("Download");
+                                                let enabled = !is_loading
+                                                    && !has_failed
+                                                    && compatibility.unwrap_or(false);
+                                                let mut response = ui.add_enabled(enabled, button);
 
-                                            if is_loading {
-                                                response = response.on_disabled_hover_text(
-                                                    "Loading mod details...",
-                                                );
-                                            } else if has_failed {
-                                                response = response.on_disabled_hover_text(
-                                                    "Failed to load mod details",
-                                                );
-                                            }
+                                                if is_loading {
+                                                    response = response.on_disabled_hover_text(
+                                                        "Loading mod details...",
+                                                    );
+                                                } else if has_failed {
+                                                    response = response.on_disabled_hover_text(
+                                                        "Failed to load mod details",
+                                                    );
+                                                }
 
-                                            if response.clicked() {
-                                                self.state.start_download(mod_id);
+                                                if response.clicked() {
+                                                    self.state.start_download(mod_id);
+                                                }
                                             }
                                         }
                                         DownloadStatus::Queued => {
@@ -809,6 +833,15 @@ impl App {
                                         }
                                     }
 
+                                    let archive_text = if is_archived {
+                                        "📂 Unarchive"
+                                    } else {
+                                        "📁"
+                                    };
+                                    if ui.button(archive_text).clicked() {
+                                        toggle_archive_id = Some(mod_id.clone());
+                                    }
+
                                     if ui.button("🗑").clicked() {
                                         delete_mod_id = Some(mod_id.clone());
                                     }
@@ -816,11 +849,43 @@ impl App {
                             );
                         });
                         ui.separator();
+                    };
+
+                    if !active_mods.is_empty() {
+                        ui.heading(format!("{} ({})", list_name, active_mods.len()));
+                        ui.add_space(4.0);
+                        for entry in active_mods {
+                            render_mod_entry(ui, entry);
+                        }
+                    }
+
+                    if !archived_mods.is_empty() {
+                        ui.add_space(10.0);
+
+                        ui.horizontal(|ui| {
+                            let icon = if self.show_archived { "🔽" } else { "▶" };
+                            if ui
+                                .button(format!("{} Archived ({})", icon, archived_mods.len()))
+                                .clicked()
+                            {
+                                self.show_archived = !self.show_archived;
+                            }
+                        });
+
+                        if self.show_archived {
+                            ui.add_space(4.0);
+                            for entry in archived_mods {
+                                render_mod_entry(ui, entry);
+                            }
+                        }
                     }
                 });
 
                 if let Some(mod_id) = delete_mod_id {
                     self.state.delete_mod(&mod_id);
+                }
+                if let Some(mod_id) = toggle_archive_id {
+                    self.state.toggle_archive_mod(&mod_id);
                 }
             }
         });
@@ -991,10 +1056,19 @@ impl App {
                             } else {
                                 for mod_info in &self.state.search_window_results {
                                     ui.horizontal(|ui| {
-                                        if !mod_info.icon_url.is_empty() && let Some(handle) = self.state.icon_service.get(&mod_info.icon_url) {
-                                            ui.add(egui::Image::from_texture(handle).fit_to_exact_size(egui::vec2(32.0, 32.0)));
+                                        if !mod_info.icon_url.is_empty()
+                                            && let Some(handle) =
+                                                self.state.icon_service.get(&mod_info.icon_url)
+                                        {
+                                            ui.add(
+                                                egui::Image::from_texture(handle)
+                                                    .fit_to_exact_size(egui::vec2(32.0, 32.0)),
+                                            );
                                         } else {
-                                            ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
+                                            ui.add_sized(
+                                                egui::vec2(32.0, 32.0),
+                                                egui::Spinner::new(),
+                                            );
                                         }
                                         ui.add_space(4.0);
                                         ui.vertical(|ui| {
