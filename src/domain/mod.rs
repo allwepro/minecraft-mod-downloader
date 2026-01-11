@@ -42,6 +42,8 @@ pub struct ModEntry {
     pub mod_id: String,
     pub mod_name: String,
     pub added_at: DateTime<Utc>,
+    #[serde(default)]
+    pub archived: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

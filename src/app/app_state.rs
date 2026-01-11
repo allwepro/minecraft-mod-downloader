@@ -469,6 +469,7 @@ impl AppState {
                     mod_id: mod_info.id.clone(),
                     mod_name: mod_info.name.clone(),
                     added_at: Utc::now(),
+                    archived: false,
                 });
                 self.download_status
                     .insert(mod_info.id.clone(), DownloadStatus::Idle);
@@ -492,6 +493,18 @@ impl AppState {
             self.runtime_handle.spawn(async move {
                 let _ = cm.save_list(&list).await;
             });
+        }
+    }
+    pub fn toggle_archive_mod(&mut self, mod_id: &str) {
+        if let Some(list) = self.get_current_list_mut() {
+            if let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id) {
+                entry.archived = !entry.archived;
+                let list = list.clone();
+                let cm = self.config_manager.clone();
+                self.runtime_handle.spawn(async move {
+                    let _ = cm.save_list(&list).await;
+                });
+            }
         }
     }
 
