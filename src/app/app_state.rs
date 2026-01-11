@@ -8,29 +8,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-#[derive(PartialEq)]
-pub enum ListAction {
-    Import,
-    Duplicate,
-}
-
-#[derive(PartialEq)]
-pub enum LegacyState {
-    Idle,
-    InProgress {
-        current: usize,
-        total: usize,
-        message: String,
-    },
-    Complete {
-        suggested_name: String,
-        successful: Vec<String>,
-        failed: Vec<String>,
-        warnings: Vec<String>,
-        is_import: bool,
-    },
-}
-
 pub struct AppState {
     pub mod_service: Arc<ModService>,
     pub config_manager: Arc<ConfigManager>,
@@ -197,10 +174,9 @@ impl AppState {
                 let _ = cm.ensure_dirs().await;
 
                 let config = if cm.config_exists() {
-                    match cm.load_config().await {
-                        Ok(cfg) => cfg,
-                        Err(_) => cm.create_default_config().await.unwrap(),
-                    }
+                    cm.load_config().await.unwrap_or_else(|_| {
+                        runtime_handle.block_on(cm.create_default_config()).unwrap()
+                    })
                 } else {
                     cm.create_default_config().await.unwrap()
                 };

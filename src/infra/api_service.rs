@@ -1,6 +1,7 @@
 use crate::adapters::ModrinthProvider;
-use crate::domain::{ConnectionLimiter, ModProvider};
+use crate::domain::ModProvider;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 #[derive(Clone)]
 pub struct ApiService {
@@ -17,5 +18,26 @@ impl ApiService {
             provider,
             limiter: connection_limiter,
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct ConnectionLimiter {
+    semaphore: Arc<Semaphore>,
+}
+
+impl ConnectionLimiter {
+    pub fn new(max_connections: usize) -> Self {
+        Self {
+            semaphore: Arc::new(Semaphore::new(max_connections)),
+        }
+    }
+
+    pub async fn acquire(&self, slots: u32) -> tokio::sync::OwnedSemaphorePermit {
+        self.semaphore
+            .clone()
+            .acquire_many_owned(slots)
+            .await
+            .expect("Semaphore closed")
     }
 }
