@@ -32,6 +32,7 @@ pub struct AppState {
     pub legacy_state: LegacyState,
     pub pending_legacy_mods: Option<Vec<Arc<ModInfo>>>,
     pub icon_service: IconService,
+    pub search_filter_exact: bool,
 }
 
 impl AppState {
@@ -71,8 +72,9 @@ impl AppState {
                                 .await
                             {
                                 let cached_results = mod_svc.cache_search_results(results).await;
-
                                 let _ = event_tx.send(Event::SearchResults(cached_results)).await;
+                            } else {
+                                log::warn!("Failed to search mods: {}", query);
                             }
                         });
                     }
@@ -244,6 +246,7 @@ impl AppState {
             legacy_state: LegacyState::Idle,
             pending_legacy_mods: None,
             icon_service,
+            search_filter_exact: true,
         }
     }
 
@@ -456,8 +459,16 @@ impl AppState {
         if !query.is_empty() {
             let _ = self.cmd_tx.try_send(Command::SearchMods {
                 query: query.to_string(),
-                version: self.selected_version.clone(),
-                loader: self.selected_loader.clone(),
+                version: if self.search_filter_exact {
+                    self.selected_version.clone()
+                } else {
+                    String::new()
+                },
+                loader: if self.search_filter_exact {
+                    self.selected_loader.clone()
+                } else {
+                    String::new()
+                },
             });
         }
     }
