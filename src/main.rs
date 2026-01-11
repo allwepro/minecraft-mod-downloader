@@ -1,3 +1,4 @@
+//#![windows_subsystem = "windows"]
 mod adapters;
 mod app;
 mod domain;
