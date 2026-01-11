@@ -2,9 +2,8 @@ use crate::app::AppState;
 use eframe::egui;
 use rfd::FileDialog;
 
-use crate::app::app_state::{LegacyState, ListAction};
 use crate::app::*;
-use crate::domain::{DownloadStatus, ModEntry, ModList};
+use crate::domain::{ModEntry, ModList};
 
 pub struct App {
     state: AppState,
@@ -516,9 +515,9 @@ impl App {
                 .filter(|list| {
                     self.list_search_query.is_empty()
                         || list
-                            .name
-                            .to_lowercase()
-                            .contains(&self.list_search_query.to_lowercase())
+                        .name
+                        .to_lowercase()
+                        .contains(&self.list_search_query.to_lowercase())
                 })
                 .collect();
 
@@ -659,17 +658,17 @@ impl App {
                         .filter(|entry| {
                             !self.state.mods_being_loaded.contains(&entry.mod_id)
                                 && self
-                                    .state
-                                    .download_status
-                                    .get(&entry.mod_id)
-                                    .map(|s| {
-                                        matches!(s, DownloadStatus::Idle | DownloadStatus::Failed)
-                                    })
-                                    .unwrap_or(true)
+                                .state
+                                .download_status
+                                .get(&entry.mod_id)
+                                .map(|s| {
+                                    matches!(s, DownloadStatus::Idle | DownloadStatus::Failed)
+                                })
+                                .unwrap_or(true)
                                 && self
-                                    .state
-                                    .check_mod_compatibility(&entry.mod_id)
-                                    .unwrap_or(false)
+                                .state
+                                .check_mod_compatibility(&entry.mod_id)
+                                .unwrap_or(false)
                         })
                         .map(|e| e.mod_id.clone())
                         .collect();

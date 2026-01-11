@@ -1,5 +1,4 @@
-use crate::domain::{Event, ModInfo, ModService};
-use anyhow::Result;
+use crate::domain::{Event, ModService};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -42,7 +41,7 @@ impl LegacyListService {
 
         let mut successful_mods = Vec::new();
         let mut failed = Vec::new();
-        let mut warnings = Vec::new();
+        let warnings = Vec::new();
 
         for (idx, slug) in slugs.iter().enumerate() {
             let _ = tx
