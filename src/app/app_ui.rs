@@ -56,6 +56,7 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state.process_events();
+        self.state.icon_service.update(ctx);
 
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.settings_window_open = false;
@@ -717,6 +718,12 @@ impl App {
                         let compatibility = self.state.check_mod_compatibility(mod_id);
 
                         ui.horizontal(|ui| {
+                            if let Some(mod_info) = self.state.get_mod_details(mod_id) && !mod_info.icon_url.is_empty() && let Some(handle) = self.state.icon_service.get(&mod_info.icon_url) {
+                                ui.add(egui::Image::from_texture(handle).fit_to_exact_size(egui::vec2(32.0, 32.0)));
+                            } else {
+                                ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
+                            }
+                            ui.add_space(4.0);
                             ui.vertical(|ui| {
                                 ui.hyperlink_to(
                                     &entry.mod_name,
@@ -984,6 +991,12 @@ impl App {
                             } else {
                                 for mod_info in &self.state.search_window_results {
                                     ui.horizontal(|ui| {
+                                        if !mod_info.icon_url.is_empty() && let Some(handle) = self.state.icon_service.get(&mod_info.icon_url) {
+                                            ui.add(egui::Image::from_texture(handle).fit_to_exact_size(egui::vec2(32.0, 32.0)));
+                                        } else {
+                                            ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
+                                        }
+                                        ui.add_space(4.0);
                                         ui.vertical(|ui| {
                                             ui.hyperlink_to(
                                                 &mod_info.name,

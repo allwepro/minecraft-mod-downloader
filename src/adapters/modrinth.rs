@@ -31,6 +31,7 @@ struct ModrinthProject {
     downloads: u32,
     #[serde(default)]
     versions: Vec<String>,
+    icon_url: String,
     #[serde(default)]
     categories: Vec<String>,
 }
@@ -46,6 +47,7 @@ struct ModrinthProjectDetails {
     downloads: u32,
     #[serde(default)]
     versions: Vec<String>,
+    icon_url: String,
     #[serde(default)]
     categories: Vec<String>,
 }
@@ -105,6 +107,7 @@ impl ModProvider for ModrinthProvider {
                 description: hit.description,
                 version: "Latest".to_string(),
                 author: hit.author,
+                icon_url: hit.icon_url,
                 download_count: hit.downloads,
                 download_url: String::new(),
                 supported_versions: hit.versions,
@@ -168,6 +171,7 @@ impl ModProvider for ModrinthProvider {
             description: project.description,
             version: compatible_version.version_number.clone(),
             author: project.team,
+            icon_url: project.icon_url,
             download_count: project.downloads,
             download_url,
             supported_versions: compatible_version.game_versions.clone(),
