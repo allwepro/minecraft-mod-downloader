@@ -249,6 +249,46 @@ impl AppState {
             search_filter_exact: true,
         }
     }
+    fn get_current_list_settings(&self) -> (Option<String>, Option<String>, Option<String>) {
+        if let Some(list) = self.get_current_list() {
+            let ver = if list.version.is_empty() {
+                None
+            } else {
+                Some(list.version.clone())
+            };
+            let loader = if list.loader.is_empty() {
+                None
+            } else {
+                Some(list.loader.clone())
+            };
+            let dir = if list.download_dir.is_empty() {
+                None
+            } else {
+                Some(list.download_dir.clone())
+            };
+            (ver, loader, dir)
+        } else {
+            (None, None, None)
+        }
+    }
+
+    pub fn get_effective_version(&self) -> String {
+        self.get_current_list_settings()
+            .0
+            .unwrap_or_else(|| self.selected_version.clone())
+    }
+
+    pub fn get_effective_loader(&self) -> String {
+        self.get_current_list_settings()
+            .1
+            .unwrap_or_else(|| self.selected_loader.clone())
+    }
+
+    pub fn get_effective_download_dir(&self) -> String {
+        self.get_current_list_settings()
+            .2
+            .unwrap_or_else(|| self.download_dir.clone())
+    }
 
     pub fn process_events(&mut self) {
         while let Ok(event) = self.event_rx.try_recv() {
@@ -347,6 +387,8 @@ impl AppState {
         filter_mode: FilterMode,
     ) -> Vec<ModEntry> {
         let query = query.to_lowercase();
+        let effective_version = self.get_effective_version();
+        let effective_loader = self.get_effective_loader();
 
         if let Some(current_list) = self.get_current_list() {
             let mut mods: Vec<ModEntry> = current_list
@@ -361,11 +403,19 @@ impl AppState {
 
                     let matches_filter = match filter_mode {
                         FilterMode::All => true,
-                        FilterMode::CompatibleOnly => {
-                            self.check_mod_compatibility(&entry.mod_id).unwrap_or(false)
-                        }
+                        FilterMode::CompatibleOnly => self
+                            .check_mod_compatibility_with(
+                                &entry.mod_id,
+                                &effective_version,
+                                &effective_loader,
+                            )
+                            .unwrap_or(false),
                         FilterMode::IncompatibleOnly => self
-                            .check_mod_compatibility(&entry.mod_id)
+                            .check_mod_compatibility_with(
+                                &entry.mod_id,
+                                &effective_version,
+                                &effective_loader,
+                            )
                             .map(|c| !c)
                             .unwrap_or(false),
                     };
@@ -379,8 +429,20 @@ impl AppState {
                 SortMode::Name => a.mod_name.cmp(&b.mod_name),
                 SortMode::DateAdded => a.added_at.cmp(&b.added_at),
                 SortMode::Compatibility => {
-                    let comp_a = self.check_mod_compatibility(&a.mod_id).unwrap_or(false);
-                    let comp_b = self.check_mod_compatibility(&b.mod_id).unwrap_or(false);
+                    let comp_a = self
+                        .check_mod_compatibility_with(
+                            &a.mod_id,
+                            &effective_version,
+                            &effective_loader,
+                        )
+                        .unwrap_or(false);
+                    let comp_b = self
+                        .check_mod_compatibility_with(
+                            &b.mod_id,
+                            &effective_version,
+                            &effective_loader,
+                        )
+                        .unwrap_or(false);
                     comp_b.cmp(&comp_a)
                 }
             });
@@ -400,9 +462,24 @@ impl AppState {
     }
 
     pub fn check_mod_compatibility(&self, mod_id: &str) -> Option<bool> {
+        self.check_mod_compatibility_with(
+            mod_id,
+            &self.get_effective_version(),
+            &self.get_effective_loader(),
+        )
+    }
+
+    fn check_mod_compatibility_with(
+        &self,
+        mod_id: &str,
+        version: &str,
+        loader: &str,
+    ) -> Option<bool> {
         self.get_mod_details(mod_id).map(|m| {
-            m.supported_versions.contains(&self.selected_version)
-                && m.supported_loaders.contains(&self.selected_loader)
+            m.supported_versions.contains(&version.to_string())
+                && m.supported_loaders
+                    .iter()
+                    .any(|l| l.eq_ignore_ascii_case(loader))
         })
     }
 
@@ -437,8 +514,8 @@ impl AppState {
         self.mods_being_loaded.insert(mod_id.to_string());
         let _ = self.cmd_tx.try_send(Command::FetchModDetails {
             mod_id: mod_id.to_string(),
-            version: self.selected_version.clone(),
-            loader: self.selected_loader.clone(),
+            version: self.get_effective_version(),
+            loader: self.get_effective_loader(),
         });
     }
 
@@ -450,7 +527,7 @@ impl AppState {
         if let Some(mod_info) = self.get_mod_details(mod_id) {
             let _ = self.cmd_tx.try_send(Command::DownloadMod {
                 mod_info,
-                download_dir: self.download_dir.clone(),
+                download_dir: self.get_effective_download_dir(),
             });
         }
     }
@@ -460,12 +537,12 @@ impl AppState {
             let _ = self.cmd_tx.try_send(Command::SearchMods {
                 query: query.to_string(),
                 version: if self.search_filter_exact {
-                    self.selected_version.clone()
+                    self.get_effective_version()
                 } else {
                     String::new()
                 },
                 loader: if self.search_filter_exact {
-                    self.selected_loader.clone()
+                    self.get_effective_loader()
                 } else {
                     String::new()
                 },
@@ -506,6 +583,7 @@ impl AppState {
             });
         }
     }
+
     pub fn toggle_archive_mod(&mut self, mod_id: &str) {
         if let Some(list) = self.get_current_list_mut() {
             if let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id) {
@@ -516,6 +594,32 @@ impl AppState {
                     let _ = cm.save_list(&list).await;
                 });
             }
+        }
+    }
+
+    pub fn update_list_settings(&mut self, mut version: String, mut loader: String, dir: String) {
+        if version == "default" {
+            version = String::new();
+        }
+        if loader == "default" {
+            loader = String::new();
+        }
+
+        if let Some(list) = self.get_current_list_mut() {
+            list.version = version;
+            list.loader = loader;
+            list.download_dir = dir;
+
+            let list_clone = list.clone();
+            let cm = self.config_manager.clone();
+
+            self.runtime_handle.spawn(async move {
+                let _ = cm.save_list(&list_clone).await;
+            });
+        }
+
+        if self.current_list_id.is_some() {
+            self.invalidate_and_reload();
         }
     }
 
@@ -576,8 +680,8 @@ impl AppState {
                 let _ = self.cmd_tx.try_send(Command::LegacyListExport {
                     path,
                     mod_ids,
-                    version: self.selected_version.clone(),
-                    loader: self.selected_loader.clone(),
+                    version: self.get_effective_version(),
+                    loader: self.get_effective_loader(),
                 });
             }
             _ => {
@@ -594,24 +698,35 @@ impl AppState {
         self.legacy_state = LegacyState::InProgress {
             current: 0,
             total: 0,
-            message: "Preparing export...".into(),
+            message: "Preparing import...".into(),
         };
         let _ = self.cmd_tx.try_send(Command::LegacyListImport {
             path,
-            version: self.selected_version.clone(),
-            loader: self.selected_loader.clone(),
+            version: self.get_effective_version(),
+            loader: self.get_effective_loader(),
         });
     }
 
     pub fn finalize_import(&mut self, list: ModList) {
+        let mut list_to_save = list;
+        if list_to_save.version.is_empty() {
+            list_to_save.version = self.selected_version.clone();
+        }
+        if list_to_save.loader.is_empty() {
+            list_to_save.loader = self.selected_loader.clone();
+        }
+        if list_to_save.download_dir.is_empty() {
+            list_to_save.download_dir = self.download_dir.clone();
+        }
+
         let cm = self.config_manager.clone();
-        let list_to_save = list.clone();
+        let list_for_spawn = list_to_save.clone();
         self.runtime_handle.spawn(async move {
-            let _ = cm.save_list(&list_to_save).await;
+            let _ = cm.save_list(&list_for_spawn).await;
         });
 
-        self.current_list_id = Some(list.id.clone());
-        self.mod_lists.push(list);
+        self.current_list_id = Some(list_to_save.id.clone());
+        self.mod_lists.push(list_to_save);
     }
 
     pub fn persist_config_on_exit(&self) {
@@ -642,6 +757,9 @@ impl AppState {
             name: "New List".to_string(),
             created_at: Utc::now(),
             mods: Vec::new(),
+            version: self.selected_version.clone(),
+            loader: self.selected_loader.clone(),
+            download_dir: self.download_dir.clone(),
         };
 
         self.save_list(&new_list);
