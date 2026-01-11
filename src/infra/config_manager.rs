@@ -95,4 +95,8 @@ impl ConfigManager {
         self.save_config(&config).await?;
         Ok(config)
     }
+
+    pub fn get_cache_dir(&self) -> std::path::PathBuf {
+        self.config_dir.clone().join("cache")
+    }
 }
