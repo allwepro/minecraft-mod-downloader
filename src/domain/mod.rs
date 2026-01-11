@@ -52,6 +52,12 @@ pub struct ModList {
     pub name: String,
     pub created_at: DateTime<Utc>,
     pub mods: Vec<ModEntry>,
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub loader: String,
+    #[serde(default)]
+    pub download_dir: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
