@@ -81,21 +81,30 @@ impl ModProvider for ModrinthProvider {
         version: &str,
         loader: &str,
     ) -> anyhow::Result<Vec<ModInfo>> {
-        let url = format!(
-            "https://api.modrinth.com/v2/search?query={}&facets=[[\"versions:{}\"],[\"categories:{}\"]]",
-            urlencoding::encode(query),
-            version,
-            loader
+        let base = format!(
+            "https://api.modrinth.com/v2/search?query={}",
+            urlencoding::encode(query)
         );
+
+        let url = if version.is_empty() && loader.is_empty() {
+            format!("{}&facets=[[\"project_type:mod\"]]", base)
+        } else {
+            format!(
+                "{}&facets=[[\"versions:{}\"],[\"categories:{}\"],[\"project_type:mod\"]]",
+                base, version, loader
+            )
+        };
 
         let response: ModrinthSearchResult = self
             .client
             .get(&url)
             .header("User-Agent", "MinecraftModDownloader/1.0")
             .send()
-            .await?
+            .await
+            .expect("Failed to search mods")
             .json()
-            .await?;
+            .await
+            .expect("Failed to parse search results");
 
         let mods = response
             .hits
@@ -192,7 +201,6 @@ impl ModProvider for ModrinthProvider {
         let versions = response
             .into_iter()
             .filter(|v| v.version_type == "release")
-            .take(10)
             .map(|v| MinecraftVersion {
                 id: v.version.clone(),
                 name: v.version,
