@@ -31,6 +31,7 @@ pub struct AppState {
     runtime_handle: tokio::runtime::Handle,
     pub legacy_state: LegacyState,
     pub pending_legacy_mods: Option<Vec<Arc<ModInfo>>>,
+    pub icon_service: IconService,
 }
 
 impl AppState {
@@ -158,6 +159,12 @@ impl AppState {
         let config_manager =
             Arc::new(ConfigManager::new().expect("Failed to create config manager"));
 
+        let icon_service = IconService::new(
+            api_service.clone(),
+            config_manager.get_cache_dir().to_path_buf(),
+            runtime_handle.clone(),
+        );
+
         let (
             selected_version,
             selected_loader,
@@ -236,6 +243,7 @@ impl AppState {
             runtime_handle,
             legacy_state: LegacyState::Idle,
             pending_legacy_mods: None,
+            icon_service,
         }
     }
 

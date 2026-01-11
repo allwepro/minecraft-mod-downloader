@@ -15,6 +15,7 @@ pub struct ModInfo {
     pub id: String,
     pub slug: String,
     pub name: String,
+    pub icon_url: String,
     pub description: String,
     pub version: String,
     pub author: String,
