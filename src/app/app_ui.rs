@@ -1038,6 +1038,10 @@ impl App {
                                     .hint_text("Search mod name or description...")
                                     .desired_width(400.0),
                             );
+                            ui.checkbox(
+                                &mut self.state.search_filter_exact,
+                                "Match version/loader",
+                            );
                             if ui.button("Search").clicked() {
                                 self.state.perform_search(&self.search_window_query);
                             }
