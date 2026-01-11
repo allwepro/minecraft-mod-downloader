@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Semaphore;
 
 pub mod mod_source;
 
@@ -24,15 +22,6 @@ pub struct ModInfo {
     pub download_url: String,
     pub supported_versions: Vec<String>,
     pub supported_loaders: Vec<String>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DownloadStatus {
-    Idle,
-    Queued,
-    Downloading,
-    Complete,
-    Failed,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -128,132 +117,4 @@ pub enum Event {
         error: String,
         is_import: bool,
     },
-}
-
-#[derive(Clone, Debug)]
-struct CachedModInfo {
-    pub info: Arc<ModInfo>,
-    pub cached_at: DateTime<Utc>,
-}
-
-impl CachedModInfo {
-    pub fn new(info: Arc<ModInfo>) -> Self {
-        Self {
-            info,
-            cached_at: Utc::now(),
-        }
-    }
-
-    pub fn is_expired(&self, max_age_hours: i64) -> bool {
-        let now = Utc::now();
-        let age = now.signed_duration_since(self.cached_at);
-        age.num_hours() >= max_age_hours
-    }
-}
-
-#[derive(Clone)]
-pub struct ModInfoPool {
-    cache: HashMap<String, CachedModInfo>,
-    slug_to_id: HashMap<String, String>,
-    max_size: usize,
-    max_age_hours: i64,
-}
-
-impl ModInfoPool {
-    pub fn new(max_size: usize, max_age_hours: i64) -> Self {
-        Self {
-            cache: HashMap::new(),
-            slug_to_id: HashMap::new(),
-            max_size,
-            max_age_hours,
-        }
-    }
-
-    pub fn get(&self, mod_id: &str) -> Option<Arc<ModInfo>> {
-        self.cache.get(mod_id).and_then(|cached| {
-            if cached.is_expired(self.max_age_hours) {
-                None
-            } else {
-                Some(cached.info.clone())
-            }
-        })
-    }
-
-    pub fn get_by_slug(&self, slug: &str) -> Option<Arc<ModInfo>> {
-        self.slug_to_id.get(slug).and_then(|id| self.get(id))
-    }
-
-    pub fn insert(&mut self, info: ModInfo) -> Arc<ModInfo> {
-        let id = info.id.clone();
-        let slug = info.slug.clone();
-        let arc_info = Arc::new(info);
-
-        if !slug.is_empty() {
-            self.slug_to_id.insert(slug, id.clone());
-        }
-
-        if let Some(existing) = self.cache.get(&id) {
-            if !existing.is_expired(self.max_age_hours) {
-                return existing.info.clone();
-            }
-        }
-
-        if self.cache.len() >= self.max_size {
-            self.evict_oldest();
-        }
-
-        self.cache
-            .insert(id.clone(), CachedModInfo::new(arc_info.clone()));
-        arc_info
-    }
-
-    pub fn contains_valid(&self, mod_id: &str) -> bool {
-        self.cache
-            .get(mod_id)
-            .map(|c| !c.is_expired(self.max_age_hours))
-            .unwrap_or(false)
-    }
-
-    pub fn clear(&mut self) {
-        self.cache.clear();
-        self.slug_to_id.clear();
-    }
-
-    fn evict_oldest(&mut self) {
-        if let Some(oldest_key) = self
-            .cache
-            .iter()
-            .min_by_key(|(_, v)| v.cached_at)
-            .map(|(k, _)| k.clone())
-        {
-            if let Some(cached) = self.cache.remove(&oldest_key) {
-                self.slug_to_id.remove(&cached.info.slug);
-            }
-        }
-    }
-
-    pub fn clear_expired(&mut self) {
-        self.cache.retain(|_, v| !v.is_expired(self.max_age_hours));
-    }
-}
-
-#[derive(Clone)]
-pub struct ConnectionLimiter {
-    semaphore: Arc<Semaphore>,
-}
-
-impl ConnectionLimiter {
-    pub fn new(max_connections: usize) -> Self {
-        Self {
-            semaphore: Arc::new(Semaphore::new(max_connections)),
-        }
-    }
-
-    pub async fn acquire(&self, slots: u32) -> tokio::sync::OwnedSemaphorePermit {
-        self.semaphore
-            .clone()
-            .acquire_many_owned(slots)
-            .await
-            .expect("Semaphore closed")
-    }
 }
