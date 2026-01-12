@@ -1,4 +1,4 @@
-use super::{MinecraftVersion, ModInfo, ModLoader};
+use super::{MinecraftVersion, ModInfo, ModLoader, ProjectType};
 use async_trait::async_trait;
 
 #[async_trait]
@@ -8,6 +8,7 @@ pub trait ModProvider: Send + Sync {
         query: &str,
         version: &str,
         loader: &str,
+        project_type: &ProjectType,
     ) -> anyhow::Result<Vec<ModInfo>>;
 
     async fn fetch_mod_details(
@@ -19,7 +20,10 @@ pub trait ModProvider: Send + Sync {
 
     async fn get_minecraft_versions(&self) -> anyhow::Result<Vec<MinecraftVersion>>;
 
-    async fn get_mod_loaders(&self) -> anyhow::Result<Vec<ModLoader>>;
+    async fn get_mod_loaders_for_type(
+        &self,
+        project_type: ProjectType,
+    ) -> anyhow::Result<Vec<ModLoader>>;
 
     async fn download_mod(
         &self,
