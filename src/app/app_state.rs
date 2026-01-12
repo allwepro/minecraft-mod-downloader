@@ -250,6 +250,25 @@ impl AppState {
         }
     }
 
+    pub fn force_reload_mod(&mut self, mod_id: &str) {
+        self.mods_failed_loading.remove(mod_id);
+        self.mods_being_loaded.remove(mod_id);
+        self.mod_service.clear_cache_for(mod_id);
+        self.load_mod_details_if_needed(mod_id);
+    }
+
+    pub fn reload_all_mods(&mut self) {
+        if let Some(list) = self.get_current_list() {
+            let mod_ids: Vec<String> = list.mods.iter().map(|e| e.mod_id.clone()).collect();
+            for mod_id in mod_ids {
+                self.mods_failed_loading.remove(&mod_id);
+                self.mods_being_loaded.remove(&mod_id);
+                self.mod_service.clear_cache_for(&mod_id);
+                self.load_mod_details_if_needed(&mod_id);
+            }
+        }
+    }
+
     pub fn is_mod_file_present(&self, mod_info: &ModInfo) -> bool {
         let download_dir = self.get_effective_download_dir();
         if download_dir.is_empty() {
