@@ -80,6 +80,12 @@ impl ModService {
     pub fn clear_cache(&self) {
         self.pool.blocking_lock().clear();
     }
+    pub fn clear_cache_for(&self, mod_id: &str) {
+        let mut pool = self.pool.blocking_lock();
+        if let Some(cached) = pool.cache.remove(mod_id) {
+            pool.slug_to_id.remove(&cached.info.slug);
+        }
+    }
 
     pub async fn cache_search_results(&self, results: Vec<ModInfo>) -> Vec<Arc<ModInfo>> {
         let mut pool = self.pool.lock().await;
