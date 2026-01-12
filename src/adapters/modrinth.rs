@@ -135,7 +135,7 @@ impl ModProvider for ModrinthProvider {
                     slug: hit.slug,
                     name: hit.title,
                     description: hit.description,
-                    version: "Latest".to_string(),
+                    version: String::new(),
                     author: hit.author,
                     icon_url: hit.icon_url,
                     download_count: hit.downloads,
@@ -158,6 +158,7 @@ impl ModProvider for ModrinthProvider {
     ) -> anyhow::Result<ModInfo> {
         let project_url = format!("https://api.modrinth.com/v2/project/{}", mod_id);
         let versions_url = format!("https://api.modrinth.com/v2/project/{}/version", mod_id);
+        let team_url = format!("https://api.modrinth.com/v2/project/{}/members", mod_id);
 
         let project_response = self
             .client
@@ -169,6 +170,36 @@ impl ModProvider for ModrinthProvider {
         let project_text = project_response.text().await?;
         let project: ModrinthProjectDetails = serde_json::from_str(&project_text)
             .map_err(|e| anyhow::anyhow!("Failed to parse project: {}", e))?;
+
+        let author = match self
+            .client
+            .get(&team_url)
+            .header("User-Agent", "MinecraftModDownloader/1.0")
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                #[derive(Deserialize)]
+                struct TeamMember {
+                    role: String,
+                    user: TeamUser,
+                }
+                #[derive(Deserialize)]
+                struct TeamUser {
+                    username: String,
+                }
+                match resp.json::<Vec<TeamMember>>().await {
+                    Ok(members) => members
+                        .into_iter()
+                        .filter(|m| m.role == "Owner")
+                        .next()
+                        .map(|m| m.user.username.clone())
+                        .unwrap_or_else(|| project.team.clone()),
+                    Err(_) => project.team.clone(),
+                }
+            }
+            Err(_) => project.team.clone(),
+        };
 
         let project_type = match project.project_type.as_str() {
             "mod" => ProjectType::Mod,
@@ -190,29 +221,92 @@ impl ModProvider for ModrinthProvider {
         let versions: Vec<ModrinthVersion> = serde_json::from_str(&versions_text)
             .map_err(|e| anyhow::anyhow!("Failed to parse versions: {}", e))?;
 
+        log::debug!(
+            "Mod {} has {} versions. Looking for version={} loader={}",
+            mod_id,
+            versions.len(),
+            version,
+            loader
+        );
+
         let compatible_version = versions
             .iter()
             .find(|v| {
-                v.game_versions.contains(&version.to_string())
-                    && (loader.is_empty()
-                        || v.loaders.iter().any(|l| l.eq_ignore_ascii_case(loader)))
+                let version_match = v.game_versions.contains(&version.to_string());
+                let loader_match = loader.is_empty()
+                    || v.loaders.iter().any(|l| l.eq_ignore_ascii_case(loader));
+
+                if !version_match {
+                    log::debug!(
+                        "Version {} doesn't match for mod {} (has: {:?})",
+                        version,
+                        mod_id,
+                        v.game_versions
+                    );
+                }
+                if !loader_match {
+                    log::debug!(
+                        "Loader {} doesn't match for mod {} (has: {:?})",
+                        loader,
+                        mod_id,
+                        v.loaders
+                    );
+                }
+
+                version_match && loader_match
             })
-            .or_else(|| versions.first())
+            .or_else(|| {
+                log::warn!(
+                    "No exact match for mod {} version={} loader={}. Using first available version.",
+                    mod_id,
+                    version,
+                    loader
+                );
+                versions.first()
+            })
             .ok_or_else(|| anyhow::anyhow!("No versions available for project {}", mod_id))?;
+
+        log::debug!(
+            "Selected version '{}' for mod {} (file count: {}, id: {})",
+            compatible_version.version_number,
+            mod_id,
+            compatible_version.files.len(),
+            compatible_version.id
+        );
 
         let download_url = compatible_version
             .files
             .first()
-            .map(|f| f.url.clone())
-            .unwrap_or_default();
+            .map(|f| {
+                log::debug!("Download URL: {}", f.url);
+                f.url.clone()
+            })
+            .unwrap_or_else(|| {
+                log::warn!(
+                    "No files available for mod {} version {}",
+                    mod_id,
+                    compatible_version.version_number
+                );
+                String::new()
+            });
+
+        let version_number = compatible_version.version_number.clone();
+
+        log::debug!(
+            "Creating ModInfo: version='{}' (len={}), download_url='{}' (len={})",
+            version_number,
+            version_number.len(),
+            download_url,
+            download_url.len()
+        );
 
         Ok(ModInfo {
             id: project.id,
             slug: project.slug,
             name: project.title,
             description: project.description,
-            version: compatible_version.version_number.clone(),
-            author: project.team,
+            version: version_number,
+            author,
             icon_url: project.icon_url,
             download_count: project.downloads,
             download_url,
@@ -305,6 +399,14 @@ impl ModProvider for ModrinthProvider {
             ],
             ProjectType::Plugin => vec![
                 ModLoader {
+                    id: "paper".to_string(),
+                    name: "Paper".to_string(),
+                },
+                ModLoader {
+                    id: "spigot".to_string(),
+                    name: "Spigot".to_string(),
+                },
+                ModLoader {
                     id: "bukkit".to_string(),
                     name: "Bukkit".to_string(),
                 },
@@ -313,20 +415,16 @@ impl ModProvider for ModrinthProvider {
                     name: "Folia".to_string(),
                 },
                 ModLoader {
-                    id: "paper".to_string(),
-                    name: "Paper".to_string(),
-                },
-                ModLoader {
                     id: "purpur".to_string(),
                     name: "Purpur".to_string(),
                 },
                 ModLoader {
-                    id: "spigot".to_string(),
-                    name: "Spigot".to_string(),
-                },
-                ModLoader {
                     id: "sponge".to_string(),
                     name: "Sponge".to_string(),
+                },
+                ModLoader {
+                    id: "velocity".to_string(),
+                    name: "Velocity".to_string(),
                 },
                 ModLoader {
                     id: "bungeecord".to_string(),
@@ -335,10 +433,6 @@ impl ModProvider for ModrinthProvider {
                 ModLoader {
                     id: "geyser".to_string(),
                     name: "Geyser".to_string(),
-                },
-                ModLoader {
-                    id: "velocity".to_string(),
-                    name: "Velocity".to_string(),
                 },
                 ModLoader {
                     id: "waterfall".to_string(),
@@ -351,8 +445,8 @@ impl ModProvider for ModrinthProvider {
             }],
             ProjectType::Shader => vec![
                 ModLoader {
-                    id: "canvas".to_string(),
-                    name: "Canvas".to_string(),
+                    id: "vanilla".to_string(),
+                    name: "Vanilla".to_string(),
                 },
                 ModLoader {
                     id: "iris".to_string(),
@@ -363,8 +457,8 @@ impl ModProvider for ModrinthProvider {
                     name: "OptiFine".to_string(),
                 },
                 ModLoader {
-                    id: "vanilla".to_string(),
-                    name: "Vanilla".to_string(),
+                    id: "canvas".to_string(),
+                    name: "Canvas".to_string(),
                 },
             ],
             ProjectType::Datapack => vec![ModLoader {
