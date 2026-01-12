@@ -26,7 +26,7 @@ impl ModService {
         version: &str,
         loader: &str,
     ) -> Result<Arc<ModInfo>> {
-        self.get_mod_internal(id, version, loader, |pool| pool.get(id))
+        self.get_mod_internal(id, version, loader, |pool, v, l| pool.get(id, v, l))
             .await
     }
 
@@ -36,8 +36,10 @@ impl ModService {
         version: &str,
         loader: &str,
     ) -> Result<Arc<ModInfo>> {
-        self.get_mod_internal(slug, version, loader, |pool| pool.get_by_slug(slug))
-            .await
+        self.get_mod_internal(slug, version, loader, |pool, v, l| {
+            pool.get_by_slug(slug, v, l)
+        })
+        .await
     }
 
     async fn get_mod_internal<F>(
@@ -48,18 +50,30 @@ impl ModService {
         cache_check: F,
     ) -> Result<Arc<ModInfo>>
     where
-        F: FnOnce(&ModInfoPool) -> Option<Arc<ModInfo>>,
+        F: FnOnce(&ModInfoPool, &str, &str) -> Option<Arc<ModInfo>>,
     {
         if let Some(info) = {
             let pool = self.pool.lock().await;
-            cache_check(&pool)
+            cache_check(&pool, version, loader)
         } {
-            return Ok(info);
+            if !info.version.is_empty() {
+                log::debug!("Returning cached complete info for {}", identifier);
+                return Ok(info);
+            }
+            log::debug!(
+                "Cached info for {} has empty version, fetching fresh",
+                identifier
+            );
         }
 
         let _permit = self.api_service.limiter.acquire(1).await;
 
-        println!("Fetching mod details for {}", loader);
+        log::debug!(
+            "Fetching mod details for {} (version={} loader={})",
+            identifier,
+            version,
+            loader
+        );
 
         let details = self
             .api_service
@@ -68,32 +82,19 @@ impl ModService {
             .await?;
 
         let mut pool = self.pool.lock().await;
-        Ok(pool.insert(details))
+        Ok(pool.insert(details, version.to_string(), loader.to_string()))
     }
 
-    pub fn get_cached_mod_blocking(&self, mod_id: &str) -> Option<Arc<ModInfo>> {
-        self.pool.blocking_lock().get(mod_id)
-    }
-
-    pub fn contains_valid_blocking(&self, mod_id: &str) -> bool {
-        self.pool.blocking_lock().contains_valid(mod_id)
-    }
-
-    pub fn clear_cache(&self) {
-        self.pool.blocking_lock().clear();
-    }
-    pub fn clear_cache_for(&self, mod_id: &str) {
-        let mut pool = self.pool.blocking_lock();
-        if let Some(cached) = pool.cache.remove(mod_id) {
-            pool.slug_to_id.remove(&cached.info.slug);
-        }
-    }
-
-    pub async fn cache_search_results(&self, results: Vec<ModInfo>) -> Vec<Arc<ModInfo>> {
+    pub async fn cache_search_results(
+        &self,
+        results: Vec<ModInfo>,
+        version: String,
+        loader: String,
+    ) -> Vec<Arc<ModInfo>> {
         let mut pool = self.pool.lock().await;
         results
             .into_iter()
-            .map(|mod_info| pool.insert(mod_info))
+            .map(|mod_info| pool.insert(mod_info, version.clone(), loader.clone()))
             .collect()
     }
 }
@@ -102,13 +103,17 @@ impl ModService {
 struct CachedModInfo {
     pub info: Arc<ModInfo>,
     pub cached_at: DateTime<Utc>,
+    pub version: String,
+    pub loader: String,
 }
 
 impl CachedModInfo {
-    pub fn new(info: Arc<ModInfo>) -> Self {
+    pub fn new(info: Arc<ModInfo>, version: String, loader: String) -> Self {
         Self {
             info,
             cached_at: Utc::now(),
+            version,
+            loader,
         }
     }
 
@@ -117,11 +122,16 @@ impl CachedModInfo {
         let age = now.signed_duration_since(self.cached_at);
         age.num_hours() >= max_age_hours
     }
+
+    pub fn matches_context(&self, version: &str, loader: &str) -> bool {
+        self.version == version && self.loader == loader
+    }
 }
 
 #[derive(Clone)]
 pub struct ModInfoPool {
     cache: HashMap<String, CachedModInfo>,
+    base_info_cache: HashMap<String, Arc<ModInfo>>,
     slug_to_id: HashMap<String, String>,
     max_size: usize,
     max_age_hours: i64,
@@ -131,15 +141,16 @@ impl ModInfoPool {
     pub fn new(max_size: usize, max_age_hours: i64) -> Self {
         Self {
             cache: HashMap::new(),
+            base_info_cache: HashMap::new(),
             slug_to_id: HashMap::new(),
             max_size,
             max_age_hours,
         }
     }
 
-    pub fn get(&self, mod_id: &str) -> Option<Arc<ModInfo>> {
+    pub fn get(&self, mod_id: &str, version: &str, loader: &str) -> Option<Arc<ModInfo>> {
         self.cache.get(mod_id).and_then(|cached| {
-            if cached.is_expired(self.max_age_hours) {
+            if cached.is_expired(self.max_age_hours) || !cached.matches_context(version, loader) {
                 None
             } else {
                 Some(cached.info.clone())
@@ -147,11 +158,13 @@ impl ModInfoPool {
         })
     }
 
-    pub fn get_by_slug(&self, slug: &str) -> Option<Arc<ModInfo>> {
-        self.slug_to_id.get(slug).and_then(|id| self.get(id))
+    pub fn get_by_slug(&self, slug: &str, version: &str, loader: &str) -> Option<Arc<ModInfo>> {
+        self.slug_to_id
+            .get(slug)
+            .and_then(|id| self.get(id, version, loader))
     }
 
-    pub fn insert(&mut self, info: ModInfo) -> Arc<ModInfo> {
+    pub fn insert(&mut self, info: ModInfo, version: String, loader: String) -> Arc<ModInfo> {
         let id = info.id.clone();
         let slug = info.slug.clone();
         let arc_info = Arc::new(info);
@@ -160,9 +173,17 @@ impl ModInfoPool {
             self.slug_to_id.insert(slug, id.clone());
         }
 
+        self.base_info_cache.insert(id.clone(), arc_info.clone());
+
         if let Some(existing) = self.cache.get(&id) {
-            if !existing.is_expired(self.max_age_hours) {
-                return existing.info.clone();
+            if !existing.is_expired(self.max_age_hours)
+                && existing.matches_context(&version, &loader)
+            {
+                if !existing.info.version.is_empty() {
+                    log::debug!("Keeping existing complete cache entry for {}", id);
+                    return existing.info.clone();
+                }
+                log::debug!("Replacing incomplete cache entry for {} with new data", id);
             }
         }
 
@@ -170,21 +191,18 @@ impl ModInfoPool {
             self.evict_oldest();
         }
 
-        self.cache
-            .insert(id.clone(), CachedModInfo::new(arc_info.clone()));
+        log::debug!(
+            "Caching mod {}: version='{}', download_url present={}",
+            id,
+            arc_info.version,
+            !arc_info.download_url.is_empty()
+        );
+
+        self.cache.insert(
+            id.clone(),
+            CachedModInfo::new(arc_info.clone(), version, loader),
+        );
         arc_info
-    }
-
-    pub fn contains_valid(&self, mod_id: &str) -> bool {
-        self.cache
-            .get(mod_id)
-            .map(|c| !c.is_expired(self.max_age_hours))
-            .unwrap_or(false)
-    }
-
-    pub fn clear(&mut self) {
-        self.cache.clear();
-        self.slug_to_id.clear();
     }
 
     fn evict_oldest(&mut self) {
@@ -196,11 +214,8 @@ impl ModInfoPool {
         {
             if let Some(cached) = self.cache.remove(&oldest_key) {
                 self.slug_to_id.remove(&cached.info.slug);
+                // Don't remove from base_info_cache as it's version-independent
             }
         }
-    }
-
-    pub fn clear_expired(&mut self) {
-        self.cache.retain(|_, v| !v.is_expired(self.max_age_hours));
     }
 }

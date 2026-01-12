@@ -1,12 +1,15 @@
 mod app_state;
-mod app_ui;
+mod effect;
+mod runtime;
 
 pub use app_state::AppState;
-pub use app_ui::App;
+pub use effect::Effect;
+pub use runtime::AppRuntime;
 use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Default)]
 pub enum ListAction {
+    #[default]
     Import,
     Duplicate,
 }
@@ -37,22 +40,25 @@ pub enum DownloadStatus {
     Failed,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum SortMode {
+    #[default]
     Name,
     DateAdded,
     Compatibility,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum FilterMode {
+    #[default]
     All,
     CompatibleOnly,
     IncompatibleOnly,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum OrderMode {
+    #[default]
     Ascending,
     Descending,
 }
