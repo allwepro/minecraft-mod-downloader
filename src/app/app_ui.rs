@@ -682,6 +682,14 @@ impl App {
                     if ui.button("⚙ Default Settings").clicked() {
                         self.settings_window_open = true;
                     }
+
+                    if ui
+                        .button("↻ Reload All")
+                        .on_hover_text("Refresh all mod details")
+                        .clicked()
+                    {
+                        self.state.reload_all_mods();
+                    }
                 });
             });
         });
@@ -1099,10 +1107,16 @@ impl App {
                                 } else if is_loading {
                                     ui.label("⏳ Loading details...");
                                 } else if has_failed {
-                                    ui.colored_label(
-                                        egui::Color32::YELLOW,
-                                        "⚠ Failed to load details",
-                                    );
+                                    if ui
+                                        .button(
+                                            egui::RichText::new("⚠ Failed to load details")
+                                                .color(egui::Color32::YELLOW),
+                                        )
+                                        .on_hover_text("Reloads this mods details")
+                                        .clicked()
+                                    {
+                                        self.state.force_reload_mod(mod_id);
+                                    }
                                 } else {
                                     ui.label("Details unavailable");
                                 }
