@@ -933,6 +933,38 @@ impl App {
                         self.current_order_mode,
                         self.current_filter_mode,
                     );
+
+                    let mut existing_count = 0;
+                    let mut missing_ids: Vec<String> = Vec::new();
+
+                    for entry in &filtered_mods {
+                        let is_downloading = self.state.mods_being_loaded.contains(&entry.mod_id);
+                        let status = self.state.download_status.get(&entry.mod_id);
+                        let is_queued_or_active = status
+                            .map(|s| {
+                                matches!(s, DownloadStatus::Queued | DownloadStatus::Downloading)
+                            })
+                            .unwrap_or(false);
+
+                        if is_downloading || is_queued_or_active {
+                            continue;
+                        }
+
+                        if let Some(info) = self.state.get_mod_details(&entry.mod_id) {
+                            if self.state.is_mod_file_present(&*info) {
+                                existing_count += 1;
+                            } else {
+                                if self
+                                    .state
+                                    .check_mod_compatibility(&entry.mod_id)
+                                    .unwrap_or(false)
+                                {
+                                    missing_ids.push(entry.mod_id.clone());
+                                }
+                            }
+                        }
+                    }
+
                     let mods_to_download: Vec<String> = filtered_mods
                         .iter()
                         .filter(|entry| {
@@ -965,6 +997,19 @@ impl App {
                             self.state.start_download(&mod_id);
                         }
                     }
+
+                    let show_missing_button = existing_count > 0 && !missing_ids.is_empty();
+                    if show_missing_button {
+                        ui.add_space(5.0);
+                        if ui
+                            .add_enabled(can_interact, egui::Button::new("⬇ Download Missing"))
+                            .clicked()
+                        {
+                            for mod_id in missing_ids {
+                                self.state.start_download(&mod_id);
+                            }
+                        }
+                    }
                 });
             });
 
@@ -993,6 +1038,19 @@ impl App {
                 let mut toggle_archive_id = None;
                 let mut delete_mod_id = None;
 
+                let total_existing_in_list: usize = active_mods
+                    .iter()
+                    .filter(|e| {
+                        if let Some(info) = self.state.get_mod_details(&e.mod_id) {
+                            self.state.is_mod_file_present(&*info)
+                        } else {
+                            false
+                        }
+                    })
+                    .count();
+
+                let highlight_missing = total_existing_in_list > 0;
+
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     let mut render_mod_entry = |ui: &mut egui::Ui, entry: &ModEntry| {
                         let mod_id = &entry.mod_id;
@@ -1002,6 +1060,13 @@ impl App {
                         let has_failed = self.state.mods_failed_loading.contains(mod_id);
                         let compatibility = self.state.check_mod_compatibility(mod_id);
                         let is_archived = entry.archived;
+
+                        let is_present = if let Some(mod_info) = self.state.get_mod_details(mod_id)
+                        {
+                            self.state.is_mod_file_present(&*mod_info)
+                        } else {
+                            false
+                        };
 
                         ui.horizontal(|ui| {
                             if let Some(mod_info) = self.state.get_mod_details(mod_id)
@@ -1043,6 +1108,12 @@ impl App {
                                 }
                                 if let Some(false) = compatibility {
                                     ui.colored_label(egui::Color32::RED, "❌ Incompatible");
+                                } else if highlight_missing
+                                    && !is_present
+                                    && !is_archived
+                                    && !is_loading
+                                {
+                                    ui.colored_label(egui::Color32::LIGHT_YELLOW, "⚠ Missing");
                                 }
                             });
 
@@ -1058,6 +1129,9 @@ impl App {
 
                                     match status {
                                         DownloadStatus::Idle => {
+                                            if is_present {
+                                                ui.label("✅");
+                                            }
                                             if !is_archived {
                                                 let button = egui::Button::new("Download");
                                                 let enabled = !is_loading
