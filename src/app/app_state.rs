@@ -249,6 +249,17 @@ impl AppState {
             search_filter_exact: true,
         }
     }
+
+    pub fn is_mod_file_present(&self, mod_info: &ModInfo) -> bool {
+        let download_dir = self.get_effective_download_dir();
+        if download_dir.is_empty() {
+            return false;
+        }
+        let filename = format!("{}.jar", mod_info.name.replace(" ", "_"));
+        let path = std::path::Path::new(&download_dir).join(filename);
+        path.exists()
+    }
+
     fn get_current_list_settings(&self) -> (Option<String>, Option<String>, Option<String>) {
         if let Some(list) = self.get_current_list() {
             let ver = if list.version.is_empty() {
