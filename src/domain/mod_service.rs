@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct ModService {
-    api_service: Arc<ApiService>,
+    pub(crate) api_service: Arc<ApiService>,
     pool: Arc<Mutex<ModInfoPool>>,
 }
 
@@ -58,6 +58,8 @@ impl ModService {
         }
 
         let _permit = self.api_service.limiter.acquire(1).await;
+
+        println!("Fetching mod details for {}", loader);
 
         let details = self
             .api_service

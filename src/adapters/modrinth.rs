@@ -1,4 +1,4 @@
-use crate::domain::{MinecraftVersion, ModInfo, ModLoader, ModProvider};
+use crate::domain::{MinecraftVersion, ModInfo, ModLoader, ModProvider, ProjectType};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -34,6 +34,7 @@ struct ModrinthProject {
     icon_url: String,
     #[serde(default)]
     categories: Vec<String>,
+    project_type: String,
 }
 
 #[derive(Deserialize)]
@@ -50,6 +51,7 @@ struct ModrinthProjectDetails {
     icon_url: String,
     #[serde(default)]
     categories: Vec<String>,
+    project_type: String,
 }
 
 #[derive(Deserialize)]
@@ -80,47 +82,68 @@ impl ModProvider for ModrinthProvider {
         query: &str,
         version: &str,
         loader: &str,
+        project_type: &ProjectType,
     ) -> anyhow::Result<Vec<ModInfo>> {
         let base = format!(
             "https://api.modrinth.com/v2/search?query={}",
             urlencoding::encode(query)
         );
 
-        let url = if version.is_empty() && loader.is_empty() {
-            format!("{}&facets=[[\"project_type:mod\"]]", base)
-        } else {
-            format!(
-                "{}&facets=[[\"versions:{}\"],[\"categories:{}\"],[\"project_type:mod\"]]",
-                base, version, loader
-            )
-        };
+        let mut facets = vec![format!("\"project_type:{}\"", project_type.id())];
+
+        if !version.is_empty() {
+            facets.push(format!("\"versions:{}\"", version));
+        }
+        if !loader.is_empty() && *project_type == ProjectType::Mod {
+            facets.push(format!("\"categories:{}\"", loader));
+        }
+
+        let url = format!(
+            "{}&facets=[{}]",
+            base,
+            facets
+                .iter()
+                .map(|f| format!("[{}]", f))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
 
         let response: ModrinthSearchResult = self
             .client
             .get(&url)
             .header("User-Agent", "MinecraftModDownloader/1.0")
             .send()
-            .await
-            .expect("Failed to search mods")
+            .await?
             .json()
-            .await
-            .expect("Failed to parse search results");
+            .await?;
 
         let mods = response
             .hits
             .into_iter()
-            .map(|hit| ModInfo {
-                id: hit.project_id,
-                slug: hit.slug,
-                name: hit.title,
-                description: hit.description,
-                version: "Latest".to_string(),
-                author: hit.author,
-                icon_url: hit.icon_url,
-                download_count: hit.downloads,
-                download_url: String::new(),
-                supported_versions: hit.versions,
-                supported_loaders: hit.categories,
+            .map(|hit| {
+                let pt = match hit.project_type.as_str() {
+                    "mod" => ProjectType::Mod,
+                    "resourcepack" => ProjectType::ResourcePack,
+                    "shader" => ProjectType::Shader,
+                    "datapack" => ProjectType::Datapack,
+                    "plugin" => ProjectType::Plugin,
+                    _ => ProjectType::Mod,
+                };
+
+                ModInfo {
+                    id: hit.project_id,
+                    slug: hit.slug,
+                    name: hit.title,
+                    description: hit.description,
+                    version: "Latest".to_string(),
+                    author: hit.author,
+                    icon_url: hit.icon_url,
+                    download_count: hit.downloads,
+                    download_url: String::new(),
+                    supported_versions: hit.versions,
+                    supported_loaders: hit.categories,
+                    project_type: pt,
+                }
             })
             .collect();
 
@@ -147,6 +170,15 @@ impl ModProvider for ModrinthProvider {
         let project: ModrinthProjectDetails = serde_json::from_str(&project_text)
             .map_err(|e| anyhow::anyhow!("Failed to parse project: {}", e))?;
 
+        let project_type = match project.project_type.as_str() {
+            "mod" => ProjectType::Mod,
+            "resourcepack" => ProjectType::ResourcePack,
+            "shader" => ProjectType::Shader,
+            "datapack" => ProjectType::Datapack,
+            "plugin" => ProjectType::Plugin,
+            _ => ProjectType::Mod,
+        };
+
         let versions_response = self
             .client
             .get(&versions_url)
@@ -162,10 +194,11 @@ impl ModProvider for ModrinthProvider {
             .iter()
             .find(|v| {
                 v.game_versions.contains(&version.to_string())
-                    && v.loaders.iter().any(|l| l.eq_ignore_ascii_case(loader))
+                    && (loader.is_empty()
+                        || v.loaders.iter().any(|l| l.eq_ignore_ascii_case(loader)))
             })
             .or_else(|| versions.first())
-            .ok_or_else(|| anyhow::anyhow!("No versions available for mod {}", mod_id))?;
+            .ok_or_else(|| anyhow::anyhow!("No versions available for project {}", mod_id))?;
 
         let download_url = compatible_version
             .files
@@ -185,6 +218,7 @@ impl ModProvider for ModrinthProvider {
             download_url,
             supported_versions: compatible_version.game_versions.clone(),
             supported_loaders: compatible_version.loaders.clone(),
+            project_type,
         })
     }
 
@@ -210,25 +244,134 @@ impl ModProvider for ModrinthProvider {
         Ok(versions)
     }
 
-    async fn get_mod_loaders(&self) -> anyhow::Result<Vec<ModLoader>> {
-        Ok(vec![
-            ModLoader {
-                id: "fabric".to_string(),
-                name: "Fabric".to_string(),
-            },
-            ModLoader {
-                id: "forge".to_string(),
-                name: "Forge".to_string(),
-            },
-            ModLoader {
-                id: "neoforge".to_string(),
-                name: "NeoForge".to_string(),
-            },
-            ModLoader {
-                id: "quilt".to_string(),
-                name: "Quilt".to_string(),
-            },
-        ])
+    async fn get_mod_loaders_for_type(
+        &self,
+        project_type: ProjectType,
+    ) -> anyhow::Result<Vec<ModLoader>> {
+        Ok(match project_type {
+            ProjectType::Mod => vec![
+                ModLoader {
+                    id: "fabric".to_string(),
+                    name: "Fabric".to_string(),
+                },
+                ModLoader {
+                    id: "forge".to_string(),
+                    name: "Forge".to_string(),
+                },
+                ModLoader {
+                    id: "neoforge".to_string(),
+                    name: "NeoForge".to_string(),
+                },
+                ModLoader {
+                    id: "quilt".to_string(),
+                    name: "Quilt".to_string(),
+                },
+                ModLoader {
+                    id: "babric".to_string(),
+                    name: "Babric".to_string(),
+                },
+                ModLoader {
+                    id: "bta-babric".to_string(),
+                    name: "BTA (Babric)".to_string(),
+                },
+                ModLoader {
+                    id: "java-agent".to_string(),
+                    name: "Java Agent".to_string(),
+                },
+                ModLoader {
+                    id: "legacy-fabric".to_string(),
+                    name: "Legacy Fabric".to_string(),
+                },
+                ModLoader {
+                    id: "liteloader".to_string(),
+                    name: "LiteLoader".to_string(),
+                },
+                ModLoader {
+                    id: "modloader".to_string(),
+                    name: "Risugami's ModLoader".to_string(),
+                },
+                ModLoader {
+                    id: "nilloader".to_string(),
+                    name: "NilLoader".to_string(),
+                },
+                ModLoader {
+                    id: "ornithe".to_string(),
+                    name: "Ornithe".to_string(),
+                },
+                ModLoader {
+                    id: "rift".to_string(),
+                    name: "Rift".to_string(),
+                },
+            ],
+            ProjectType::Plugin => vec![
+                ModLoader {
+                    id: "bukkit".to_string(),
+                    name: "Bukkit".to_string(),
+                },
+                ModLoader {
+                    id: "folia".to_string(),
+                    name: "Folia".to_string(),
+                },
+                ModLoader {
+                    id: "paper".to_string(),
+                    name: "Paper".to_string(),
+                },
+                ModLoader {
+                    id: "purpur".to_string(),
+                    name: "Purpur".to_string(),
+                },
+                ModLoader {
+                    id: "spigot".to_string(),
+                    name: "Spigot".to_string(),
+                },
+                ModLoader {
+                    id: "sponge".to_string(),
+                    name: "Sponge".to_string(),
+                },
+                ModLoader {
+                    id: "bungeecord".to_string(),
+                    name: "BungeeCord".to_string(),
+                },
+                ModLoader {
+                    id: "geyser".to_string(),
+                    name: "Geyser".to_string(),
+                },
+                ModLoader {
+                    id: "velocity".to_string(),
+                    name: "Velocity".to_string(),
+                },
+                ModLoader {
+                    id: "waterfall".to_string(),
+                    name: "Waterfall".to_string(),
+                },
+            ],
+            ProjectType::ResourcePack => vec![ModLoader {
+                id: "minecraft".to_string(),
+                name: "Vanilla".to_string(),
+            }],
+            ProjectType::Shader => vec![
+                ModLoader {
+                    id: "canvas".to_string(),
+                    name: "Canvas".to_string(),
+                },
+                ModLoader {
+                    id: "iris".to_string(),
+                    name: "Iris".to_string(),
+                },
+                ModLoader {
+                    id: "optifine".to_string(),
+                    name: "OptiFine".to_string(),
+                },
+                ModLoader {
+                    id: "vanilla".to_string(),
+                    name: "Vanilla".to_string(),
+                },
+            ],
+            ProjectType::Datapack => vec![ModLoader {
+                id: "datapack".to_string(),
+                name: "Vanilla".to_string(),
+            }],
+        })
     }
 
     async fn download_mod(

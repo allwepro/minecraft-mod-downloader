@@ -1,6 +1,6 @@
 use crate::app::*;
 use crate::domain::*;
-use crate::domain::{AppConfig, ModList, ModService};
+use crate::domain::{AppConfig, ModList, ModService, ProjectType};
 use crate::infra::LegacyListService;
 use crate::infra::*;
 use chrono::Utc;
@@ -13,10 +13,6 @@ pub struct AppState {
     pub config_manager: Arc<ConfigManager>,
     pub minecraft_versions: Vec<MinecraftVersion>,
     pub mod_loaders: Vec<ModLoader>,
-    pub selected_version: String,
-    pub selected_loader: String,
-    pub(crate) previous_version: String,
-    pub(crate) previous_loader: String,
     pub mod_lists: Vec<ModList>,
     pub current_list_id: Option<String>,
     pub download_progress: HashMap<String, f32>,
@@ -26,13 +22,13 @@ pub struct AppState {
     pub search_window_results: Vec<Arc<ModInfo>>,
     pub mods_being_loaded: HashSet<String>,
     pub mods_failed_loading: HashSet<String>,
-    pub download_dir: String,
     _runtime: tokio::runtime::Runtime,
     runtime_handle: tokio::runtime::Handle,
     pub legacy_state: LegacyState,
     pub pending_legacy_mods: Option<Vec<Arc<ModInfo>>>,
     pub icon_service: IconService,
     pub search_filter_exact: bool,
+    pub default_list_name: String,
 }
 
 impl AppState {
@@ -62,19 +58,20 @@ impl AppState {
                         query,
                         version,
                         loader,
+                        project_type,
                     } => {
                         tokio::spawn(async move {
                             let _permit = api_svc.limiter.acquire(1).await;
 
                             if let Ok(results) = api_svc
                                 .provider
-                                .search_mods(&query, &version, &loader)
+                                .search_mods(&query, &version, &loader, &project_type)
                                 .await
                             {
                                 let cached_results = mod_svc.cache_search_results(results).await;
                                 let _ = event_tx.send(Event::SearchResults(cached_results)).await;
                             } else {
-                                log::warn!("Failed to search mods: {}", query);
+                                log::warn!("Failed to search: {}", query);
                             }
                         });
                     }
@@ -89,7 +86,7 @@ impl AppState {
                                     let _ = event_tx.send(Event::ModDetails(info)).await;
                                 }
                                 Err(e) => {
-                                    log::warn!("Failed to fetch mod details for {}: {}", mod_id, e);
+                                    log::warn!("Failed to fetch details for {}: {}", mod_id, e);
                                     let _ = event_tx.send(Event::ModDetailsFailed { mod_id }).await;
                                 }
                             }
@@ -103,7 +100,10 @@ impl AppState {
                             let _permit = api_svc.limiter.acquire(3).await;
 
                             let mod_id = mod_info.id.clone();
-                            let filename = format!("{}.jar", mod_info.name.replace(" ", "_"));
+                            let extension = mod_info.project_type.fileext();
+
+                            let filename =
+                                format!("{}.{}", mod_info.name.replace(" ", "_"), extension);
                             let destination = std::path::Path::new(&download_dir).join(&filename);
 
                             let tx_progress = event_tx.clone();
@@ -167,15 +167,7 @@ impl AppState {
             runtime_handle.clone(),
         );
 
-        let (
-            selected_version,
-            selected_loader,
-            download_dir,
-            mod_lists,
-            current_list_id,
-            minecraft_versions,
-            mod_loaders,
-        ) = {
+        let (mod_lists, current_list_id, minecraft_versions, mod_loaders, default_list_name) = {
             let cm = config_manager.clone();
             let prov = api_service.provider.clone();
 
@@ -203,21 +195,17 @@ impl AppState {
                     }]
                 });
 
-                let loaders = prov.get_mod_loaders().await.unwrap_or_else(|_| {
-                    vec![ModLoader {
-                        id: "fabric".to_string(),
-                        name: "Fabric".to_string(),
-                    }]
-                });
+                let loaders = prov
+                    .get_mod_loaders_for_type(ProjectType::Mod)
+                    .await
+                    .unwrap_or_default();
 
                 (
-                    config.selected_version,
-                    config.selected_loader,
-                    config.download_dir,
                     lists,
                     current_list_id,
                     versions,
                     loaders,
+                    config.default_list_name,
                 )
             })
         };
@@ -227,10 +215,6 @@ impl AppState {
             config_manager,
             minecraft_versions,
             mod_loaders,
-            previous_version: selected_version.clone(),
-            previous_loader: selected_loader.clone(),
-            selected_version,
-            selected_loader,
             mod_lists,
             current_list_id,
             download_progress: HashMap::new(),
@@ -240,14 +224,24 @@ impl AppState {
             search_window_results: Vec::new(),
             mods_being_loaded: HashSet::new(),
             mods_failed_loading: HashSet::new(),
-            download_dir,
             _runtime: runtime,
             runtime_handle,
             legacy_state: LegacyState::Idle,
             pending_legacy_mods: None,
             icon_service,
             search_filter_exact: true,
+            default_list_name,
         }
+    }
+
+    pub fn refresh_loaders(&mut self) {
+        let current_type = self.get_current_list_type();
+        let prov = self.mod_service.api_service.provider.clone();
+
+        self.mod_loaders = self
+            .runtime_handle
+            .block_on(async move { prov.get_mod_loaders_for_type(current_type).await })
+            .unwrap_or_default();
     }
 
     pub fn force_reload_mod(&mut self, mod_id: &str) {
@@ -274,50 +268,75 @@ impl AppState {
         if download_dir.is_empty() {
             return false;
         }
-        let filename = format!("{}.jar", mod_info.name.replace(" ", "_"));
+        let extension = mod_info.project_type.fileext();
+        let filename = format!("{}.{}", mod_info.name.replace(" ", "_"), extension);
         let path = std::path::Path::new(&download_dir).join(filename);
         path.exists()
     }
 
-    fn get_current_list_settings(&self) -> (Option<String>, Option<String>, Option<String>) {
-        if let Some(list) = self.get_current_list() {
-            let ver = if list.version.is_empty() {
-                None
-            } else {
-                Some(list.version.clone())
-            };
-            let loader = if list.loader.is_empty() {
-                None
-            } else {
-                Some(list.loader.clone())
-            };
-            let dir = if list.download_dir.is_empty() {
-                None
-            } else {
-                Some(list.download_dir.clone())
-            };
-            (ver, loader, dir)
-        } else {
-            (None, None, None)
-        }
+    pub fn get_current_list_type(&self) -> ProjectType {
+        self.get_current_list()
+            .map(|l| l.content_type.clone())
+            .unwrap_or(ProjectType::Mod)
     }
 
     pub fn get_effective_version(&self) -> String {
-        self.get_current_list_settings()
-            .0
-            .unwrap_or_else(|| self.selected_version.clone())
+        self.get_current_list()
+            .and_then(|l| {
+                if l.version.is_empty() {
+                    None
+                } else {
+                    Some(l.version.clone())
+                }
+            })
+            .unwrap_or_else(|| {
+                self.minecraft_versions
+                    .first()
+                    .map(|v| v.id.clone())
+                    .unwrap_or_default()
+            })
     }
 
     pub fn get_effective_loader(&self) -> String {
-        self.get_current_list_settings()
-            .1
-            .unwrap_or_else(|| self.selected_loader.clone())
+        self.get_current_list()
+            .and_then(|l| {
+                if l.loader.id.is_empty() {
+                    None
+                } else {
+                    Some(l.loader.id.clone())
+                }
+            })
+            .unwrap_or_else(|| {
+                self.mod_loaders
+                    .first()
+                    .map(|l| l.id.clone())
+                    .unwrap_or_default()
+            })
+    }
+
+    pub fn get_mod_loaders_for_type_blocking(&self, project_type: ProjectType) -> Vec<ModLoader> {
+        let prov = self.mod_service.api_service.provider.clone();
+        self.runtime_handle
+            .block_on(async move { prov.get_mod_loaders_for_type(project_type).await })
+            .unwrap_or_default()
     }
 
     pub fn get_effective_download_dir(&self) -> String {
-        self.get_current_list_settings()
-            .2
-            .unwrap_or_else(|| self.download_dir.clone())
+        self.get_current_list()
+            .and_then(|l| {
+                if l.download_dir.is_empty() {
+                    None
+                } else {
+                    Some(l.download_dir.clone())
+                }
+            })
+            .unwrap_or_else(|| {
+                dirs::download_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    .join("minecraft")
+                    .to_string_lossy()
+                    .to_string()
+            })
     }
 
     pub fn process_events(&mut self) {
@@ -564,6 +583,7 @@ impl AppState {
 
     pub fn perform_search(&mut self, query: &str) {
         if !query.is_empty() {
+            let current_type = self.get_current_list_type();
             let _ = self.cmd_tx.try_send(Command::SearchMods {
                 query: query.to_string(),
                 version: if self.search_filter_exact {
@@ -571,11 +591,16 @@ impl AppState {
                 } else {
                     String::new()
                 },
-                loader: if self.search_filter_exact {
+                loader: if self.search_filter_exact
+                    && (current_type == ProjectType::Mod
+                        || current_type == ProjectType::Shader
+                        || current_type == ProjectType::Plugin)
+                {
                     self.get_effective_loader()
                 } else {
                     String::new()
                 },
+                project_type: current_type,
             });
         }
     }
@@ -627,17 +652,20 @@ impl AppState {
         }
     }
 
-    pub fn update_list_settings(&mut self, mut version: String, mut loader: String, dir: String) {
-        if version == "default" {
-            version = String::new();
-        }
-        if loader == "default" {
-            loader = String::new();
-        }
+    pub fn update_list_settings(&mut self, version: String, loader: String, dir: String) {
+        let loader_obj = self
+            .mod_loaders
+            .iter()
+            .find(|l| l.id == loader)
+            .cloned()
+            .unwrap_or(crate::domain::ModLoader {
+                id: loader.clone(),
+                name: loader.clone(),
+            });
 
         if let Some(list) = self.get_current_list_mut() {
             list.version = version;
-            list.loader = loader;
+            list.loader = loader_obj;
             list.download_dir = dir;
 
             let list_clone = list.clone();
@@ -669,17 +697,6 @@ impl AppState {
         let list = list.clone();
         self.runtime_handle.spawn(async move {
             let _ = cm.save_list(&list).await;
-        });
-    }
-
-    pub fn update_download_dir(&mut self, new_dir: String) {
-        self.download_dir = new_dir.clone();
-        let cm = self.config_manager.clone();
-        self.runtime_handle.spawn(async move {
-            if let Ok(mut config) = cm.load_config().await {
-                config.download_dir = new_dir;
-                let _ = cm.save_config(&config).await;
-            }
         });
     }
 
@@ -738,16 +755,7 @@ impl AppState {
     }
 
     pub fn finalize_import(&mut self, list: ModList) {
-        let mut list_to_save = list;
-        if list_to_save.version.is_empty() {
-            list_to_save.version = self.selected_version.clone();
-        }
-        if list_to_save.loader.is_empty() {
-            list_to_save.loader = self.selected_loader.clone();
-        }
-        if list_to_save.download_dir.is_empty() {
-            list_to_save.download_dir = self.download_dir.clone();
-        }
+        let list_to_save = list;
 
         let cm = self.config_manager.clone();
         let list_for_spawn = list_to_save.clone();
@@ -757,15 +765,14 @@ impl AppState {
 
         self.current_list_id = Some(list_to_save.id.clone());
         self.mod_lists.push(list_to_save);
+        self.refresh_loaders();
     }
 
     pub fn persist_config_on_exit(&self) {
         let cm = self.config_manager.clone();
         let config = AppConfig {
-            selected_version: self.selected_version.clone(),
-            selected_loader: self.selected_loader.clone(),
             current_list_id: self.current_list_id.clone(),
-            download_dir: self.download_dir.clone(),
+            default_list_name: self.default_list_name.clone(),
         };
 
         if let Some(current_list) = self.get_current_list() {
@@ -781,19 +788,38 @@ impl AppState {
         }
     }
 
-    pub fn create_new_list(&mut self) {
+    pub fn create_new_list(
+        &mut self,
+        new_name: String,
+        content_type: ProjectType,
+        version: String,
+        loader: String,
+        download_dir: String,
+    ) {
+        let list_name = format!("{}", new_name);
+
         let new_list = ModList {
             id: format!("list_{}", Utc::now().timestamp()),
-            name: "New List".to_string(),
+            name: list_name,
             created_at: Utc::now(),
             mods: Vec::new(),
-            version: self.selected_version.clone(),
-            loader: self.selected_loader.clone(),
-            download_dir: self.download_dir.clone(),
+            version,
+            loader: self
+                .mod_loaders
+                .iter()
+                .find(|l| l.id == loader)
+                .cloned()
+                .unwrap_or(crate::domain::ModLoader {
+                    id: loader.clone(),
+                    name: loader.clone(),
+                }),
+            download_dir,
+            content_type,
         };
 
         self.save_list(&new_list);
         self.current_list_id = Some(new_list.id.clone());
         self.mod_lists.push(new_list);
+        self.refresh_loaders();
     }
 }

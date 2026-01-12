@@ -80,17 +80,9 @@ impl ConfigManager {
     }
 
     pub async fn create_default_config(&self) -> anyhow::Result<AppConfig> {
-        let default_download_dir = dirs::download_dir()
-            .unwrap_or_else(|| self.config_dir.clone())
-            .join("minecraft-mods")
-            .to_string_lossy()
-            .to_string();
-
         let config = AppConfig {
-            selected_version: "1.21.11".to_string(),
-            selected_loader: "fabric".to_string(),
             current_list_id: None,
-            download_dir: default_download_dir,
+            default_list_name: "New List".to_string(),
         };
         self.save_config(&config).await?;
         Ok(config)
