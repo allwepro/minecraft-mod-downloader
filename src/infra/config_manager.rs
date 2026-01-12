@@ -31,13 +31,6 @@ impl ConfigManager {
         Ok(())
     }
 
-    pub async fn load_list(&self, list_id: &str) -> anyhow::Result<ModList> {
-        let path = self.get_lists_dir().join(format!("{}.toml", list_id));
-        let content = tokio::fs::read_to_string(path).await?;
-        let list: ModList = toml::from_str(&content)?;
-        Ok(list)
-    }
-
     pub async fn load_all_lists(&self) -> anyhow::Result<Vec<ModList>> {
         let mut lists = Vec::new();
         let mut dir = tokio::fs::read_dir(self.get_lists_dir()).await?;

@@ -1,352 +1,177 @@
 use crate::app::*;
 use crate::domain::*;
-use crate::domain::{AppConfig, ModList, ModService, ProjectType};
-use crate::infra::LegacyListService;
-use crate::infra::*;
 use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub struct AppState {
-    pub mod_service: Arc<ModService>,
-    pub config_manager: Arc<ConfigManager>,
     pub minecraft_versions: Vec<MinecraftVersion>,
     pub mod_loaders: Vec<ModLoader>,
     pub mod_lists: Vec<ModList>,
     pub current_list_id: Option<String>,
     pub download_progress: HashMap<String, f32>,
     pub download_status: HashMap<String, DownloadStatus>,
-    cmd_tx: mpsc::Sender<Command>,
     event_rx: mpsc::Receiver<Event>,
     pub search_window_results: Vec<Arc<ModInfo>>,
     pub mods_being_loaded: HashSet<String>,
     pub mods_failed_loading: HashSet<String>,
-    _runtime: tokio::runtime::Runtime,
-    runtime_handle: tokio::runtime::Handle,
     pub legacy_state: LegacyState,
     pub pending_legacy_mods: Option<Vec<Arc<ModInfo>>>,
-    pub icon_service: IconService,
     pub search_filter_exact: bool,
     pub default_list_name: String,
+    pub initial_loading: bool,
+    loaders_by_type: HashMap<ProjectType, Vec<ModLoader>>,
+    loaders_loading: HashSet<ProjectType>,
+    pub effective_settings_cache: HashMap<String, (String, String, String)>,
+    pub cached_mods: HashMap<(String, String, String), Arc<ModInfo>>,
 }
 
 impl AppState {
-    pub fn new(runtime: tokio::runtime::Runtime) -> Self {
-        let runtime_handle = runtime.handle().clone();
-        let (cmd_tx, mut cmd_rx) = mpsc::channel::<Command>(100);
-        let (event_tx, event_rx) = mpsc::channel::<Event>(100);
-
-        let api_service = Arc::new(ApiService::new());
-        let api_service_for_spawn = api_service.clone();
-
-        let mod_service = Arc::new(ModService::new(api_service.clone()));
-        let mod_service_for_spawn = mod_service.clone();
-
-        let legacy_service = Arc::new(LegacyListService::new(mod_service_for_spawn.clone()));
-        let legacy_service_for_spawn = legacy_service.clone();
-
-        runtime_handle.spawn(async move {
-            while let Some(cmd) = cmd_rx.recv().await {
-                let event_tx = event_tx.clone();
-                let api_svc = api_service_for_spawn.clone();
-                let legacy_svc = legacy_service_for_spawn.clone();
-                let mod_svc = mod_service_for_spawn.clone();
-
-                match cmd {
-                    Command::SearchMods {
-                        query,
-                        version,
-                        loader,
-                        project_type,
-                    } => {
-                        tokio::spawn(async move {
-                            let _permit = api_svc.limiter.acquire(1).await;
-
-                            if let Ok(results) = api_svc
-                                .provider
-                                .search_mods(&query, &version, &loader, &project_type)
-                                .await
-                            {
-                                let cached_results = mod_svc.cache_search_results(results).await;
-                                let _ = event_tx.send(Event::SearchResults(cached_results)).await;
-                            } else {
-                                log::warn!("Failed to search: {}", query);
-                            }
-                        });
-                    }
-                    Command::FetchModDetails {
-                        mod_id,
-                        version,
-                        loader,
-                    } => {
-                        tokio::spawn(async move {
-                            match mod_svc.get_mod_by_id(&mod_id, &version, &loader).await {
-                                Ok(info) => {
-                                    let _ = event_tx.send(Event::ModDetails(info)).await;
-                                }
-                                Err(e) => {
-                                    log::warn!("Failed to fetch details for {}: {}", mod_id, e);
-                                    let _ = event_tx.send(Event::ModDetailsFailed { mod_id }).await;
-                                }
-                            }
-                        });
-                    }
-                    Command::DownloadMod {
-                        mod_info,
-                        download_dir,
-                    } => {
-                        tokio::spawn(async move {
-                            let _permit = api_svc.limiter.acquire(3).await;
-
-                            let mod_id = mod_info.id.clone();
-                            let extension = mod_info.project_type.fileext();
-
-                            let filename =
-                                format!("{}.{}", mod_info.name.replace(" ", "_"), extension);
-                            let destination = std::path::Path::new(&download_dir).join(&filename);
-
-                            let tx_progress = event_tx.clone();
-                            let mod_id_clone = mod_id.clone();
-
-                            let result = api_svc
-                                .provider
-                                .download_mod(
-                                    &mod_info.download_url,
-                                    &destination,
-                                    Box::new(move |progress| {
-                                        let _ = tx_progress.try_send(Event::DownloadProgress {
-                                            mod_id: mod_id_clone.clone(),
-                                            progress,
-                                        });
-                                    }),
-                                )
-                                .await;
-
-                            let _ = event_tx
-                                .send(Event::DownloadComplete {
-                                    mod_id,
-                                    success: result.is_ok(),
-                                })
-                                .await;
-                        });
-                    }
-                    Command::LegacyListImport {
-                        path,
-                        version,
-                        loader,
-                    } => {
-                        tokio::spawn(async move {
-                            legacy_svc
-                                .import_legacy_list(path, version, loader, event_tx)
-                                .await;
-                        });
-                    }
-                    Command::LegacyListExport {
-                        path,
-                        mod_ids,
-                        version,
-                        loader,
-                    } => {
-                        tokio::spawn(async move {
-                            legacy_svc
-                                .export_legacy_list(path, mod_ids, version, loader, event_tx)
-                                .await;
-                        });
-                    }
-                }
-            }
-        });
-
-        let config_manager =
-            Arc::new(ConfigManager::new().expect("Failed to create config manager"));
-
-        let icon_service = IconService::new(
-            api_service.clone(),
-            config_manager.get_cache_dir().to_path_buf(),
-            runtime_handle.clone(),
-        );
-
-        let (mod_lists, current_list_id, minecraft_versions, mod_loaders, default_list_name) = {
-            let cm = config_manager.clone();
-            let prov = api_service.provider.clone();
-
-            runtime_handle.block_on(async {
-                let _ = cm.ensure_dirs().await;
-
-                let config = if cm.config_exists() {
-                    cm.load_config().await.unwrap_or_else(|_| {
-                        runtime_handle.block_on(cm.create_default_config()).unwrap()
-                    })
-                } else {
-                    cm.create_default_config().await.unwrap()
-                };
-
-                let lists = cm.load_all_lists().await.unwrap_or_else(|_| Vec::new());
-
-                let current_list_id = config
-                    .current_list_id
-                    .filter(|id| lists.iter().any(|l| &l.id == id));
-
-                let versions = prov.get_minecraft_versions().await.unwrap_or_else(|_| {
-                    vec![MinecraftVersion {
-                        id: "1.20.1".to_string(),
-                        name: "1.20.1".to_string(),
-                    }]
-                });
-
-                let loaders = prov
-                    .get_mod_loaders_for_type(ProjectType::Mod)
-                    .await
-                    .unwrap_or_default();
-
-                (
-                    lists,
-                    current_list_id,
-                    versions,
-                    loaders,
-                    config.default_list_name,
-                )
-            })
-        };
-
-        Self {
-            mod_service,
-            config_manager,
-            minecraft_versions,
-            mod_loaders,
-            mod_lists,
-            current_list_id,
+    pub fn new(event_rx: mpsc::Receiver<Event>) -> (Self, Vec<Effect>) {
+        let state = Self {
+            minecraft_versions: Vec::new(),
+            mod_loaders: Vec::new(),
+            mod_lists: Vec::new(),
+            current_list_id: None,
             download_progress: HashMap::new(),
             download_status: HashMap::new(),
-            cmd_tx,
             event_rx,
             search_window_results: Vec::new(),
             mods_being_loaded: HashSet::new(),
             mods_failed_loading: HashSet::new(),
-            _runtime: runtime,
-            runtime_handle,
             legacy_state: LegacyState::Idle,
             pending_legacy_mods: None,
-            icon_service,
             search_filter_exact: true,
-            default_list_name,
-        }
+            default_list_name: "New List".to_string(),
+
+            initial_loading: true,
+            loaders_by_type: HashMap::new(),
+            loaders_loading: HashSet::new(),
+            effective_settings_cache: HashMap::new(),
+            cached_mods: HashMap::new(),
+        };
+
+        (state, vec![Effect::LoadInitialData])
     }
 
-    pub fn refresh_loaders(&mut self) {
-        let current_type = self.get_current_list_type();
-        let prov = self.mod_service.api_service.provider.clone();
-
-        self.mod_loaders = self
-            .runtime_handle
-            .block_on(async move { prov.get_mod_loaders_for_type(current_type).await })
-            .unwrap_or_default();
-    }
-
-    pub fn force_reload_mod(&mut self, mod_id: &str) {
-        self.mods_failed_loading.remove(mod_id);
-        self.mods_being_loaded.remove(mod_id);
-        self.mod_service.clear_cache_for(mod_id);
-        self.load_mod_details_if_needed(mod_id);
-    }
-
-    pub fn reload_all_mods(&mut self) {
-        if let Some(list) = self.get_current_list() {
-            let mod_ids: Vec<String> = list.mods.iter().map(|e| e.mod_id.clone()).collect();
-            for mod_id in mod_ids {
-                self.mods_failed_loading.remove(&mod_id);
-                self.mods_being_loaded.remove(&mod_id);
-                self.mod_service.clear_cache_for(&mod_id);
-                self.load_mod_details_if_needed(&mod_id);
-            }
-        }
-    }
-
-    pub fn is_mod_file_present(&self, mod_info: &ModInfo) -> bool {
-        let download_dir = self.get_effective_download_dir();
-        if download_dir.is_empty() {
-            return false;
-        }
-        let extension = mod_info.project_type.fileext();
-        let filename = format!("{}.{}", mod_info.name.replace(" ", "_"), extension);
-        let path = std::path::Path::new(&download_dir).join(filename);
-        path.exists()
-    }
-
-    pub fn get_current_list_type(&self) -> ProjectType {
-        self.get_current_list()
-            .map(|l| l.content_type.clone())
-            .unwrap_or(ProjectType::Mod)
-    }
-
-    pub fn get_effective_version(&self) -> String {
-        self.get_current_list()
-            .and_then(|l| {
-                if l.version.is_empty() {
-                    None
+    pub fn loaders_for_type(&self, project_type: ProjectType) -> Option<&[ModLoader]> {
+        self.loaders_by_type
+            .get(&project_type)
+            .map(|v| v.as_slice())
+            .or_else(|| {
+                if project_type == ProjectType::Mod {
+                    Some(self.mod_loaders.as_slice())
                 } else {
-                    Some(l.version.clone())
+                    None
                 }
             })
-            .unwrap_or_else(|| {
-                self.minecraft_versions
-                    .first()
-                    .map(|v| v.id.clone())
-                    .unwrap_or_default()
-            })
     }
 
-    pub fn get_effective_loader(&self) -> String {
-        self.get_current_list()
-            .and_then(|l| {
-                if l.loader.id.is_empty() {
-                    None
-                } else {
-                    Some(l.loader.id.clone())
-                }
-            })
-            .unwrap_or_else(|| {
-                self.mod_loaders
-                    .first()
-                    .map(|l| l.id.clone())
-                    .unwrap_or_default()
-            })
+    pub fn get_cached_mod(&self, mod_id: &str) -> Option<Arc<ModInfo>> {
+        let version = self.get_effective_version();
+        let loader = self.get_effective_loader();
+
+        let key = (mod_id.to_string(), version.clone(), loader.clone());
+        let result = self.cached_mods.get(&key).cloned();
+
+        if result.is_none() {
+            log::debug!(
+                "Mod {} not in cache (have {} entries, looking for version={} loader={})",
+                mod_id,
+                self.cached_mods.len(),
+                version,
+                loader
+            );
+        }
+
+        result
     }
 
-    pub fn get_mod_loaders_for_type_blocking(&self, project_type: ProjectType) -> Vec<ModLoader> {
-        let prov = self.mod_service.api_service.provider.clone();
-        self.runtime_handle
-            .block_on(async move { prov.get_mod_loaders_for_type(project_type).await })
-            .unwrap_or_default()
+    pub fn get_cached_mod_with_context(
+        &self,
+        mod_id: &str,
+        version: &str,
+        loader: &str,
+    ) -> Option<Arc<ModInfo>> {
+        let key = (mod_id.to_string(), version.to_string(), loader.to_string());
+        self.cached_mods.get(&key).cloned()
     }
 
-    pub fn get_effective_download_dir(&self) -> String {
-        self.get_current_list()
-            .and_then(|l| {
-                if l.download_dir.is_empty() {
-                    None
-                } else {
-                    Some(l.download_dir.clone())
-                }
-            })
-            .unwrap_or_else(|| {
-                dirs::download_dir()
-                    .unwrap_or_else(|| std::path::PathBuf::from("."))
-                    .join("minecraft")
-                    .to_string_lossy()
-                    .to_string()
-            })
+    pub fn ensure_loaders_for_type(&mut self, project_type: ProjectType) -> Vec<Effect> {
+        if self.loaders_by_type.contains_key(&project_type) {
+            return Vec::new();
+        }
+        if self.loaders_loading.contains(&project_type) {
+            return Vec::new();
+        }
+        self.loaders_loading.insert(project_type);
+        vec![Effect::LoadLoadersForType { project_type }]
     }
 
-    pub fn process_events(&mut self) {
+    pub fn is_loading_loaders_for_type(&self, project_type: ProjectType) -> bool {
+        self.loaders_loading.contains(&project_type)
+    }
+
+    pub fn process_events(&mut self) -> Vec<Effect> {
+        let mut effects = Vec::new();
+
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
+                Event::InitialDataLoaded {
+                    mod_lists,
+                    current_list_id,
+                    minecraft_versions,
+                    mod_loaders,
+                    default_list_name,
+                } => {
+                    self.mod_lists = mod_lists;
+                    self.current_list_id = current_list_id;
+                    self.minecraft_versions = minecraft_versions;
+                    self.mod_loaders = mod_loaders.clone();
+                    self.default_list_name = default_list_name;
+                    self.initial_loading = false;
+
+                    self.loaders_by_type.insert(ProjectType::Mod, mod_loaders);
+                    self.loaders_loading.remove(&ProjectType::Mod);
+
+                    self.effective_settings_cache.clear();
+
+                    effects.extend(self.invalidate_and_reload());
+                }
+
+                Event::LoadersForTypeLoaded {
+                    project_type,
+                    loaders,
+                } => {
+                    self.loaders_by_type.insert(project_type, loaders);
+                    self.loaders_loading.remove(&project_type);
+                }
                 Event::SearchResults(results) => {
+                    let version = self.get_effective_version();
+                    let loader = self.get_effective_loader();
+                    for mod_info in &results {
+                        let key = (mod_info.id.clone(), version.clone(), loader.clone());
+                        self.cached_mods.insert(key, mod_info.clone());
+                    }
                     self.search_window_results = results;
                 }
-                Event::ModDetails(mod_info) => {
+                Event::ModDetails {
+                    info: mod_info,
+                    version,
+                    loader,
+                } => {
                     let mod_id = mod_info.id.clone();
+                    log::debug!(
+                        "ModDetails event for {}: version='{}', download_url='{}', fetched_for=({},{})",
+                        mod_id,
+                        mod_info.version,
+                        mod_info.download_url,
+                        version,
+                        loader
+                    );
+                    let key = (mod_id.clone(), version, loader);
+                    self.cached_mods.insert(key, mod_info);
                     self.mods_being_loaded.remove(&mod_id);
                 }
                 Event::ModDetailsFailed { mod_id } => {
@@ -413,6 +238,8 @@ impl AppState {
                 }
             }
         }
+
+        effects
     }
 
     pub fn get_current_list(&self) -> Option<&ModList> {
@@ -421,11 +248,431 @@ impl AppState {
             .and_then(|id| self.mod_lists.iter().find(|l| &l.id == id))
     }
 
+    pub fn get_list_by_id(&self, list_id: &str) -> Option<&ModList> {
+        self.mod_lists.iter().find(|l| l.id == list_id)
+    }
+
     pub fn get_current_list_mut(&mut self) -> Option<&mut ModList> {
         let current_id = self.current_list_id.clone();
         current_id
             .as_ref()
             .and_then(|id| self.mod_lists.iter_mut().find(|l| &l.id == id))
+    }
+
+    pub fn get_current_list_type(&self) -> ProjectType {
+        self.get_current_list()
+            .map(|l| l.content_type.clone())
+            .unwrap_or(ProjectType::Mod)
+    }
+
+    fn default_version_fallback(&self) -> String {
+        self.minecraft_versions
+            .first()
+            .map(|v| v.id.clone())
+            .unwrap_or_default()
+    }
+
+    fn default_loader_fallback(&self, project_type: ProjectType) -> String {
+        self.loaders_for_type(project_type)
+            .and_then(|loaders| loaders.first())
+            .map(|l| l.id.clone())
+            .unwrap_or_default()
+    }
+
+    fn default_dir_fallback(&self) -> String {
+        dirs::download_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("minecraft")
+            .to_string_lossy()
+            .to_string()
+    }
+
+    fn compute_effective_settings_for_list(&self, list: &ModList) -> (String, String, String) {
+        let version = if list.version.is_empty() {
+            self.default_version_fallback()
+        } else {
+            list.version.clone()
+        };
+
+        let loader = if list.loader.id.is_empty() {
+            self.default_loader_fallback(list.content_type)
+        } else {
+            list.loader.id.clone()
+        };
+
+        let dir = if list.download_dir.is_empty() {
+            self.default_dir_fallback()
+        } else {
+            list.download_dir.clone()
+        };
+
+        (version, loader, dir)
+    }
+
+    fn get_cached_effective_settings(&self, list_id: &str) -> Option<(String, String, String)> {
+        self.effective_settings_cache.get(list_id).cloned()
+    }
+
+    pub fn get_effective_version(&self) -> String {
+        let Some(list) = self.get_current_list() else {
+            return self.default_version_fallback();
+        };
+
+        if let Some((v, _, _)) = self.get_cached_effective_settings(&list.id) {
+            return v;
+        }
+
+        self.compute_effective_settings_for_list(list).0
+    }
+
+    pub fn get_effective_loader(&self) -> String {
+        let Some(list) = self.get_current_list() else {
+            return self.default_loader_fallback(ProjectType::Mod);
+        };
+
+        if let Some((_, l, _)) = self.get_cached_effective_settings(&list.id) {
+            return l;
+        }
+
+        self.compute_effective_settings_for_list(list).1
+    }
+
+    pub fn get_effective_download_dir(&self) -> String {
+        let Some(list) = self.get_current_list() else {
+            return self.default_dir_fallback();
+        };
+
+        if let Some((_, _, d)) = self.get_cached_effective_settings(&list.id) {
+            return d;
+        }
+
+        self.compute_effective_settings_for_list(list).2
+    }
+
+    pub fn invalidate_and_reload(&mut self) -> Vec<Effect> {
+        let current_version = self.get_effective_version();
+        let current_loader = self.get_effective_loader();
+
+        log::info!(
+            "=== Invalidate and reload for version={} loader={} ===",
+            current_version,
+            current_loader
+        );
+        log::info!(
+            "Cache has {} entries before reload:",
+            self.cached_mods.len()
+        );
+        for ((id, ver, ldr), info) in &self.cached_mods {
+            log::info!("  - {} : {}/{} (version={})", id, ver, ldr, info.version);
+        }
+
+        self.mods_being_loaded.clear();
+        self.mods_failed_loading.clear();
+        // Don't clear cached_mods! It holds data for multiple version/loader combinations. This allows switching between versions without refetching.
+
+        let mod_ids: Vec<String> = self
+            .get_current_list()
+            .map(|l| l.mods.iter().map(|e| e.mod_id.clone()).collect())
+            .unwrap_or_default();
+
+        log::info!(
+            "Reloading {} mods for {}/{}",
+            mod_ids.len(),
+            current_version,
+            current_loader
+        );
+
+        let mut effects = Vec::new();
+        for mod_id in mod_ids {
+            effects.extend(self.load_mod_details_if_needed(&mod_id));
+        }
+
+        log::info!(
+            "=== Reload complete, {} effects generated ===",
+            effects.len()
+        );
+
+        effects
+    }
+
+    pub fn load_mod_details_if_needed(&mut self, mod_id: &str) -> Vec<Effect> {
+        if self.mods_being_loaded.contains(mod_id) {
+            log::debug!("Mod {} already being loaded", mod_id);
+            return Vec::new();
+        }
+        if self.mods_failed_loading.contains(mod_id) {
+            log::debug!("Mod {} previously failed", mod_id);
+            return Vec::new();
+        }
+
+        let version = self.get_effective_version();
+        let loader = self.get_effective_loader();
+
+        let key = (mod_id.to_string(), version.clone(), loader.clone());
+
+        if let Some(info) = self.cached_mods.get(&key) {
+            if !info.version.is_empty() {
+                log::debug!(
+                    "Mod {} has complete cached info for {}/{}, skipping fetch",
+                    mod_id,
+                    version,
+                    loader
+                );
+                return Vec::new();
+            }
+            log::debug!(
+                "Mod {} has incomplete info (empty version), fetching details",
+                mod_id
+            );
+        } else {
+            log::debug!(
+                "Mod {} not in cache for {}/{}, fetching",
+                mod_id,
+                version,
+                loader
+            );
+        }
+
+        self.mods_being_loaded.insert(mod_id.to_string());
+        log::debug!(
+            "Triggering fetch for mod {} with version={} loader={}",
+            mod_id,
+            version,
+            loader
+        );
+
+        vec![Effect::FetchModDetails {
+            mod_id: mod_id.to_string(),
+            version,
+            loader,
+        }]
+    }
+
+    pub fn force_reload_mod(&mut self, mod_id: &str) -> Vec<Effect> {
+        self.mods_failed_loading.remove(mod_id);
+        self.mods_being_loaded.remove(mod_id);
+        self.load_mod_details_if_needed(mod_id)
+    }
+
+    pub fn start_download(&mut self, mod_id: &str) -> Vec<Effect> {
+        self.download_status
+            .insert(mod_id.to_string(), DownloadStatus::Queued);
+        self.download_progress.insert(mod_id.to_string(), 0.0);
+
+        if let Some(mod_info) = self.get_cached_mod(mod_id) {
+            return vec![Effect::DownloadMod {
+                mod_info,
+                download_dir: self.get_effective_download_dir(),
+            }];
+        }
+
+        Vec::new()
+    }
+
+    pub fn perform_search(&self, query: &str) -> Vec<Effect> {
+        if query.is_empty() {
+            return Vec::new();
+        }
+
+        let current_type = self.get_current_list_type();
+
+        vec![Effect::SearchMods {
+            query: query.to_string(),
+            version: if self.search_filter_exact {
+                self.get_effective_version()
+            } else {
+                String::new()
+            },
+            loader: if self.search_filter_exact
+                && (current_type == ProjectType::Mod
+                    || current_type == ProjectType::Shader
+                    || current_type == ProjectType::Plugin)
+            {
+                self.get_effective_loader()
+            } else {
+                String::new()
+            },
+            project_type: current_type,
+        }]
+    }
+
+    pub fn add_mod_to_current_list(&mut self, mod_info: Arc<ModInfo>) -> Vec<Effect> {
+        let mut list_to_save = None;
+
+        if let Some(current_list) = self.get_current_list_mut() {
+            if !current_list.mods.iter().any(|e| e.mod_id == mod_info.id) {
+                current_list.mods.push(ModEntry {
+                    mod_id: mod_info.id.clone(),
+                    mod_name: mod_info.name.clone(),
+                    added_at: Utc::now(),
+                    archived: false,
+                });
+                list_to_save = Some(current_list.clone());
+            }
+        }
+
+        if list_to_save.is_some() {
+            self.download_status
+                .insert(mod_info.id.clone(), DownloadStatus::Idle);
+        }
+
+        list_to_save
+            .map(|list| vec![Effect::SaveList { list }])
+            .unwrap_or_default()
+    }
+
+    pub fn delete_mod(&mut self, mod_id: &str) -> Vec<Effect> {
+        let mut effects = Vec::new();
+
+        if let Some(current_list) = self.get_current_list_mut() {
+            current_list.mods.retain(|e| e.mod_id != mod_id);
+            effects.push(Effect::SaveList {
+                list: current_list.clone(),
+            });
+        }
+
+        self.mods_being_loaded.remove(mod_id);
+        self.mods_failed_loading.remove(mod_id);
+        self.download_progress.remove(mod_id);
+        self.download_status.remove(mod_id);
+
+        effects
+    }
+
+    pub fn toggle_archive_mod(&mut self, mod_id: &str) -> Vec<Effect> {
+        if let Some(list) = self.get_current_list_mut() {
+            if let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id) {
+                entry.archived = !entry.archived;
+                return vec![Effect::SaveList { list: list.clone() }];
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn delete_current_list(&mut self) -> Vec<Effect> {
+        if let Some(list_id) = self.current_list_id.clone() {
+            self.mod_lists.retain(|l| l.id != list_id);
+            self.current_list_id = None;
+            return vec![Effect::DeleteList { list_id }];
+        }
+        Vec::new()
+    }
+
+    pub fn export_current_list(&mut self, path: std::path::PathBuf) -> Vec<Effect> {
+        let export_info = self.get_current_list().map(|list| {
+            (
+                list.mods
+                    .iter()
+                    .map(|m| m.mod_id.clone())
+                    .collect::<Vec<String>>(),
+                list.clone(),
+            )
+        });
+
+        let (mod_ids, current_list_obj) = match export_info {
+            Some(data) => data,
+            None => return Vec::new(),
+        };
+
+        match path.extension().and_then(|s| s.to_str()) {
+            Some("mods") => {
+                self.legacy_state = LegacyState::InProgress {
+                    current: 0,
+                    total: mod_ids.len(),
+                    message: "Initializing export...".into(),
+                };
+
+                vec![Effect::LegacyListExport {
+                    path,
+                    mod_ids,
+                    version: self.get_effective_version(),
+                    loader: self.get_effective_loader(),
+                }]
+            }
+            _ => vec![Effect::ExportListToml {
+                path,
+                list: current_list_obj,
+            }],
+        }
+    }
+
+    pub fn start_legacy_import(&mut self, path: std::path::PathBuf) -> Vec<Effect> {
+        self.legacy_state = LegacyState::InProgress {
+            current: 0,
+            total: 0,
+            message: "Preparing import...".into(),
+        };
+
+        vec![Effect::LegacyListImport {
+            path,
+            version: self.get_effective_version(),
+            loader: self.get_effective_loader(),
+        }]
+    }
+
+    pub fn finalize_import(&mut self, list: ModList) -> Vec<Effect> {
+        self.current_list_id = Some(list.id.clone());
+        self.mod_lists.push(list.clone());
+
+        vec![Effect::SaveList { list }]
+    }
+
+    pub fn create_new_list(
+        &mut self,
+        new_name: String,
+        content_type: ProjectType,
+        version: String,
+        loader: String,
+        download_dir: String,
+    ) -> Vec<Effect> {
+        let list_name = format!("{}", new_name);
+
+        let loader_obj = self
+            .loaders_for_type(content_type)
+            .and_then(|loaders| loaders.iter().find(|l| l.id == loader).cloned())
+            .or_else(|| self.mod_loaders.iter().find(|l| l.id == loader).cloned())
+            .unwrap_or(crate::domain::ModLoader {
+                id: loader.clone(),
+                name: loader.clone(),
+            });
+
+        let new_list = ModList {
+            id: format!("list_{}", Utc::now().timestamp()),
+            name: list_name,
+            created_at: Utc::now(),
+            mods: Vec::new(),
+            version,
+            loader: loader_obj,
+            download_dir,
+            content_type,
+        };
+
+        self.current_list_id = Some(new_list.id.clone());
+        self.mod_lists.push(new_list.clone());
+
+        vec![Effect::SaveList { list: new_list }]
+    }
+
+    pub fn is_mod_compatible(&self, mod_id: &str) -> Option<bool> {
+        let version = self.get_effective_version();
+        let loader = self.get_effective_loader();
+        self.is_mod_compatible_with_context(mod_id, &version, &loader)
+    }
+
+    pub fn is_mod_compatible_with_context(
+        &self,
+        mod_id: &str,
+        version: &str,
+        loader: &str,
+    ) -> Option<bool> {
+        let info = self.get_cached_mod_with_context(mod_id, version, loader)?;
+
+        let version_ok = info.supported_versions.is_empty()
+            || info.supported_versions.iter().any(|v| v == version);
+        let loader_ok =
+            info.supported_loaders.is_empty() || info.supported_loaders.iter().any(|l| l == loader);
+
+        Some(version_ok && loader_ok)
     }
 
     pub fn get_filtered_mods(
@@ -439,387 +686,131 @@ impl AppState {
         let effective_version = self.get_effective_version();
         let effective_loader = self.get_effective_loader();
 
-        if let Some(current_list) = self.get_current_list() {
-            let mut mods: Vec<ModEntry> = current_list
-                .mods
-                .iter()
-                .filter(|entry| {
-                    let matches_search = entry.mod_name.to_lowercase().contains(&query)
-                        || self
-                            .get_mod_details(&entry.mod_id)
-                            .map(|m| m.description.to_lowercase().contains(&query))
-                            .unwrap_or(false);
-
-                    let matches_filter = match filter_mode {
-                        FilterMode::All => true,
-                        FilterMode::CompatibleOnly => self
-                            .check_mod_compatibility_with(
-                                &entry.mod_id,
-                                &effective_version,
-                                &effective_loader,
-                            )
-                            .unwrap_or(false),
-                        FilterMode::IncompatibleOnly => self
-                            .check_mod_compatibility_with(
-                                &entry.mod_id,
-                                &effective_version,
-                                &effective_loader,
-                            )
-                            .map(|c| !c)
-                            .unwrap_or(false),
-                    };
-
-                    matches_search && matches_filter
-                })
-                .cloned()
-                .collect();
-
-            mods.sort_by(|a, b| match sort_mode {
-                SortMode::Name => a.mod_name.cmp(&b.mod_name),
-                SortMode::DateAdded => a.added_at.cmp(&b.added_at),
-                SortMode::Compatibility => {
-                    let comp_a = self
-                        .check_mod_compatibility_with(
-                            &a.mod_id,
-                            &effective_version,
-                            &effective_loader,
-                        )
-                        .unwrap_or(false);
-                    let comp_b = self
-                        .check_mod_compatibility_with(
-                            &b.mod_id,
-                            &effective_version,
-                            &effective_loader,
-                        )
-                        .unwrap_or(false);
-                    comp_b.cmp(&comp_a)
+        let mut mods: Vec<ModEntry> = self
+            .get_current_list()
+            .map(|l| l.mods.clone())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|entry| {
+                if query.is_empty() {
+                    return true;
                 }
-            });
 
-            if order_mode == OrderMode::Descending {
-                mods.reverse();
-            }
+                if entry.mod_name.to_lowercase().contains(&query) {
+                    return true;
+                }
 
-            mods
-        } else {
-            Vec::new()
+                if let Some(info) = self.get_cached_mod(&entry.mod_id) {
+                    info.description.to_lowercase().contains(&query)
+                } else {
+                    false
+                }
+            })
+            .collect();
+
+        if matches!(
+            filter_mode,
+            FilterMode::CompatibleOnly | FilterMode::IncompatibleOnly
+        ) {
+            mods = mods
+                .into_iter()
+                .filter(|entry| {
+                    let comp = self
+                        .is_mod_compatible_with_context(
+                            &entry.mod_id,
+                            &effective_version,
+                            &effective_loader,
+                        )
+                        .unwrap_or(true);
+
+                    match filter_mode {
+                        FilterMode::CompatibleOnly => comp,
+                        FilterMode::IncompatibleOnly => !comp,
+                        FilterMode::All => true,
+                    }
+                })
+                .collect();
         }
+
+        mods.sort_by(|a, b| match sort_mode {
+            SortMode::Name => a.mod_name.to_lowercase().cmp(&b.mod_name.to_lowercase()),
+            SortMode::DateAdded => a.added_at.cmp(&b.added_at),
+            SortMode::Compatibility => {
+                let ca = self
+                    .is_mod_compatible_with_context(
+                        &a.mod_id,
+                        &effective_version,
+                        &effective_loader,
+                    )
+                    .unwrap_or(true);
+                let cb = self
+                    .is_mod_compatible_with_context(
+                        &b.mod_id,
+                        &effective_version,
+                        &effective_loader,
+                    )
+                    .unwrap_or(true);
+                ca.cmp(&cb)
+            }
+        });
+
+        if matches!(order_mode, OrderMode::Descending) {
+            mods.reverse();
+        }
+
+        mods
     }
 
-    pub fn get_mod_details(&self, mod_id: &str) -> Option<Arc<ModInfo>> {
-        self.mod_service.get_cached_mod_blocking(mod_id)
-    }
-
-    pub fn check_mod_compatibility(&self, mod_id: &str) -> Option<bool> {
-        self.check_mod_compatibility_with(
-            mod_id,
-            &self.get_effective_version(),
-            &self.get_effective_loader(),
-        )
-    }
-
-    fn check_mod_compatibility_with(
-        &self,
-        mod_id: &str,
-        version: &str,
-        loader: &str,
-    ) -> Option<bool> {
-        self.get_mod_details(mod_id).map(|m| {
-            m.supported_versions.contains(&version.to_string())
-                && m.supported_loaders
-                    .iter()
-                    .any(|l| l.eq_ignore_ascii_case(loader))
-        })
-    }
-
-    pub fn invalidate_and_reload(&mut self) {
-        self.mod_service.clear_cache();
-        self.mods_being_loaded.clear();
-        self.mods_failed_loading.clear();
-
-        let mod_ids: Vec<String> = if let Some(current_list) = self.get_current_list() {
-            current_list.mods.iter().map(|e| e.mod_id.clone()).collect()
-        } else {
-            Vec::new()
+    pub fn is_mod_downloaded(&self, mod_id: &str) -> bool {
+        let Some(mod_info) = self.get_cached_mod(mod_id) else {
+            return false;
         };
 
-        for mod_id in mod_ids {
-            self.load_mod_details_if_needed(&mod_id);
-        }
+        let download_dir = self.get_effective_download_dir();
+        let filename = crate::domain::generate_mod_filename(&mod_info);
+        let file_path = std::path::Path::new(&download_dir).join(&filename);
+        file_path.exists()
     }
 
-    pub fn load_mod_details_if_needed(&mut self, mod_id: &str) {
-        if self.mods_being_loaded.contains(mod_id) {
-            return;
-        }
-        if self.mods_failed_loading.contains(mod_id) {
-            return;
-        }
+    pub fn get_missing_mod_ids(&self, filtered_mods: &[ModEntry]) -> Vec<String> {
+        let download_dir = self.get_effective_download_dir();
+        let effective_version = self.get_effective_version();
+        let effective_loader = self.get_effective_loader();
 
-        if self.mod_service.contains_valid_blocking(mod_id) {
-            return;
-        }
-
-        self.mods_being_loaded.insert(mod_id.to_string());
-        let _ = self.cmd_tx.try_send(Command::FetchModDetails {
-            mod_id: mod_id.to_string(),
-            version: self.get_effective_version(),
-            loader: self.get_effective_loader(),
-        });
-    }
-
-    pub fn start_download(&mut self, mod_id: &str) {
-        self.download_status
-            .insert(mod_id.to_string(), DownloadStatus::Queued);
-        self.download_progress.insert(mod_id.to_string(), 0.0);
-
-        if let Some(mod_info) = self.get_mod_details(mod_id) {
-            let _ = self.cmd_tx.try_send(Command::DownloadMod {
-                mod_info,
-                download_dir: self.get_effective_download_dir(),
-            });
-        }
-    }
-
-    pub fn perform_search(&mut self, query: &str) {
-        if !query.is_empty() {
-            let current_type = self.get_current_list_type();
-            let _ = self.cmd_tx.try_send(Command::SearchMods {
-                query: query.to_string(),
-                version: if self.search_filter_exact {
-                    self.get_effective_version()
-                } else {
-                    String::new()
-                },
-                loader: if self.search_filter_exact
-                    && (current_type == ProjectType::Mod
-                        || current_type == ProjectType::Shader
-                        || current_type == ProjectType::Plugin)
-                {
-                    self.get_effective_loader()
-                } else {
-                    String::new()
-                },
-                project_type: current_type,
-            });
-        }
-    }
-
-    pub fn add_mod_to_current_list(&mut self, mod_info: Arc<ModInfo>) {
-        if let Some(current_list) = self.get_current_list_mut() {
-            if !current_list.mods.iter().any(|e| e.mod_id == mod_info.id) {
-                current_list.mods.push(ModEntry {
-                    mod_id: mod_info.id.clone(),
-                    mod_name: mod_info.name.clone(),
-                    added_at: Utc::now(),
-                    archived: false,
-                });
-                self.download_status
-                    .insert(mod_info.id.clone(), DownloadStatus::Idle);
-            }
-        }
-    }
-
-    pub fn delete_mod(&mut self, mod_id: &str) {
-        if let Some(current_list) = self.get_current_list_mut() {
-            current_list.mods.retain(|e| e.mod_id != mod_id);
-        }
-
-        self.mods_being_loaded.remove(mod_id);
-        self.mods_failed_loading.remove(mod_id);
-        self.download_progress.remove(mod_id);
-        self.download_status.remove(mod_id);
-
-        if let Some(current_list) = self.get_current_list() {
-            let list = current_list.clone();
-            let cm = self.config_manager.clone();
-            self.runtime_handle.spawn(async move {
-                let _ = cm.save_list(&list).await;
-            });
-        }
-    }
-
-    pub fn toggle_archive_mod(&mut self, mod_id: &str) {
-        if let Some(list) = self.get_current_list_mut() {
-            if let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id) {
-                entry.archived = !entry.archived;
-                let list = list.clone();
-                let cm = self.config_manager.clone();
-                self.runtime_handle.spawn(async move {
-                    let _ = cm.save_list(&list).await;
-                });
-            }
-        }
-    }
-
-    pub fn update_list_settings(&mut self, version: String, loader: String, dir: String) {
-        let loader_obj = self
-            .mod_loaders
+        filtered_mods
             .iter()
-            .find(|l| l.id == loader)
-            .cloned()
-            .unwrap_or(crate::domain::ModLoader {
-                id: loader.clone(),
-                name: loader.clone(),
-            });
+            .filter(|entry| !entry.archived)
+            .filter(|entry| {
+                if self.mods_being_loaded.contains(&entry.mod_id) {
+                    return false;
+                }
 
-        if let Some(list) = self.get_current_list_mut() {
-            list.version = version;
-            list.loader = loader_obj;
-            list.download_dir = dir;
+                if let Some(status) = self.download_status.get(&entry.mod_id) {
+                    if matches!(status, DownloadStatus::Queued | DownloadStatus::Downloading) {
+                        return false;
+                    }
+                }
 
-            let list_clone = list.clone();
-            let cm = self.config_manager.clone();
+                if !self
+                    .is_mod_compatible_with_context(
+                        &entry.mod_id,
+                        &effective_version,
+                        &effective_loader,
+                    )
+                    .unwrap_or(false)
+                {
+                    return false;
+                }
 
-            self.runtime_handle.spawn(async move {
-                let _ = cm.save_list(&list_clone).await;
-            });
-        }
-
-        if self.current_list_id.is_some() {
-            self.invalidate_and_reload();
-        }
-    }
-
-    pub fn delete_current_list(&mut self) {
-        if let Some(list_id) = self.current_list_id.clone() {
-            self.mod_lists.retain(|l| l.id != list_id);
-            self.current_list_id = None;
-            let cm = self.config_manager.clone();
-            self.runtime_handle.spawn(async move {
-                let _ = cm.delete_list(&list_id).await;
-            });
-        }
-    }
-
-    pub fn save_list(&self, list: &ModList) {
-        let cm = self.config_manager.clone();
-        let list = list.clone();
-        self.runtime_handle.spawn(async move {
-            let _ = cm.save_list(&list).await;
-        });
-    }
-
-    pub fn export_current_list(&mut self, path: std::path::PathBuf) {
-        let export_info = self.get_current_list().map(|list| {
-            (
-                list.mods
-                    .iter()
-                    .map(|m| m.mod_id.clone())
-                    .collect::<Vec<String>>(),
-                list.clone(),
-            )
-        });
-
-        let (mod_ids, current_list_obj) = match export_info {
-            Some(data) => data,
-            None => return,
-        };
-
-        match path.extension().and_then(|s| s.to_str()) {
-            Some("mods") => {
-                self.legacy_state = LegacyState::InProgress {
-                    current: 0,
-                    total: mod_ids.len(),
-                    message: "Initializing export...".into(),
-                };
-
-                let _ = self.cmd_tx.try_send(Command::LegacyListExport {
-                    path,
-                    mod_ids,
-                    version: self.get_effective_version(),
-                    loader: self.get_effective_loader(),
-                });
-            }
-            _ => {
-                let runtime = self.runtime_handle.clone();
-                runtime.spawn(async move {
-                    let toml_string = toml::to_string_pretty(&current_list_obj).unwrap_or_default();
-                    let _ = tokio::fs::write(path, toml_string).await;
-                });
-            }
-        }
-    }
-
-    pub fn start_legacy_import(&mut self, path: std::path::PathBuf) {
-        self.legacy_state = LegacyState::InProgress {
-            current: 0,
-            total: 0,
-            message: "Preparing import...".into(),
-        };
-        let _ = self.cmd_tx.try_send(Command::LegacyListImport {
-            path,
-            version: self.get_effective_version(),
-            loader: self.get_effective_loader(),
-        });
-    }
-
-    pub fn finalize_import(&mut self, list: ModList) {
-        let list_to_save = list;
-
-        let cm = self.config_manager.clone();
-        let list_for_spawn = list_to_save.clone();
-        self.runtime_handle.spawn(async move {
-            let _ = cm.save_list(&list_for_spawn).await;
-        });
-
-        self.current_list_id = Some(list_to_save.id.clone());
-        self.mod_lists.push(list_to_save);
-        self.refresh_loaders();
-    }
-
-    pub fn persist_config_on_exit(&self) {
-        let cm = self.config_manager.clone();
-        let config = AppConfig {
-            current_list_id: self.current_list_id.clone(),
-            default_list_name: self.default_list_name.clone(),
-        };
-
-        if let Some(current_list) = self.get_current_list() {
-            let list = current_list.clone();
-            self.runtime_handle.block_on(async {
-                let _ = cm.save_config(&config).await;
-                let _ = cm.save_list(&list).await;
-            });
-        } else {
-            self.runtime_handle.block_on(async {
-                let _ = cm.save_config(&config).await;
-            });
-        }
-    }
-
-    pub fn create_new_list(
-        &mut self,
-        new_name: String,
-        content_type: ProjectType,
-        version: String,
-        loader: String,
-        download_dir: String,
-    ) {
-        let list_name = format!("{}", new_name);
-
-        let new_list = ModList {
-            id: format!("list_{}", Utc::now().timestamp()),
-            name: list_name,
-            created_at: Utc::now(),
-            mods: Vec::new(),
-            version,
-            loader: self
-                .mod_loaders
-                .iter()
-                .find(|l| l.id == loader)
-                .cloned()
-                .unwrap_or(crate::domain::ModLoader {
-                    id: loader.clone(),
-                    name: loader.clone(),
-                }),
-            download_dir,
-            content_type,
-        };
-
-        self.save_list(&new_list);
-        self.current_list_id = Some(new_list.id.clone());
-        self.mod_lists.push(new_list);
-        self.refresh_loaders();
+                if let Some(mod_info) = self.get_cached_mod(&entry.mod_id) {
+                    let filename = crate::domain::generate_mod_filename(&mod_info);
+                    let file_path = std::path::Path::new(&download_dir).join(&filename);
+                    !file_path.exists()
+                } else {
+                    false
+                }
+            })
+            .map(|entry| entry.mod_id.clone())
+            .collect()
     }
 }

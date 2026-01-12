@@ -10,7 +10,21 @@ pub mod mod_service;
 
 pub use mod_service::ModService;
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect::<String>()
+        .trim_matches(|c| c == '_' || c == '-')
+        .to_string()
+}
+
+pub fn generate_mod_filename(mod_info: &ModInfo) -> String {
+    let sanitized_name = sanitize_filename(&mod_info.name);
+    let extension = mod_info.project_type.fileext();
+    format!("{}.{}", sanitized_name, extension)
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ProjectType {
     #[serde(rename = "mod")]
     Mod,
@@ -149,7 +163,6 @@ where
     D: serde::Deserializer<'de>,
 {
     use serde::de::Error as _;
-
     let value = serde_json::Value::deserialize(deserializer).map_err(D::Error::custom)?;
 
     if value.is_string() {
@@ -165,38 +178,24 @@ where
     Ok(ml)
 }
 
-pub enum Command {
-    SearchMods {
-        query: String,
-        version: String,
-        loader: String,
-        project_type: ProjectType,
-    },
-    FetchModDetails {
-        mod_id: String,
-        version: String,
-        loader: String,
-    },
-    DownloadMod {
-        mod_info: Arc<ModInfo>,
-        download_dir: String,
-    },
-    LegacyListImport {
-        path: std::path::PathBuf,
-        version: String,
-        loader: String,
-    },
-    LegacyListExport {
-        path: std::path::PathBuf,
-        mod_ids: Vec<String>,
-        version: String,
-        loader: String,
-    },
-}
-
 pub enum Event {
+    InitialDataLoaded {
+        mod_lists: Vec<ModList>,
+        current_list_id: Option<String>,
+        minecraft_versions: Vec<MinecraftVersion>,
+        mod_loaders: Vec<ModLoader>,
+        default_list_name: String,
+    },
+    LoadersForTypeLoaded {
+        project_type: ProjectType,
+        loaders: Vec<ModLoader>,
+    },
     SearchResults(Vec<Arc<ModInfo>>),
-    ModDetails(Arc<ModInfo>),
+    ModDetails {
+        info: Arc<ModInfo>,
+        version: String,
+        loader: String,
+    },
     ModDetailsFailed {
         mod_id: String,
     },
