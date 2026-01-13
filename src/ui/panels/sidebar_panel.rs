@@ -120,6 +120,9 @@ impl SidebarPanel {
                         } else {
                             state.current_list_id = Some(list_id);
                             effects.extend(state.invalidate_and_reload());
+
+                            let download_dir = state.get_effective_download_dir();
+                            effects.push(Effect::ValidateMetadata { download_dir });
                         }
                         view_state.selected_mod = None;
                     }

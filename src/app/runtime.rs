@@ -334,6 +334,196 @@ impl AppRuntime {
                 });
             }
 
+            Effect::DeleteModFile {
+                download_dir,
+                mod_id,
+            } => {
+                self.rt_handle.spawn(async move {
+                    let download_path = std::path::Path::new(&download_dir);
+
+                    if let Ok(metadata) = crate::infra::read_download_metadata(download_path).await
+                    {
+                        if let Some(entry) = metadata.get_entry(&mod_id) {
+                            let file_path = download_path.join(&entry.file);
+                            if file_path.exists() {
+                                if let Err(e) = tokio::fs::remove_file(&file_path).await {
+                                    log::warn!("Failed to delete mod file {}: {}", entry.file, e);
+                                } else {
+                                    log::info!("Deleted mod file: {}", entry.file);
+                                }
+                            }
+
+                            let archived_path =
+                                download_path.join(format!("{}.archived", entry.file));
+                            if archived_path.exists() {
+                                if let Err(e) = tokio::fs::remove_file(&archived_path).await {
+                                    log::warn!(
+                                        "Failed to delete archived file {}.archived: {}",
+                                        entry.file,
+                                        e
+                                    );
+                                } else {
+                                    log::info!("Deleted archived file: {}.archived", entry.file);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            Effect::DeleteUnknownFile {
+                download_dir,
+                filename,
+            } => {
+                self.rt_handle.spawn(async move {
+                    let download_path = std::path::Path::new(&download_dir);
+                    let file_path = download_path.join(&filename);
+
+                    if file_path.exists() {
+                        if let Err(e) = tokio::fs::remove_file(&file_path).await {
+                            log::warn!("Failed to delete unknown file {}: {}", filename, e);
+                        } else {
+                            log::info!("Deleted unknown file: {}", filename);
+                        }
+                    }
+                });
+            }
+
+            Effect::ArchiveModFile {
+                download_dir,
+                mod_id,
+            } => {
+                let tx = self.event_tx.clone();
+                let dir_clone = download_dir.clone();
+
+                self.rt_handle.spawn(async move {
+                    let download_path = std::path::Path::new(&download_dir);
+
+                    if let Ok(mut metadata) =
+                        crate::infra::read_download_metadata(download_path).await
+                    {
+                        if let Some(entry) = metadata.get_entry(&mod_id) {
+                            let original_file = entry.file.clone();
+                            let version = entry.version.clone();
+                            let file_path = download_path.join(&original_file);
+                            let archived_path =
+                                download_path.join(format!("{}.archived", original_file));
+
+                            if file_path.exists() {
+                                if let Err(e) = tokio::fs::rename(&file_path, &archived_path).await
+                                {
+                                    log::warn!(
+                                        "Failed to archive mod file {}: {}",
+                                        original_file,
+                                        e
+                                    );
+                                } else {
+                                    log::info!(
+                                        "Archived mod file: {} -> {}.archived",
+                                        original_file,
+                                        original_file
+                                    );
+
+                                    metadata.update_entry(
+                                        mod_id.clone(),
+                                        format!("{}.archived", original_file),
+                                        version,
+                                    );
+
+                                    if let Err(e) = crate::infra::write_download_metadata(
+                                        download_path,
+                                        &metadata,
+                                    )
+                                    .await
+                                    {
+                                        log::warn!(
+                                            "Failed to update metadata after archiving: {}",
+                                            e
+                                        );
+                                    } else {
+                                        let _ = tx
+                                            .send(Event::MetadataLoaded {
+                                                download_dir: dir_clone,
+                                                metadata,
+                                            })
+                                            .await;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            Effect::UnarchiveModFile {
+                download_dir,
+                mod_id,
+            } => {
+                let tx = self.event_tx.clone();
+                let dir_clone = download_dir.clone();
+
+                self.rt_handle.spawn(async move {
+                    let download_path = std::path::Path::new(&download_dir);
+
+                    if let Ok(mut metadata) =
+                        crate::infra::read_download_metadata(download_path).await
+                    {
+                        if let Some(entry) = metadata.get_entry(&mod_id) {
+                            let archived_file = entry.file.clone();
+                            let version = entry.version.clone();
+
+                            if let Some(original_file) = archived_file.strip_suffix(".archived") {
+                                let archived_path = download_path.join(&archived_file);
+                                let file_path = download_path.join(original_file);
+
+                                if archived_path.exists() {
+                                    if let Err(e) =
+                                        tokio::fs::rename(&archived_path, &file_path).await
+                                    {
+                                        log::warn!(
+                                            "Failed to unarchive mod file {}: {}",
+                                            archived_file,
+                                            e
+                                        );
+                                    } else {
+                                        log::info!(
+                                            "Unarchived mod file: {} -> {}",
+                                            archived_file,
+                                            original_file
+                                        );
+
+                                        metadata.update_entry(
+                                            mod_id.clone(),
+                                            original_file.to_string(),
+                                            version,
+                                        );
+
+                                        if let Err(e) = crate::infra::write_download_metadata(
+                                            download_path,
+                                            &metadata,
+                                        )
+                                        .await
+                                        {
+                                            log::warn!(
+                                                "Failed to update metadata after unarchiving: {}",
+                                                e
+                                            );
+                                        } else {
+                                            let _ = tx
+                                                .send(Event::MetadataLoaded {
+                                                    download_dir: dir_clone,
+                                                    metadata,
+                                                })
+                                                .await;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
             Effect::ValidateMetadata { download_dir } => {
                 let tx = self.event_tx.clone();
                 let dir_clone = download_dir.clone();
