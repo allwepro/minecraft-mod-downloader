@@ -46,9 +46,11 @@ struct ModrinthProjectDetails {
     #[serde(default)]
     team: String,
     downloads: u32,
+    #[allow(dead_code)]
     #[serde(default)]
     versions: Vec<String>,
     icon_url: String,
+    #[allow(dead_code)]
     #[serde(default)]
     categories: Vec<String>,
     project_type: String,
@@ -66,6 +68,7 @@ struct ModrinthVersion {
 #[derive(Deserialize)]
 struct ModrinthFile {
     url: String,
+    #[allow(dead_code)]
     filename: String,
 }
 
