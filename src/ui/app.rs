@@ -71,6 +71,15 @@ pub struct App {
     legacy_state: LegacyState,
     pending_legacy_mods: Option<Vec<Arc<ModInfo>>>,
     legacy_service: Arc<LegacyListService>,
+    // Launcher fields
+    java_installations: Vec<JavaInstallation>,
+    selected_java_index: Option<usize>,
+    minecraft_installation: Option<MinecraftInstallation>,
+    launcher_username: String,
+    launcher_min_memory: u32,
+    launcher_max_memory: u32,
+    launch_status: Option<String>,
+    active_tab: usize,
 }
 
 impl App {
@@ -303,6 +312,15 @@ impl App {
             legacy_state: LegacyState::Idle,
             pending_legacy_mods: None,
             legacy_service,
+            // Initialize launcher fields
+            java_installations: JavaDetector::detect_java_installations(),
+            selected_java_index: None,
+            minecraft_installation: MinecraftDetector::detect_minecraft(),
+            launcher_username: whoami::username(),
+            launcher_min_memory: 1024,
+            launcher_max_memory: 4096,
+            launch_status: None,
+            active_tab: 0,
         }
     }
 
@@ -606,6 +624,210 @@ impl App {
 
             self.import_window_open = false;
             self.import_name_input.clear();
+        }
+    }
+
+    fn render_launcher_tab(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Minecraft Launcher");
+        ui.add_space(10.0);
+
+        // Java installation section
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Java Installation").strong());
+            ui.add_space(5.0);
+
+            if self.java_installations.is_empty() {
+                ui.colored_label(egui::Color32::RED, "⚠ No Java installations found!");
+                ui.label("Please install Java 17+ to launch Minecraft.");
+            } else {
+                egui::ComboBox::from_label("Select Java")
+                    .selected_text(
+                        self.selected_java_index
+                            .and_then(|idx| self.java_installations.get(idx))
+                            .map(|j| format!("{} ({})", j.version, j.path.display()))
+                            .unwrap_or_else(|| "Select Java...".to_string()),
+                    )
+                    .show_ui(ui, |ui| {
+                        for (idx, java) in self.java_installations.iter().enumerate() {
+                            let label = format!("{} - {}", java.version, java.path.display());
+                            ui.selectable_value(&mut self.selected_java_index, Some(idx), label);
+                        }
+                    });
+
+                if let Some(idx) = self.selected_java_index {
+                    if let Some(java) = self.java_installations.get(idx) {
+                        if java.is_valid {
+                            ui.colored_label(egui::Color32::GREEN, "✓ Valid Java installation");
+                        } else {
+                            ui.colored_label(egui::Color32::YELLOW, "⚠ Java validation failed");
+                        }
+                    }
+                }
+            }
+        });
+
+        ui.add_space(10.0);
+
+        // Minecraft installation section
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Minecraft Installation").strong());
+            ui.add_space(5.0);
+
+            if let Some(ref mc) = self.minecraft_installation {
+                ui.colored_label(egui::Color32::GREEN, "✓ Minecraft found");
+                ui.label(format!("Location: {}", mc.root_dir.display()));
+                ui.label(format!("Installed versions: {}", mc.available_versions.len()));
+            } else {
+                ui.colored_label(egui::Color32::RED, "⚠ Minecraft not found!");
+                ui.label("Please install Minecraft to use the launcher.");
+            }
+        });
+
+        ui.add_space(10.0);
+
+        // Launch settings
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Launch Settings").strong());
+            ui.add_space(5.0);
+
+            ui.horizontal(|ui| {
+                ui.label("Username:");
+                ui.text_edit_singleline(&mut self.launcher_username);
+            });
+
+            ui.add_space(5.0);
+
+            ui.label(format!("Minimum Memory: {} MB", self.launcher_min_memory));
+            ui.add(egui::Slider::new(&mut self.launcher_min_memory, 512..=8192).suffix(" MB"));
+
+            ui.add_space(5.0);
+
+            ui.label(format!("Maximum Memory: {} MB", self.launcher_max_memory));
+            ui.add(egui::Slider::new(&mut self.launcher_max_memory, 1024..=16384).suffix(" MB"));
+
+            if self.launcher_min_memory > self.launcher_max_memory {
+                ui.colored_label(egui::Color32::RED, "⚠ Min memory cannot be greater than max memory!");
+            }
+        });
+
+        ui.add_space(10.0);
+
+        // Mod list selection
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Mod List").strong());
+            ui.add_space(5.0);
+
+            if let Some(list_id) = &self.current_list_id {
+                if let Some(list) = self.mod_lists.iter().find(|l| &l.id == list_id) {
+                    ui.colored_label(egui::Color32::GREEN, format!("✓ Using list: {}", list.name));
+                    ui.label(format!("Mods: {}", list.mods.len()));
+                } else {
+                    ui.label("No list selected");
+                }
+            } else {
+                ui.label("No list selected - will launch vanilla Minecraft");
+            }
+        });
+
+        ui.add_space(15.0);
+
+        // Launch button
+        let can_launch = !self.java_installations.is_empty()
+            && self.selected_java_index.is_some()
+            && self.minecraft_installation.is_some()
+            && !self.launcher_username.is_empty()
+            && self.launcher_min_memory <= self.launcher_max_memory;
+
+        ui.horizontal(|ui| {
+            let launch_button = egui::Button::new(egui::RichText::new("🚀 Launch Minecraft").size(18.0));
+
+            if ui.add_sized([200.0, 40.0], launch_button)
+                .on_disabled_hover_text("Configure Java and Minecraft to launch")
+                .on_hover_text("Launch Minecraft with selected settings")
+                .clicked() && can_launch
+            {
+                self.launch_minecraft();
+            }
+        });
+
+        // Status message
+        if let Some(ref status) = self.launch_status {
+            ui.add_space(10.0);
+            ui.separator();
+            ui.label(status);
+        }
+    }
+
+    fn launch_minecraft(&mut self) {
+        self.launch_status = Some("Preparing to launch...".to_string());
+
+        let java_idx = match self.selected_java_index {
+            Some(idx) => idx,
+            None => {
+                self.launch_status = Some("❌ No Java selected".to_string());
+                return;
+            }
+        };
+
+        let java = match self.java_installations.get(java_idx) {
+            Some(j) => j,
+            None => {
+                self.launch_status = Some("❌ Invalid Java selection".to_string());
+                return;
+            }
+        };
+
+        let mc_install = match &self.minecraft_installation {
+            Some(mc) => mc,
+            None => {
+                self.launch_status = Some("❌ Minecraft not found".to_string());
+                return;
+            }
+        };
+
+        // Copy mods if a list is selected
+        if let Some(list_id) = &self.current_list_id {
+            if let Some(list) = self.mod_lists.iter().find(|l| &l.id == list_id) {
+                let mod_names: Vec<String> = list.mods.iter().map(|m| m.mod_name.clone()).collect();
+                let source_dir = std::path::PathBuf::from(&self.download_dir);
+                let mods_dir = mc_install.mods_dir.clone();
+
+                let runtime = self.runtime_handle.clone();
+                let status_msg = format!("Copying {} mods...", mod_names.len());
+                self.launch_status = Some(status_msg);
+
+                runtime.spawn(async move {
+                    let _ = ModCopier::copy_mods_to_minecraft(&source_dir, &mods_dir, &mod_names).await;
+                });
+            }
+        }
+
+        // Build launch config
+        let config = LaunchConfig {
+            profile: LaunchProfile {
+                minecraft_version: self.selected_version.clone(),
+                mod_loader: self.selected_loader.clone(),
+                mod_loader_version: None,
+                java_path: java.path.clone(),
+                game_directory: mc_install.root_dir.clone(),
+                mod_list_id: self.current_list_id.clone(),
+            },
+            username: self.launcher_username.clone(),
+            max_memory_mb: self.launcher_max_memory,
+            min_memory_mb: self.launcher_min_memory,
+        };
+
+        // Launch Minecraft
+        match LauncherService::launch_minecraft(&config) {
+            Ok(LaunchResult::Success { pid }) => {
+                self.launch_status = Some(format!("✅ Minecraft launched successfully! (PID: {})", pid));
+            }
+            Ok(LaunchResult::Failed { error }) => {
+                self.launch_status = Some(format!("❌ Launch failed: {}", error));
+            }
+            Err(e) => {
+                self.launch_status = Some(format!("❌ Error: {}", e));
+            }
         }
     }
 }
@@ -1061,6 +1283,23 @@ impl eframe::App for App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Tab selection
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.active_tab, 0, "📦 Mod Lists");
+                ui.selectable_value(&mut self.active_tab, 1, "🚀 Launcher");
+            });
+            ui.separator();
+            ui.add_space(5.0);
+
+            // Render appropriate tab
+            if self.active_tab == 1 {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    self.render_launcher_tab(ui);
+                });
+                return;
+            }
+
+            // Original mod list UI (tab 0)
             if self.current_list_id.is_none() {
                 ui.vertical_centered(|ui| {
                     ui.add_space(100.0);
