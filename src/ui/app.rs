@@ -80,6 +80,7 @@ pub struct App {
     launcher_max_memory: u32,
     launch_status: Option<String>,
     active_tab: usize,
+    selected_mc_version: String,
 }
 
 impl App {
@@ -315,12 +316,18 @@ impl App {
             // Initialize launcher fields
             java_installations: JavaDetector::detect_java_installations(),
             selected_java_index: None,
-            minecraft_installation: MinecraftDetector::detect_minecraft(),
+            minecraft_installation: {
+                let mc = MinecraftDetector::detect_minecraft();
+                mc
+            },
             launcher_username: whoami::username(),
             launcher_min_memory: 1024,
             launcher_max_memory: 4096,
             launch_status: None,
             active_tab: 0,
+            selected_mc_version: MinecraftDetector::detect_minecraft()
+                .and_then(|mc| mc.available_versions.first().cloned())
+                .unwrap_or_else(|| "1.20.1".to_string()),
         }
     }
 
@@ -677,6 +684,20 @@ impl App {
                 ui.colored_label(egui::Color32::GREEN, "✓ Minecraft found");
                 ui.label(format!("Location: {}", mc.root_dir.display()));
                 ui.label(format!("Installed versions: {}", mc.available_versions.len()));
+
+                ui.add_space(5.0);
+
+                if !mc.available_versions.is_empty() {
+                    egui::ComboBox::from_label("Select Minecraft Version")
+                        .selected_text(&self.selected_mc_version)
+                        .show_ui(ui, |ui| {
+                            for version in &mc.available_versions {
+                                ui.selectable_value(&mut self.selected_mc_version, version.clone(), version);
+                            }
+                        });
+                } else {
+                    ui.colored_label(egui::Color32::YELLOW, "⚠ No Minecraft versions installed");
+                }
             } else {
                 ui.colored_label(egui::Color32::RED, "⚠ Minecraft not found!");
                 ui.label("Please install Minecraft to use the launcher.");
@@ -732,9 +753,15 @@ impl App {
         ui.add_space(15.0);
 
         // Launch button
+        let has_valid_mc_version = self.minecraft_installation
+            .as_ref()
+            .map(|mc| mc.available_versions.contains(&self.selected_mc_version))
+            .unwrap_or(false);
+
         let can_launch = !self.java_installations.is_empty()
             && self.selected_java_index.is_some()
             && self.minecraft_installation.is_some()
+            && has_valid_mc_version
             && !self.launcher_username.is_empty()
             && self.launcher_min_memory <= self.launcher_max_memory;
 
@@ -805,7 +832,7 @@ impl App {
         // Build launch config
         let config = LaunchConfig {
             profile: LaunchProfile {
-                minecraft_version: self.selected_version.clone(),
+                minecraft_version: self.selected_mc_version.clone(),
                 mod_loader: self.selected_loader.clone(),
                 mod_loader_version: None,
                 java_path: java.path.clone(),
