@@ -61,7 +61,7 @@ impl MainPanel {
 
                     ui.label(
                         egui::RichText::new(format!(
-                            "{} | {} | {}",
+                            "{} List | {} | {}",
                             content_type.display_name(),
                             ver_name,
                             loader_name
@@ -211,7 +211,12 @@ impl MainPanel {
                                     .download_status
                                     .get(&entry.mod_id)
                                     .map(|s| {
-                                        matches!(s, DownloadStatus::Idle | DownloadStatus::Failed)
+                                        matches!(
+                                            s,
+                                            DownloadStatus::Idle
+                                                | DownloadStatus::Complete
+                                                | DownloadStatus::Failed
+                                        )
                                     })
                                     .unwrap_or(true)
                                 && state.is_mod_compatible(&entry.mod_id).unwrap_or(false)
@@ -221,7 +226,13 @@ impl MainPanel {
 
                     let mods_to_download_count = mods_to_download.len();
 
-                    if !mods_to_download.is_empty() && ui.button("⬇ Download All").clicked() {
+                    if ui
+                        .add_enabled(
+                            can_interact && !mods_to_download.is_empty(),
+                            egui::Button::new("⬇ Download All"),
+                        )
+                        .clicked()
+                    {
                         for mod_id in mods_to_download {
                             effects.extend(state.start_download(&mod_id));
                         }
@@ -371,14 +382,8 @@ impl MainPanel {
                     name_text = name_text.weak();
                 }
 
-                ui.hyperlink_to(
-                    name_text,
-                    format!(
-                        "https://modrinth.com/{}/{}",
-                        project_type.id(),
-                        entry.mod_id
-                    ),
-                );
+                let project_link = runtime.get_project_link(&project_type, &entry.mod_id);
+                ui.hyperlink_to(name_text, project_link);
 
                 if let Some(ref info) = mod_info {
                     let version_text = if info.version.is_empty() {
@@ -400,8 +405,26 @@ impl MainPanel {
                     }
                 }
 
-                if matches!(compatibility, Some(false)) {
-                    ui.colored_label(egui::Color32::RED, "❌ Incompatible");
+                let has_override = state.has_compatibility_override(mod_id);
+                let raw_compatibility = state.is_mod_compatible_raw(mod_id);
+
+                if has_override {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(255, 165, 0),
+                            "⚠ Incompatible Overruled",
+                        );
+                        if ui.small_button("🔓 Revoke").clicked() {
+                            effects.extend(state.toggle_compatibility_override(mod_id));
+                        }
+                    });
+                } else if matches!(raw_compatibility, Some(false)) {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(egui::Color32::RED, "❌ Incompatible");
+                        if ui.small_button("🔒 Overrule").clicked() {
+                            effects.extend(state.toggle_compatibility_override(mod_id));
+                        }
+                    });
                 } else if is_missing && matches!(compatibility, Some(true)) {
                     ui.colored_label(egui::Color32::YELLOW, "📁 Missing");
                 }
@@ -440,9 +463,25 @@ impl MainPanel {
                             );
                         }
                         DownloadStatus::Complete => {
+                            let enabled =
+                                mod_info.is_some() && !matches!(compatibility, Some(false));
+                            if ui
+                                .add_enabled(enabled, egui::Button::new("Download"))
+                                .clicked()
+                            {
+                                effects.extend(state.start_download(mod_id));
+                            }
                             ui.label("✅");
                         }
                         DownloadStatus::Failed => {
+                            let enabled =
+                                mod_info.is_some() && !matches!(compatibility, Some(false));
+                            if ui
+                                .add_enabled(enabled, egui::Button::new("Download"))
+                                .clicked()
+                            {
+                                effects.extend(state.start_download(mod_id));
+                            }
                             ui.label("❌");
                         }
                         _ => {

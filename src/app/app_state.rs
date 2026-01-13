@@ -506,6 +506,7 @@ impl AppState {
                     mod_name: mod_info.name.clone(),
                     added_at: Utc::now(),
                     archived: false,
+                    compatibility_override: false,
                 });
                 list_to_save = Some(current_list.clone());
             }
@@ -547,6 +548,25 @@ impl AppState {
             }
         }
         Vec::new()
+    }
+
+    pub fn toggle_compatibility_override(&mut self, mod_id: &str) -> Vec<Effect> {
+        if let Some(list) = self.get_current_list_mut() {
+            if let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id) {
+                entry.compatibility_override = !entry.compatibility_override;
+                return vec![Effect::SaveList { list: list.clone() }];
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn has_compatibility_override(&self, mod_id: &str) -> bool {
+        if let Some(list) = self.get_current_list() {
+            if let Some(entry) = list.mods.iter().find(|e| e.mod_id == mod_id) {
+                return entry.compatibility_override;
+            }
+        }
+        false
     }
 
     pub fn delete_current_list(&mut self) -> Vec<Effect> {
@@ -654,6 +674,20 @@ impl AppState {
     }
 
     pub fn is_mod_compatible(&self, mod_id: &str) -> Option<bool> {
+        if let Some(list) = self.get_current_list() {
+            if let Some(entry) = list.mods.iter().find(|e| e.mod_id == mod_id) {
+                if entry.compatibility_override {
+                    return Some(true);
+                }
+            }
+        }
+
+        let version = self.get_effective_version();
+        let loader = self.get_effective_loader();
+        self.is_mod_compatible_with_context(mod_id, &version, &loader)
+    }
+
+    pub fn is_mod_compatible_raw(&self, mod_id: &str) -> Option<bool> {
         let version = self.get_effective_version();
         let loader = self.get_effective_loader();
         self.is_mod_compatible_with_context(mod_id, &version, &loader)
@@ -767,7 +801,7 @@ impl AppState {
         };
 
         let download_dir = self.get_effective_download_dir();
-        let filename = crate::domain::generate_mod_filename(&mod_info);
+        let filename = generate_mod_filename(&mod_info);
         let file_path = std::path::Path::new(&download_dir).join(&filename);
         file_path.exists()
     }
@@ -791,19 +825,20 @@ impl AppState {
                     }
                 }
 
-                if !self
-                    .is_mod_compatible_with_context(
-                        &entry.mod_id,
-                        &effective_version,
-                        &effective_loader,
-                    )
-                    .unwrap_or(false)
+                if !entry.compatibility_override
+                    && !self
+                        .is_mod_compatible_with_context(
+                            &entry.mod_id,
+                            &effective_version,
+                            &effective_loader,
+                        )
+                        .unwrap_or(false)
                 {
                     return false;
                 }
 
                 if let Some(mod_info) = self.get_cached_mod(&entry.mod_id) {
-                    let filename = crate::domain::generate_mod_filename(&mod_info);
+                    let filename = generate_mod_filename(&mod_info);
                     let file_path = std::path::Path::new(&download_dir).join(&filename);
                     !file_path.exists()
                 } else {
