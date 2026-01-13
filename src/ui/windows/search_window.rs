@@ -115,14 +115,9 @@ impl SearchWindow {
 
                                 ui.vertical(|ui| {
                                     ui.set_max_width(available_width);
-                                    ui.hyperlink_to(
-                                        &mod_info.name,
-                                        format!(
-                                            "https://modrinth.com/{}/{}",
-                                            mod_info.project_type.id(),
-                                            mod_info.id
-                                        ),
-                                    );
+                                    let project_link = runtime
+                                        .get_project_link(&mod_info.project_type, &mod_info.id);
+                                    ui.hyperlink_to(&mod_info.name, project_link);
                                     ui.add(
                                         egui::Label::new(&mod_info.description)
                                             .wrap_mode(egui::TextWrapMode::Wrap),

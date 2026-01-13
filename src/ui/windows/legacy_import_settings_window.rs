@@ -117,6 +117,7 @@ impl LegacyImportSettingsWindow {
                                     mod_name: m.name.clone(),
                                     added_at: chrono::Utc::now(),
                                     archived: false,
+                                    compatibility_override: false,
                                 })
                                 .collect();
 

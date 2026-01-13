@@ -122,6 +122,8 @@ pub struct ModEntry {
     pub added_at: DateTime<Utc>,
     #[serde(default)]
     pub archived: bool,
+    #[serde(default)]
+    pub compatibility_override: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
