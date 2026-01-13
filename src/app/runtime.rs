@@ -53,6 +53,12 @@ impl AppRuntime {
         )
     }
 
+    pub fn get_project_link(&self, project_type: &ProjectType, mod_id: &str) -> String {
+        self.api_service
+            .provider
+            .get_project_link(project_type, mod_id)
+    }
+
     pub fn enqueue(&self, effect: Effect) {
         self.run_effect(effect);
     }

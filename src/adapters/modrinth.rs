@@ -505,4 +505,8 @@ impl ModProvider for ModrinthProvider {
         file.flush().await?;
         Ok(())
     }
+
+    fn get_project_link(&self, project_type: &ProjectType, mod_id: &str) -> String {
+        format!("https://modrinth.com/{}/{}", project_type.id(), mod_id)
+    }
 }
