@@ -355,6 +355,7 @@ impl MainPanel {
 
         let compatibility = state.is_mod_compatible(mod_id);
         let is_missing = !entry.archived && !state.is_mod_downloaded(mod_id);
+        let is_updateable = !entry.archived && state.is_mod_updateable(mod_id);
 
         ui.horizontal(|ui| {
             if let Some(ref info) = mod_info {
@@ -408,26 +409,37 @@ impl MainPanel {
                 let has_override = state.has_compatibility_override(mod_id);
                 let raw_compatibility = state.is_mod_compatible_raw(mod_id);
 
-                if has_override {
-                    ui.horizontal(|ui| {
+                ui.horizontal(|ui| {
+                    if is_updateable {
                         ui.colored_label(
-                            egui::Color32::from_rgb(255, 165, 0),
-                            "⚠ Incompatible Overruled",
+                            egui::Color32::from_rgb(100, 200, 255),
+                            "🔄 Update Available",
                         );
-                        if ui.small_button("🔓 Revoke").clicked() {
-                            effects.extend(state.toggle_compatibility_override(mod_id));
-                        }
-                    });
-                } else if matches!(raw_compatibility, Some(false)) {
-                    ui.horizontal(|ui| {
-                        ui.colored_label(egui::Color32::RED, "❌ Incompatible");
-                        if ui.small_button("🔒 Overrule").clicked() {
-                            effects.extend(state.toggle_compatibility_override(mod_id));
-                        }
-                    });
-                } else if is_missing && matches!(compatibility, Some(true)) {
-                    ui.colored_label(egui::Color32::YELLOW, "📁 Missing");
-                }
+                        ui.add_space(3.0);
+                    }
+                    if is_missing && matches!(compatibility, Some(true)) {
+                        ui.colored_label(egui::Color32::YELLOW, "📁 Missing");
+                        ui.add_space(3.0);
+                    }
+                    if has_override {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(255, 165, 0),
+                                "⚠ Incompatible Overruled",
+                            );
+                            if ui.small_button("🔓 Revoke").clicked() {
+                                effects.extend(state.toggle_compatibility_override(mod_id));
+                            }
+                        });
+                    } else if matches!(raw_compatibility, Some(false)) {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(egui::Color32::RED, "❌ Incompatible");
+                            if ui.small_button("🔒 Overrule").clicked() {
+                                effects.extend(state.toggle_compatibility_override(mod_id));
+                            }
+                        });
+                    }
+                });
             });
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -453,7 +465,7 @@ impl MainPanel {
                     let is_downloaded = !is_missing && mod_info.is_some();
 
                     match status {
-                        DownloadStatus::Downloading => {
+                        DownloadStatus::Downloading | DownloadStatus::Queued => {
                             let progress =
                                 state.download_progress.get(mod_id).copied().unwrap_or(0.0);
                             ui.add(
@@ -462,39 +474,26 @@ impl MainPanel {
                                     .desired_width(80.0),
                             );
                         }
-                        DownloadStatus::Complete => {
+                        any => {
                             let enabled =
                                 mod_info.is_some() && !matches!(compatibility, Some(false));
+                            let button_text = if is_updateable {
+                                "🔄 Update"
+                            } else {
+                                "Download"
+                            };
                             if ui
-                                .add_enabled(enabled, egui::Button::new("Download"))
+                                .add_enabled(enabled, egui::Button::new(button_text))
                                 .clicked()
                             {
                                 effects.extend(state.start_download(mod_id));
                             }
-                            ui.label("✅");
-                        }
-                        DownloadStatus::Failed => {
-                            let enabled =
-                                mod_info.is_some() && !matches!(compatibility, Some(false));
-                            if ui
-                                .add_enabled(enabled, egui::Button::new("Download"))
-                                .clicked()
+                            if (any == DownloadStatus::Complete || is_downloaded) && !is_updateable
                             {
-                                effects.extend(state.start_download(mod_id));
-                            }
-                            ui.label("❌");
-                        }
-                        _ => {
-                            let enabled =
-                                mod_info.is_some() && !matches!(compatibility, Some(false));
-                            if ui
-                                .add_enabled(enabled, egui::Button::new("Download"))
-                                .clicked()
-                            {
-                                effects.extend(state.start_download(mod_id));
-                            }
-                            if is_downloaded {
                                 ui.label("✅");
+                            }
+                            if any == DownloadStatus::Failed {
+                                ui.colored_label(egui::Color32::RED, "❌");
                             }
                         }
                     }

@@ -215,6 +215,7 @@ impl AppRuntime {
                     let _permit = api_svc.limiter.acquire(3).await;
 
                     let mod_id = mod_info.id.clone();
+                    let mod_version = mod_info.version.clone();
                     let filename = crate::domain::generate_mod_filename(&mod_info);
                     let destination = std::path::Path::new(&download_dir).join(&filename);
 
@@ -235,12 +236,23 @@ impl AppRuntime {
                         )
                         .await;
 
-                    let _ = tx
-                        .send(Event::DownloadComplete {
-                            mod_id,
-                            success: result.is_ok(),
-                        })
-                        .await;
+                    let success = result.is_ok();
+
+                    if success {
+                        let download_path = std::path::Path::new(&download_dir);
+                        if let Err(e) = crate::infra::update_metadata_entry(
+                            download_path,
+                            mod_id.clone(),
+                            filename,
+                            mod_version,
+                        )
+                        .await
+                        {
+                            log::warn!("Failed to update download metadata: {}", e);
+                        }
+                    }
+
+                    let _ = tx.send(Event::DownloadComplete { mod_id, success }).await;
                 });
             }
 
@@ -305,6 +317,55 @@ impl AppRuntime {
                     legacy_svc
                         .export_legacy_list(path, mod_ids, version, loader, tx)
                         .await;
+                });
+            }
+
+            Effect::RemoveFromMetadata {
+                download_dir,
+                mod_id,
+            } => {
+                self.rt_handle.spawn(async move {
+                    let download_path = std::path::Path::new(&download_dir);
+                    if let Err(e) =
+                        crate::infra::remove_metadata_entry(download_path, &mod_id).await
+                    {
+                        log::warn!("Failed to remove metadata entry for {}: {}", mod_id, e);
+                    }
+                });
+            }
+
+            Effect::ValidateMetadata { download_dir } => {
+                let tx = self.event_tx.clone();
+                let dir_clone = download_dir.clone();
+                self.rt_handle.spawn(async move {
+                    let download_path = std::path::Path::new(&download_dir);
+                    match crate::infra::read_download_metadata(download_path).await {
+                        Ok(mut metadata) => {
+                            metadata.validate_and_cleanup(download_path);
+                            if let Err(e) =
+                                crate::infra::write_download_metadata(download_path, &metadata)
+                                    .await
+                            {
+                                log::warn!("Failed to write validated metadata: {}", e);
+                            } else {
+                                let _ = tx
+                                    .send(Event::MetadataLoaded {
+                                        download_dir: dir_clone,
+                                        metadata,
+                                    })
+                                    .await;
+                            }
+                        }
+                        Err(e) => {
+                            log::debug!("Could not read metadata for validation: {}", e);
+                            let _ = tx
+                                .send(Event::MetadataLoaded {
+                                    download_dir: dir_clone,
+                                    metadata: crate::infra::DownloadMetadata::new(),
+                                })
+                                .await;
+                        }
+                    }
                 });
             }
         }
