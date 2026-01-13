@@ -542,6 +542,8 @@ impl AppState {
     pub fn delete_mod(&mut self, mod_id: &str) -> Vec<Effect> {
         let mut effects = Vec::new();
 
+        let download_dir = self.get_effective_download_dir();
+
         if let Some(current_list) = self.get_current_list_mut() {
             current_list.mods.retain(|e| e.mod_id != mod_id);
             effects.push(Effect::SaveList {
@@ -555,7 +557,11 @@ impl AppState {
         self.download_status.remove(mod_id);
 
         effects.push(Effect::RemoveFromMetadata {
-            download_dir: self.get_effective_download_dir(),
+            download_dir: download_dir.clone(),
+            mod_id: mod_id.to_string(),
+        });
+        effects.push(Effect::DeleteModFile {
+            download_dir: download_dir.clone(),
             mod_id: mod_id.to_string(),
         });
 
@@ -563,10 +569,29 @@ impl AppState {
     }
 
     pub fn toggle_archive_mod(&mut self, mod_id: &str) -> Vec<Effect> {
+        let download_dir = self.get_effective_download_dir();
+
         if let Some(list) = self.get_current_list_mut() {
             if let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id) {
                 entry.archived = !entry.archived;
-                return vec![Effect::SaveList { list: list.clone() }];
+                let is_archived = entry.archived;
+
+                let list_clone = list.clone();
+                let mut effects = vec![Effect::SaveList { list: list_clone }];
+
+                if is_archived {
+                    effects.push(Effect::ArchiveModFile {
+                        download_dir,
+                        mod_id: mod_id.to_string(),
+                    });
+                } else {
+                    effects.push(Effect::UnarchiveModFile {
+                        download_dir,
+                        mod_id: mod_id.to_string(),
+                    });
+                }
+
+                return effects;
             }
         }
         Vec::new()
@@ -818,10 +843,6 @@ impl AppState {
     }
 
     pub fn is_mod_downloaded(&self, mod_id: &str) -> bool {
-        let Some(mod_info) = self.get_cached_mod(mod_id) else {
-            return false;
-        };
-
         let download_dir = self.get_effective_download_dir();
 
         if let Some(metadata) = self.metadata_cache.get(&download_dir) {
@@ -831,9 +852,16 @@ impl AppState {
             }
         }
 
-        let filename = generate_mod_filename(&mod_info);
-        let file_path = std::path::Path::new(&download_dir).join(&filename);
-        file_path.exists()
+        false
+    }
+
+    pub fn has_download_metadata(&self, mod_id: &str) -> bool {
+        let download_dir = self.get_effective_download_dir();
+        if let Some(metadata) = self.metadata_cache.get(&download_dir) {
+            metadata.get_entry(mod_id).is_some()
+        } else {
+            false
+        }
     }
 
     pub fn is_mod_updateable(&self, mod_id: &str) -> bool {
@@ -903,5 +931,73 @@ impl AppState {
             })
             .map(|entry| entry.mod_id.clone())
             .collect()
+    }
+
+    pub fn get_unknown_mod_files(&self) -> Vec<String> {
+        let download_dir = self.get_effective_download_dir();
+        let download_path = std::path::Path::new(&download_dir);
+
+        if !download_path.exists() {
+            return Vec::new();
+        }
+
+        let metadata = self.metadata_cache.get(&download_dir);
+
+        if metadata.is_none() {
+            log::debug!(
+                "Metadata not loaded yet for {}, skipping unknown file detection",
+                download_dir
+            );
+            return Vec::new();
+        }
+
+        let current_list = self.get_current_list();
+
+        let known_filenames: HashSet<String> = if let Some(meta) = metadata {
+            meta.mods.values().map(|entry| entry.file.clone()).collect()
+        } else {
+            HashSet::new()
+        };
+
+        log::debug!(
+            "Unknown file detection: metadata has {} entries with {} unique filenames",
+            metadata.map(|m| m.mods.len()).unwrap_or(0),
+            known_filenames.len()
+        );
+
+        let mut unknown_files = Vec::new();
+
+        if let Ok(entries) = std::fs::read_dir(download_path) {
+            for entry in entries.flatten() {
+                if let Ok(file_type) = entry.file_type() {
+                    if file_type.is_file() {
+                        if let Some(filename) = entry.file_name().to_str() {
+                            if filename.starts_with(".mcd") {
+                                continue;
+                            }
+
+                            let current_type =
+                                current_list.map(|l| l.content_type).unwrap_or_default();
+                            let expected_ext = current_type.fileext();
+                            let base_filename =
+                                filename.strip_suffix(".archived").unwrap_or(filename);
+                            if !base_filename.ends_with(&format!(".{}", expected_ext)) {
+                                continue;
+                            }
+
+                            let is_known = known_filenames.contains(filename);
+
+                            if !is_known {
+                                log::debug!("Found unknown file: {}", filename);
+                                unknown_files.push(filename.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        unknown_files.sort();
+        unknown_files
     }
 }

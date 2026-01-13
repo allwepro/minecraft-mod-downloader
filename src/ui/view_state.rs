@@ -34,6 +34,7 @@ pub struct ViewState {
     pub current_order_mode: OrderMode,
     pub sort_field_rect: egui::Rect,
     pub show_archived: bool,
+    pub show_unknown_mods: bool,
 
     // List settings inputs
     pub list_settings_version: String,
@@ -83,6 +84,7 @@ impl Default for ViewState {
             current_order_mode: OrderMode::default(),
             sort_field_rect: egui::Rect::NOTHING,
             show_archived: false,
+            show_unknown_mods: false,
             list_settings_version: String::new(),
             list_settings_loader: String::new(),
             list_settings_dir: String::new(),
