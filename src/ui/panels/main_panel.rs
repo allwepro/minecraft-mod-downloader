@@ -280,6 +280,8 @@ impl MainPanel {
                     let archived_mods: Vec<_> =
                         filtered_entries.iter().filter(|e| e.archived).collect();
 
+                    let unknown_files = state.get_unknown_mod_files();
+
                     ui.add_space(10.0);
 
                     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -320,6 +322,41 @@ impl MainPanel {
                                         entry,
                                         state,
                                         runtime,
+                                        &mut effects,
+                                    );
+                                }
+                            }
+                        }
+
+                        if !unknown_files.is_empty() {
+                            ui.add_space(8.0);
+                            ui.separator();
+                            ui.horizontal(|ui| {
+                                let icon = if view_state.show_unknown_mods {
+                                    "🔽"
+                                } else {
+                                    "▶"
+                                };
+                                if ui
+                                    .button(format!(
+                                        "{} Unknown Files ({})",
+                                        icon,
+                                        unknown_files.len()
+                                    ))
+                                    .on_hover_text("Files in download folder without metadata")
+                                    .clicked()
+                                {
+                                    view_state.show_unknown_mods = !view_state.show_unknown_mods;
+                                }
+                            });
+
+                            if view_state.show_unknown_mods {
+                                ui.add_space(4.0);
+                                for filename in &unknown_files {
+                                    Self::render_unknown_mod_entry(
+                                        ui,
+                                        filename,
+                                        state,
                                         &mut effects,
                                     );
                                 }
@@ -462,7 +499,9 @@ impl MainPanel {
                         .get(mod_id)
                         .copied()
                         .unwrap_or(DownloadStatus::Idle);
-                    let is_downloaded = !is_missing && mod_info.is_some();
+
+                    let has_metadata = state.has_download_metadata(mod_id);
+                    let is_downloaded = has_metadata && (!is_missing && mod_info.is_some());
 
                     match status {
                         DownloadStatus::Downloading | DownloadStatus::Queued => {
@@ -497,6 +536,46 @@ impl MainPanel {
                             }
                         }
                     }
+                }
+            });
+        });
+
+        ui.separator();
+    }
+
+    fn render_unknown_mod_entry(
+        ui: &mut egui::Ui,
+        filename: &str,
+        state: &AppState,
+        effects: &mut Vec<Effect>,
+    ) {
+        ui.horizontal(|ui| {
+            let (rect, _response) =
+                ui.allocate_exact_size(egui::vec2(32.0, 32.0), egui::Sense::hover());
+
+            let text_pos = rect.center() + egui::vec2(4.0, -4.0);
+
+            ui.painter().text(
+                text_pos,
+                egui::Align2::CENTER_CENTER,
+                "❓",
+                egui::FontId::proportional(24.0),
+                ui.style().visuals.text_color(),
+            );
+
+            ui.add_space(4.0);
+
+            ui.vertical(|ui| {
+                ui.label(egui::RichText::new(filename).weak());
+                ui.label(egui::RichText::new("No metadata available").weak().small());
+            });
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("🗑").clicked() {
+                    effects.push(Effect::DeleteUnknownFile {
+                        download_dir: state.get_effective_download_dir(),
+                        filename: filename.to_string(),
+                    });
                 }
             });
         });

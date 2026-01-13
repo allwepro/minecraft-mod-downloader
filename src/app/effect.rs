@@ -62,6 +62,26 @@ pub enum Effect {
         mod_id: String,
     },
 
+    DeleteModFile {
+        download_dir: String,
+        mod_id: String,
+    },
+
+    DeleteUnknownFile {
+        download_dir: String,
+        filename: String,
+    },
+
+    ArchiveModFile {
+        download_dir: String,
+        mod_id: String,
+    },
+
+    UnarchiveModFile {
+        download_dir: String,
+        mod_id: String,
+    },
+
     ValidateMetadata {
         download_dir: String,
     },
