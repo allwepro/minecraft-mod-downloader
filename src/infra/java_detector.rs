@@ -108,7 +108,13 @@ impl JavaDetector {
 
     /// Check if java exists in PATH
     fn check_java_in_path() -> Option<JavaInstallation> {
-        let output = Command::new(Self::java_executable())
+        // Try to find the actual path of java using the which crate
+        let java_path = match which::which(Self::java_executable()) {
+            Ok(path) => path,
+            Err(_) => return None,
+        };
+
+        let output = Command::new(&java_path)
             .arg("-version")
             .output()
             .ok()?;
@@ -121,7 +127,7 @@ impl JavaDetector {
         let version = Self::parse_java_version(&version_output)?;
 
         Some(JavaInstallation {
-            path: PathBuf::from(Self::java_executable()),
+            path: java_path,
             version,
             is_valid: true,
         })
