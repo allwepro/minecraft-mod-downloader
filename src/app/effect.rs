@@ -56,4 +56,13 @@ pub enum Effect {
         version: String,
         loader: String,
     },
+
+    RemoveFromMetadata {
+        download_dir: String,
+        mod_id: String,
+    },
+
+    ValidateMetadata {
+        download_dir: String,
+    },
 }

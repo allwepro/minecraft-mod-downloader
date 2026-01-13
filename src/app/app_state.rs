@@ -1,5 +1,6 @@
 use crate::app::*;
 use crate::domain::*;
+use crate::infra::DownloadMetadata;
 use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -25,6 +26,7 @@ pub struct AppState {
     loaders_loading: HashSet<ProjectType>,
     pub effective_settings_cache: HashMap<String, (String, String, String)>,
     pub cached_mods: HashMap<(String, String, String), Arc<ModInfo>>,
+    metadata_cache: HashMap<String, DownloadMetadata>,
 }
 
 impl AppState {
@@ -50,6 +52,7 @@ impl AppState {
             loaders_loading: HashSet::new(),
             effective_settings_cache: HashMap::new(),
             cached_mods: HashMap::new(),
+            metadata_cache: HashMap::new(),
         };
 
         (state, vec![Effect::LoadInitialData])
@@ -137,6 +140,9 @@ impl AppState {
 
                     self.effective_settings_cache.clear();
 
+                    let download_dir = self.get_effective_download_dir();
+                    effects.push(Effect::ValidateMetadata { download_dir });
+
                     effects.extend(self.invalidate_and_reload());
                 }
 
@@ -187,13 +193,18 @@ impl AppState {
                 }
                 Event::DownloadComplete { mod_id, success } => {
                     self.download_status.insert(
-                        mod_id,
+                        mod_id.clone(),
                         if success {
                             DownloadStatus::Complete
                         } else {
                             DownloadStatus::Failed
                         },
                     );
+
+                    if success {
+                        let download_dir = self.get_effective_download_dir();
+                        effects.push(Effect::ValidateMetadata { download_dir });
+                    }
                 }
                 Event::LegacyListProgress {
                     current,
@@ -235,6 +246,12 @@ impl AppState {
                         warnings: vec![error],
                         is_import: is_importable,
                     };
+                }
+                Event::MetadataLoaded {
+                    download_dir,
+                    metadata,
+                } => {
+                    self.metadata_cache.insert(download_dir, metadata);
                 }
             }
         }
@@ -537,6 +554,11 @@ impl AppState {
         self.download_progress.remove(mod_id);
         self.download_status.remove(mod_id);
 
+        effects.push(Effect::RemoveFromMetadata {
+            download_dir: self.get_effective_download_dir(),
+            mod_id: mod_id.to_string(),
+        });
+
         effects
     }
 
@@ -801,15 +823,42 @@ impl AppState {
         };
 
         let download_dir = self.get_effective_download_dir();
+
+        if let Some(metadata) = self.metadata_cache.get(&download_dir) {
+            if let Some(entry) = metadata.get_entry(mod_id) {
+                let file_path = std::path::Path::new(&download_dir).join(&entry.file);
+                return file_path.exists();
+            }
+        }
+
         let filename = generate_mod_filename(&mod_info);
         let file_path = std::path::Path::new(&download_dir).join(&filename);
         file_path.exists()
+    }
+
+    pub fn is_mod_updateable(&self, mod_id: &str) -> bool {
+        let Some(mod_info) = self.get_cached_mod(mod_id) else {
+            return false;
+        };
+
+        let download_dir = self.get_effective_download_dir();
+
+        if let Some(metadata) = self.metadata_cache.get(&download_dir) {
+            if let Some(entry) = metadata.get_entry(mod_id) {
+                let file_path = std::path::Path::new(&download_dir).join(&entry.file);
+                return file_path.exists() && entry.version != mod_info.version;
+            }
+        }
+
+        false
     }
 
     pub fn get_missing_mod_ids(&self, filtered_mods: &[ModEntry]) -> Vec<String> {
         let download_dir = self.get_effective_download_dir();
         let effective_version = self.get_effective_version();
         let effective_loader = self.get_effective_loader();
+
+        let metadata = self.metadata_cache.get(&download_dir);
 
         filtered_mods
             .iter()
@@ -838,6 +887,13 @@ impl AppState {
                 }
 
                 if let Some(mod_info) = self.get_cached_mod(&entry.mod_id) {
+                    if let Some(meta) = metadata {
+                        if let Some(entry) = meta.get_entry(&mod_info.id) {
+                            let file_path = std::path::Path::new(&download_dir).join(&entry.file);
+                            return !file_path.exists() || entry.version != mod_info.version;
+                        }
+                    }
+
                     let filename = generate_mod_filename(&mod_info);
                     let file_path = std::path::Path::new(&download_dir).join(&filename);
                     !file_path.exists()
