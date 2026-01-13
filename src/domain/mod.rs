@@ -9,6 +9,7 @@ pub use mod_source::ModProvider;
 pub mod mod_service;
 
 pub use mod_service::ModService;
+use crate::infra::DownloadMetadata;
 
 pub fn sanitize_filename(name: &str) -> String {
     name.chars()
@@ -224,5 +225,9 @@ pub enum Event {
     LegacyListFailed {
         error: String,
         is_import: bool,
+    },
+    MetadataLoaded {
+        download_dir: String,
+        metadata: DownloadMetadata,
     },
 }
