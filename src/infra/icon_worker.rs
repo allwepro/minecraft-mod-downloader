@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 use tokio::sync::mpsc;
 
 pub struct IconWorker {
@@ -61,7 +62,19 @@ async fn fetch_icon_bytes(
     let icon_path = cache_path_for_url(cache_dir, url);
 
     if icon_path.exists() {
-        return tokio::fs::read(&icon_path).await.ok();
+        if let Ok(metadata) = tokio::fs::metadata(&icon_path).await {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
+                    const THIRTY_DAYS: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
+                    if elapsed > THIRTY_DAYS {
+                        let _ = tokio::fs::remove_file(&icon_path).await;
+                    } else {
+                        return tokio::fs::read(&icon_path).await.ok();
+                    }
+                }
+            }
+        }
     }
 
     let _permit = api_service.limiter.acquire(1).await;

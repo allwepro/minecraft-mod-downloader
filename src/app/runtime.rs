@@ -21,10 +21,13 @@ impl AppRuntime {
         let (event_tx, event_rx) = mpsc::channel::<Event>(200);
 
         let api_service = Arc::new(ApiService::new());
-        let mod_service = Arc::new(ModService::new(api_service.clone()));
-        let legacy_service = Arc::new(LegacyListService::new(mod_service.clone()));
         let config_manager =
             Arc::new(ConfigManager::new().expect("Failed to create config manager"));
+        let mod_service = Arc::new(ModService::new(
+            api_service.clone(),
+            config_manager.get_cache_dir().to_path_buf(),
+        ));
+        let legacy_service = Arc::new(LegacyListService::new(mod_service.clone()));
 
         let (icon_tx, icon_rx) = mpsc::channel::<(String, Vec<u8>)>(100);
         let (icon_url_tx, icon_url_rx) = mpsc::channel::<String>(100);
@@ -38,6 +41,14 @@ impl AppRuntime {
         rt_handle.spawn(icon_worker.run());
 
         let icon_service = IconService::new(icon_rx, icon_url_tx);
+
+        let disk_cache = mod_service.get_disk_cache();
+        rt_handle.spawn(async move {
+            loop {
+                disk_cache.clear_expired().await;
+                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+            }
+        });
 
         (
             Self {
