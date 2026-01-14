@@ -8,8 +8,8 @@ pub use mod_source::ModProvider;
 
 pub mod mod_service;
 
-use crate::infra::DownloadMetadata;
 pub use mod_service::ModService;
+use crate::infra::DownloadMetadata;
 
 pub fn sanitize_filename(name: &str) -> String {
     name.chars()

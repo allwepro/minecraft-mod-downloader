@@ -1,5 +1,5 @@
 use crate::domain::ModInfo;
-use crate::infra::ApiService;
+use crate::infra::{ApiService, ProjectCache};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -10,14 +10,20 @@ use tokio::sync::Mutex;
 pub struct ModService {
     pub(crate) api_service: Arc<ApiService>,
     pool: Arc<Mutex<ModInfoPool>>,
+    disk_cache: Arc<ProjectCache>,
 }
 
 impl ModService {
-    pub fn new(api_service: Arc<ApiService>) -> Self {
+    pub fn new(api_service: Arc<ApiService>, cache_dir: std::path::PathBuf) -> Self {
         Self {
             api_service,
             pool: Arc::new(Mutex::new(ModInfoPool::new(500, 1))),
+            disk_cache: Arc::new(ProjectCache::new(cache_dir)),
         }
+    }
+
+    pub fn get_disk_cache(&self) -> Arc<ProjectCache> {
+        self.disk_cache.clone()
     }
 
     pub async fn get_mod_by_id(
@@ -66,6 +72,12 @@ impl ModService {
             );
         }
 
+        if let Some(cached_info) = self.disk_cache.get(identifier, version, loader).await {
+            log::debug!("Returning disk-cached info for {}", identifier);
+            let mut pool = self.pool.lock().await;
+            return Ok(pool.insert(cached_info, version.to_string(), loader.to_string()));
+        }
+
         let _permit = self.api_service.limiter.acquire(1).await;
 
         log::debug!(
@@ -80,6 +92,10 @@ impl ModService {
             .provider
             .fetch_mod_details(identifier, version, loader)
             .await?;
+
+        self.disk_cache
+            .set(identifier, version, loader, details.clone())
+            .await;
 
         let mut pool = self.pool.lock().await;
         Ok(pool.insert(details, version.to_string(), loader.to_string()))
