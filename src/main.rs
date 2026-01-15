@@ -31,6 +31,7 @@ fn main() -> eframe::Result<()> {
     let options = NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 700.0])
+            .with_min_inner_size([1000.0, 400.0])
             .with_title("Minecraft Mod Downloader")
             .with_icon(icon_data),
         ..Default::default()
