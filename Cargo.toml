@@ -1,6 +1,6 @@
 [package]
 name = "minecraft_mod_downloader"
-version = "0.0.0"
+version = "1.0.0-alpha"
 edition = "2024"
 authors = ["Minecraft Mod Downloader Contributors"]
 description = "A GUI-based Minecraft mod downloader."

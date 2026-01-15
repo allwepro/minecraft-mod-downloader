@@ -587,7 +587,6 @@ impl MainPanel {
         let popup_pos = view_state.sort_btn_rect.left_bottom() + egui::vec2(0.0, 5.0);
 
         let stored_size = view_state.sort_popup_rect.size();
-        println!("stored size: {:?}", stored_size);
         let popup_size = if stored_size.x >= 140.0 {
             stored_size
         } else {
