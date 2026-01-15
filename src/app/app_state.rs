@@ -278,7 +278,7 @@ impl AppState {
 
     pub fn get_current_list_type(&self) -> ProjectType {
         self.get_current_list()
-            .map(|l| l.content_type.clone())
+            .map(|l| l.content_type)
             .unwrap_or(ProjectType::Mod)
     }
 
@@ -516,17 +516,17 @@ impl AppState {
     pub fn add_mod_to_current_list(&mut self, mod_info: Arc<ModInfo>) -> Vec<Effect> {
         let mut list_to_save = None;
 
-        if let Some(current_list) = self.get_current_list_mut() {
-            if !current_list.mods.iter().any(|e| e.mod_id == mod_info.id) {
-                current_list.mods.push(ModEntry {
-                    mod_id: mod_info.id.clone(),
-                    mod_name: mod_info.name.clone(),
-                    added_at: Utc::now(),
-                    archived: false,
-                    compatibility_override: false,
-                });
-                list_to_save = Some(current_list.clone());
-            }
+        if let Some(current_list) = self.get_current_list_mut()
+            && !current_list.mods.iter().any(|e| e.mod_id == mod_info.id)
+        {
+            current_list.mods.push(ModEntry {
+                mod_id: mod_info.id.clone(),
+                mod_name: mod_info.name.clone(),
+                added_at: Utc::now(),
+                archived: false,
+                compatibility_override: false,
+            });
+            list_to_save = Some(current_list.clone());
         }
 
         if list_to_save.is_some() {
@@ -571,26 +571,25 @@ impl AppState {
     pub fn toggle_archive_mod(&mut self, mod_id: &str) -> Vec<Effect> {
         let download_dir = self.get_effective_download_dir();
 
-        if let Some(list) = self.get_current_list_mut() {
-            if let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id) {
-                entry.archived = !entry.archived;
-                let is_archived = entry.archived;
+        if let Some(list) = self.get_current_list_mut()
+            && let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id)
+        {
+            entry.archived = !entry.archived;
+            let is_archived = entry.archived;
 
-                let list_clone = list.clone();
-                let mut effects = vec![Effect::SaveList { list: list_clone }];
+            let list_clone = list.clone();
+            let mut effects = vec![Effect::SaveList { list: list_clone }];
 
-                if is_archived {
-                    effects.push(Effect::ArchiveModFile {
-                        download_dir,
-                        mod_id: mod_id.to_string(),
-                    });
-                } else {
-                    effects.push(Effect::UnarchiveModFile {
-                        download_dir,
-                        mod_id: mod_id.to_string(),
-                    });
-                }
-
+            if is_archived {
+                effects.push(Effect::ArchiveModFile {
+                    download_dir,
+                    mod_id: mod_id.to_string(),
+                });
+            } else {
+                effects.push(Effect::UnarchiveModFile {
+                    download_dir,
+                    mod_id: mod_id.to_string(),
+                });
                 return effects;
             }
         }
@@ -598,20 +597,20 @@ impl AppState {
     }
 
     pub fn toggle_compatibility_override(&mut self, mod_id: &str) -> Vec<Effect> {
-        if let Some(list) = self.get_current_list_mut() {
-            if let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id) {
-                entry.compatibility_override = !entry.compatibility_override;
-                return vec![Effect::SaveList { list: list.clone() }];
-            }
+        if let Some(list) = self.get_current_list_mut()
+            && let Some(entry) = list.mods.iter_mut().find(|e| e.mod_id == mod_id)
+        {
+            entry.compatibility_override = !entry.compatibility_override;
+            return vec![Effect::SaveList { list: list.clone() }];
         }
         Vec::new()
     }
 
     pub fn has_compatibility_override(&self, mod_id: &str) -> bool {
-        if let Some(list) = self.get_current_list() {
-            if let Some(entry) = list.mods.iter().find(|e| e.mod_id == mod_id) {
-                return entry.compatibility_override;
-            }
+        if let Some(list) = self.get_current_list()
+            && let Some(entry) = list.mods.iter().find(|e| e.mod_id == mod_id)
+        {
+            return entry.compatibility_override;
         }
         false
     }
@@ -692,7 +691,7 @@ impl AppState {
         loader: String,
         download_dir: String,
     ) -> Vec<Effect> {
-        let list_name = format!("{}", new_name);
+        let list_name = new_name.to_string();
 
         let loader_obj = self
             .loaders_for_type(content_type)
@@ -721,12 +720,11 @@ impl AppState {
     }
 
     pub fn is_mod_compatible(&self, mod_id: &str) -> Option<bool> {
-        if let Some(list) = self.get_current_list() {
-            if let Some(entry) = list.mods.iter().find(|e| e.mod_id == mod_id) {
-                if entry.compatibility_override {
-                    return Some(true);
-                }
-            }
+        if let Some(list) = self.get_current_list()
+            && let Some(entry) = list.mods.iter().find(|e| e.mod_id == mod_id)
+            && entry.compatibility_override
+        {
+            return Some(true);
         }
 
         let version = self.get_effective_version();
@@ -793,29 +791,26 @@ impl AppState {
             filter_mode,
             FilterMode::CompatibleOnly | FilterMode::IncompatibleOnly | FilterMode::MissingOnly
         ) {
-            mods = mods
-                .into_iter()
-                .filter(|entry| {
-                    let comp = self
-                        .is_mod_compatible_with_context(
-                            &entry.mod_id,
-                            &effective_version,
-                            &effective_loader,
-                        )
-                        .unwrap_or(true);
+            mods.retain(|entry| {
+                let comp = self
+                    .is_mod_compatible_with_context(
+                        &entry.mod_id,
+                        &effective_version,
+                        &effective_loader,
+                    )
+                    .unwrap_or(true);
 
-                    let missing = !entry.archived
-                        && (!self.is_mod_downloaded(&entry.mod_id)
-                            || self.is_mod_updateable(&entry.mod_id));
+                let missing = !entry.archived
+                    && (!self.is_mod_downloaded(&entry.mod_id)
+                        || self.is_mod_updateable(&entry.mod_id));
 
-                    match filter_mode {
-                        FilterMode::MissingOnly => missing,
-                        FilterMode::CompatibleOnly => comp,
-                        FilterMode::IncompatibleOnly => !comp,
-                        FilterMode::All => true,
-                    }
-                })
-                .collect();
+                match filter_mode {
+                    FilterMode::MissingOnly => missing,
+                    FilterMode::CompatibleOnly => comp,
+                    FilterMode::IncompatibleOnly => !comp,
+                    FilterMode::All => true,
+                }
+            });
         }
 
         mods.sort_by(|a, b| match sort_mode {
@@ -833,11 +828,11 @@ impl AppState {
     pub fn is_mod_downloaded(&self, mod_id: &str) -> bool {
         let download_dir = self.get_effective_download_dir();
 
-        if let Some(metadata) = self.metadata_cache.get(&download_dir) {
-            if let Some(entry) = metadata.get_entry(mod_id) {
-                let file_path = std::path::Path::new(&download_dir).join(&entry.file);
-                return file_path.exists();
-            }
+        if let Some(metadata) = self.metadata_cache.get(&download_dir)
+            && let Some(entry) = metadata.get_entry(mod_id)
+        {
+            let file_path = std::path::Path::new(&download_dir).join(&entry.file);
+            return file_path.exists();
         }
 
         false
@@ -859,11 +854,11 @@ impl AppState {
 
         let download_dir = self.get_effective_download_dir();
 
-        if let Some(metadata) = self.metadata_cache.get(&download_dir) {
-            if let Some(entry) = metadata.get_entry(mod_id) {
-                let file_path = std::path::Path::new(&download_dir).join(&entry.file);
-                return file_path.exists() && entry.version != mod_info.version;
-            }
+        if let Some(metadata) = self.metadata_cache.get(&download_dir)
+            && let Some(entry) = metadata.get_entry(mod_id)
+        {
+            let file_path = std::path::Path::new(&download_dir).join(&entry.file);
+            return file_path.exists() && entry.version != mod_info.version;
         }
 
         false
@@ -884,10 +879,10 @@ impl AppState {
                     return false;
                 }
 
-                if let Some(status) = self.download_status.get(&entry.mod_id) {
-                    if matches!(status, DownloadStatus::Queued | DownloadStatus::Downloading) {
-                        return false;
-                    }
+                if let Some(status) = self.download_status.get(&entry.mod_id)
+                    && matches!(status, DownloadStatus::Queued | DownloadStatus::Downloading)
+                {
+                    return false;
                 }
 
                 if !entry.compatibility_override
@@ -903,11 +898,11 @@ impl AppState {
                 }
 
                 if let Some(mod_info) = self.get_cached_mod(&entry.mod_id) {
-                    if let Some(meta) = metadata {
-                        if let Some(entry) = meta.get_entry(&mod_info.id) {
-                            let file_path = std::path::Path::new(&download_dir).join(&entry.file);
-                            return !file_path.exists() || entry.version != mod_info.version;
-                        }
+                    if let Some(meta) = metadata
+                        && let Some(entry) = meta.get_entry(&mod_info.id)
+                    {
+                        let file_path = std::path::Path::new(&download_dir).join(&entry.file);
+                        return !file_path.exists() || entry.version != mod_info.version;
                     }
 
                     let filename = generate_mod_filename(&mod_info);
@@ -957,29 +952,26 @@ impl AppState {
 
         if let Ok(entries) = std::fs::read_dir(download_path) {
             for entry in entries.flatten() {
-                if let Ok(file_type) = entry.file_type() {
-                    if file_type.is_file() {
-                        if let Some(filename) = entry.file_name().to_str() {
-                            if filename.starts_with(".mcd") {
-                                continue;
-                            }
+                if let Ok(file_type) = entry.file_type()
+                    && file_type.is_file()
+                    && let Some(filename) = entry.file_name().to_str()
+                {
+                    if filename.starts_with(".mcd") {
+                        continue;
+                    }
 
-                            let current_type =
-                                current_list.map(|l| l.content_type).unwrap_or_default();
-                            let expected_ext = current_type.fileext();
-                            let base_filename =
-                                filename.strip_suffix(".archived").unwrap_or(filename);
-                            if !base_filename.ends_with(&format!(".{}", expected_ext)) {
-                                continue;
-                            }
+                    let current_type = current_list.map(|l| l.content_type).unwrap_or_default();
+                    let expected_ext = current_type.fileext();
+                    let base_filename = filename.strip_suffix(".archived").unwrap_or(filename);
+                    if !base_filename.ends_with(&format!(".{}", expected_ext)) {
+                        continue;
+                    }
 
-                            let is_known = known_filenames.contains(filename);
+                    let is_known = known_filenames.contains(filename);
 
-                            if !is_known {
-                                log::debug!("Found unknown file: {}", filename);
-                                unknown_files.push(filename.to_string());
-                            }
-                        }
+                    if !is_known {
+                        log::debug!("Found unknown file: {}", filename);
+                        unknown_files.push(filename.to_string());
                     }
                 }
             }

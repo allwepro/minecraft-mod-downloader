@@ -209,8 +209,7 @@ impl ModProvider for ModrinthProvider {
                 match resp.json::<Vec<TeamMember>>().await {
                     Ok(members) => members
                         .into_iter()
-                        .filter(|m| m.role == "Owner")
-                        .next()
+                        .find(|m| m.role == "Owner")
                         .map(|m| m.user.username.clone())
                         .unwrap_or_else(|| project.team.clone()),
                     Err(_) => project.team.clone(),

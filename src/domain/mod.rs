@@ -25,8 +25,9 @@ pub fn generate_mod_filename(mod_info: &ModInfo) -> String {
     format!("{}.{}", sanitized_name, extension)
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub enum ProjectType {
+    #[default]
     #[serde(rename = "mod")]
     Mod,
     #[serde(rename = "resourcepack")]
@@ -78,12 +79,6 @@ impl ProjectType {
             ProjectType::Datapack => "📦",
             ProjectType::Plugin => "🔌",
         }
-    }
-}
-
-impl Default for ProjectType {
-    fn default() -> Self {
-        ProjectType::Mod
     }
 }
 
@@ -168,13 +163,13 @@ where
     use serde::de::Error as _;
     let value = serde_json::Value::deserialize(deserializer).map_err(D::Error::custom)?;
 
-    if value.is_string() {
-        if let Some(s) = value.as_str() {
-            return Ok(ModLoader {
-                id: s.to_string(),
-                name: s.to_string(),
-            });
-        }
+    if value.is_string()
+        && let Some(s) = value.as_str()
+    {
+        return Ok(ModLoader {
+            id: s.to_string(),
+            name: s.to_string(),
+        });
     }
 
     let ml: ModLoader = serde_json::from_value(value).map_err(D::Error::custom)?;
