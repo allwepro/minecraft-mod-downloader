@@ -23,55 +23,62 @@ git checkout -b feature/<short-description>
 ```
 
 Examples:
-- feature/gui-setup  
-- fix/download-crash  
+- feature/gui-setup
+- fix/download-crash
 
 ---
 
 ## 3️⃣ Project Structure & Architecture
 
-The repository is organized into **layers**. This keeps GUI, core logic, and external IO cleanly separated.
+The repository is organized into **logical layers** to keep responsibilities clearly separated and the codebase easy to maintain.
 
-### 📁 Folder Structure
+### 📁 Folder Structure (Overview)
 ```
 src/
-├── app/                      # GUI layer
-│   ├── mod.rs
-│   ├── window.rs
-│   └── components/
+├── main.rs               # Application entry point
 │
-├── core/                     # business logic (pure, no IO)
-│   ├── mod.rs
-│   ├── compatibility.rs
-│   ├── manifest.rs
-│   └── downloader.rs
+├── adapters/             # External service adapters
+│   └── modrinth.rs       # Modrinth API adapter
 │
-├── infra/                    # external side‑effects (API, FS, HTTP)
-│   ├── mod.rs
-│   ├── modrinth_api.rs
-│   ├── fs.rs
-│   └── http.rs
+├── app/                  # Application layer
+│   ├── app_state.rs      # Global application state
+│   ├── runtime.rs        # Event loop & task orchestration
+│   └── effect.rs         # Side-effect definitions
 │
-├── common/                   # shared data models and types
-│   ├── mod.rs
-│   ├── mod_info.rs
-│   └── version.rs
+├── domain/               # Core domain logic
+│   ├── mod_service.rs    # Resource handling logic
+│   └── mod_source.rs     # Abstract adapter interface
 │
-├── utils/                    # utilities
-│   └── utils.rs
+├── infra/                # Infrastructure & side effects
+│   ├── api_service.rs    # HTTP / API handling
+│   ├── config_manager.rs # Configuration & persistence
+│   └── project_cache.rs  # Local caching
 │
-└── main.rs
+└── ui/                   # GUI layer
+    ├── dialogs.rs        # Common dialogs
+    ├── view_state.rs     # UI state definitions
+    ├── panels/           # Main UI panels
+    │   └── main_panel.rs 
+    └── windows/          # Application windows
+        └── search_window.rs
 ```
+
+> This is a simplified overview.
+
+---
 
 ### 🔄 Execution Flow
 ```
-GUI → core (service functions) → infra (API/FS) → core → GUI updates
+UI → app (state & effects) → domain (business logic)
+   → adapters / infra (API, FS, cache)
+   → domain → app → UI updates
 ```
 
 This architecture ensures:
-- GUI does not perform IO
-- core contains pure logic
-- infra handles all external side‑effects
+- 🖼 UI code focuses purely on presentation
+- 🧠 Domain logic remains pure and easy to test
+- 🔌 Infrastructure handles all external side effects
+- 🌐 Adapters isolate third‑party services like Modrinth
 
 ---
 
@@ -131,7 +138,6 @@ All checks must pass before merging.
 
 ## 8️⃣ Pull Requests
 - Tag teammates for review
-- One feature per PR
 - After approval → **Rebase & merge**
 
 ---
