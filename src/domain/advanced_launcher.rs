@@ -1,4 +1,5 @@
 use super::{LaunchConfig, LaunchResult, VersionManifest};
+use crate::infra::NativesExtractor;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -25,6 +26,19 @@ impl AdvancedLauncher {
 
         let manifest = VersionManifest::from_file(&version_json_path)
             .context("Failed to parse version manifest")?;
+
+        // Extract native libraries
+        let natives_dir = game_dir
+            .join("versions")
+            .join(version)
+            .join("natives");
+
+        let native_jars = NativesExtractor::get_native_jars(&manifest, game_dir);
+        if !native_jars.is_empty() {
+            log::info!("Extracting {} native libraries", native_jars.len());
+            NativesExtractor::extract_natives(&native_jars, &natives_dir)
+                .context("Failed to extract native libraries")?;
+        }
 
         // Build classpath
         let classpath = Self::build_classpath(&manifest, game_dir, version)?;
