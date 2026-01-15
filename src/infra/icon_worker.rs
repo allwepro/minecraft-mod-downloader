@@ -1,6 +1,7 @@
 use crate::infra::ApiService;
 use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -56,24 +57,22 @@ impl IconWorker {
 
 async fn fetch_icon_bytes(
     api_service: &ApiService,
-    cache_dir: &PathBuf,
+    cache_dir: &Path,
     url: &str,
 ) -> Option<Vec<u8>> {
     let icon_path = cache_path_for_url(cache_dir, url);
 
-    if icon_path.exists() {
-        if let Ok(metadata) = tokio::fs::metadata(&icon_path).await {
-            if let Ok(modified) = metadata.modified() {
-                if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
-                    const THIRTY_DAYS: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+    if icon_path.exists()
+        && let Ok(metadata) = tokio::fs::metadata(&icon_path).await
+        && let Ok(modified) = metadata.modified()
+        && let Ok(elapsed) = SystemTime::now().duration_since(modified)
+    {
+        const THIRTY_DAYS: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
-                    if elapsed > THIRTY_DAYS {
-                        let _ = tokio::fs::remove_file(&icon_path).await;
-                    } else {
-                        return tokio::fs::read(&icon_path).await.ok();
-                    }
-                }
-            }
+        if elapsed > THIRTY_DAYS {
+            let _ = tokio::fs::remove_file(&icon_path).await;
+        } else {
+            return tokio::fs::read(&icon_path).await.ok();
         }
     }
 
@@ -90,7 +89,7 @@ async fn fetch_icon_bytes(
     Some(data.to_vec())
 }
 
-fn cache_path_for_url(cache_dir: &PathBuf, url: &str) -> PathBuf {
+fn cache_path_for_url(cache_dir: &Path, url: &str) -> PathBuf {
     let mut hasher = DefaultHasher::new();
     url.hash(&mut hasher);
     let hash = format!("{:x}", hasher.finish());
