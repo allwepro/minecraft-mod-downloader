@@ -45,7 +45,6 @@ pub enum SortMode {
     #[default]
     Name,
     DateAdded,
-    Compatibility,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -54,6 +53,7 @@ pub enum FilterMode {
     All,
     CompatibleOnly,
     IncompatibleOnly,
+    MissingOnly,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
