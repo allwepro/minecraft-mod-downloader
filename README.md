@@ -1,7 +1,7 @@
-# 🧩 Minecraft Mod Downloader
+# 🧩 Minecraft Resource Downloader
 
-A fast, reliable **Minecraft Mod Downloader** written in **Rust**.  
-Designed for managing and downloading **Fabric-based** mods from **Modrinth** for **Minecraft: Java Edition** cross-version.
+A fast, reliable **Minecraft Resource Downloader** written in **Rust**.  
+Designed for managing and downloading **all Modrinth resources** — including **mods, shaders, resource packs, datapacks, and plugins** — for **Minecraft: Java Edition** across versions.
 
 [![Rust CI](https://github.com/allwepro/minecraft-mod-downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/allwepro/minecraft-mod-downloader/actions/workflows/ci.yml)
 [![Rust Security Audit](https://github.com/allwepro/minecraft-mod-downloader/actions/workflows/audit.yml/badge.svg)](https://github.com/allwepro/minecraft-mod-downloader/actions/workflows/audit.yml)
@@ -15,26 +15,33 @@ Designed for managing and downloading **Fabric-based** mods from **Modrinth** fo
 
 ## 🧭 Overview
 
-**Minecraft Mod Downloader** is a desktop application that makes downloading and managing Minecraft mods easy.
-It provides a responsive, cross-platform **GUI** for browsing and installing mods from Modrinth with automatic compatibility detection for your current Minecraft setup.
+**Minecraft Resource Downloader** is a modern desktop application that makes downloading and managing Minecraft content effortless.  
+It provides a sleek, responsive, cross-platform **GUI** for browsing and installing **any resource hosted on Modrinth**, with automatic detection of compatible Minecraft versions and loaders.
 
-> ⚙️ Currently supports **Modrinth** and **Fabric** targets for **Java Edition**.
-> Additional loaders and platforms may be supported in future releases.
+> ⚙️ Supports **Modrinth** resources for **Minecraft: Java Edition**, including mods, shaders, resource packs, datapacks, and plugins.
 
 ---
 
 ## 🚀 Features
 
-- 🧱 GUI-based mod management — no command line required
-- 🌐 Download and update mods directly from the Modrinth API
-- 🪄 Automatic compatibility checks for the Minecraft version
-- ⚡ Built in Rust for speed, reliability, and safety
-- 💻 Cross-platform support for Windows, macOS, and Linux
+- 🧱 Modern, sleek GUI for managing Minecraft resources
+- 🌐 Download **mods, shaders, resource packs, datapacks, and plugins** directly from Modrinth
+- ✔ Automatic Minecraft version and loader compatibility detection
+- 🔄 One-click updates for installed resources
+- 📦 Unified resource manager across all supported resource types
+- ⚡ Built in Rust for speed, safety, and reliability
+- 💻 Cross-platform support for Windows, MacOS, and Linux
 
 ---
 
 ## 🧑💻 Usage
 
+### Installation
+1. Go to the **GitHub Releases** page: [Releases](https://github.com/allwepro/minecraft-mod-downloader/releases)
+2. Download the latest release for your operating system.
+3. Run the application.
+
+### Compile yourself
 ```bash
 # Clone the repository
 git clone https://github.com/allwepro/minecraft-mod-downloader.git
@@ -48,30 +55,9 @@ cargo run
 
 ---
 
-## 🧭 Roadmap
-
-- [ ] Add **CLI mode** for advanced users
-- [ ] Advanced **compatibility checks** and **conflict resolution**
-- [ ] Easy **Version Switcher** for installed mods
-
----
-
-## 🧑🤝🧑 Contributors
-
-**Minecraft Mod Downloader** is a **university group project** developed collaboratively as a team.
-
-| Name | Role |
-|------|------|
-| Raphael Schreckeneder | Dev |
-| Marcus Nguyen | Dev |
-| Lara Becet | Dev |
-| Maxim Ashikin | Dev |
-
----
-
 ## ⚠️ Disclaimer
 
-Minecraft Mod Downloader is an **independent project** and is **not affiliated, endorsed, or associated** with **Mojang AB**, **Microsoft Corporation**, **Modrinth**, or **Rinth Inc.**  
+Minecraft Resource Downloader is an **independent project** and is **not affiliated, endorsed, or associated** with **Mojang AB**, **Microsoft Corporation**, **Modrinth**, or **Rinth Inc.**  
 All Minecraft-related trademarks, names, and assets are the property of their respective owners.  
 Use this tool responsibly and in accordance with the terms of service of each platform.
 
@@ -88,9 +74,9 @@ You may **not** copy, distribute, or modify any part of the project without expl
 
 ## 💬 Feedback
 
-Have an idea or found an issue?
+Have an idea or found an issue?  
 Open an [issue](https://github.com/allwepro/minecraft-mod-downloader/issues) or start a [discussion](https://github.com/allwepro/minecraft-mod-downloader/discussions)!
 
 ---
 
-**Minecraft Mod Downloader** — Download smarter, play faster.
+**Minecraft Resource Downloader** — One downloader. Every resource.

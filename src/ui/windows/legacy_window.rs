@@ -17,7 +17,7 @@ impl LegacyWindow {
             .fixed_pos(egui::pos2(0.0, 0.0));
 
         overlay.show(ctx, |ui| {
-            let screen_rect = ctx.screen_rect();
+            let screen_rect = ctx.content_rect();
             ui.painter()
                 .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
 
