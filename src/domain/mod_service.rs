@@ -191,16 +191,15 @@ impl ModInfoPool {
 
         self.base_info_cache.insert(id.clone(), arc_info.clone());
 
-        if let Some(existing) = self.cache.get(&id) {
-            if !existing.is_expired(self.max_age_hours)
-                && existing.matches_context(&version, &loader)
-            {
-                if !existing.info.version.is_empty() {
-                    log::debug!("Keeping existing complete cache entry for {}", id);
-                    return existing.info.clone();
-                }
-                log::debug!("Replacing incomplete cache entry for {} with new data", id);
+        if let Some(existing) = self.cache.get(&id)
+            && !existing.is_expired(self.max_age_hours)
+            && existing.matches_context(&version, &loader)
+        {
+            if !existing.info.version.is_empty() {
+                log::debug!("Keeping existing complete cache entry for {}", id);
+                return existing.info.clone();
             }
+            log::debug!("Replacing incomplete cache entry for {} with new data", id);
         }
 
         if self.cache.len() >= self.max_size {
@@ -227,11 +226,10 @@ impl ModInfoPool {
             .iter()
             .min_by_key(|(_, v)| v.cached_at)
             .map(|(k, _)| k.clone())
+            && let Some(cached) = self.cache.remove(&oldest_key)
         {
-            if let Some(cached) = self.cache.remove(&oldest_key) {
-                self.slug_to_id.remove(&cached.info.slug);
-                // Don't remove from base_info_cache as it's version-independent
-            }
+            self.slug_to_id.remove(&cached.info.slug);
+            // Don't remove from base_info_cache as it's version-independent
         }
     }
 }

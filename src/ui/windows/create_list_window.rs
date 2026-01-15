@@ -20,12 +20,11 @@ impl CreateListWindow {
         if view_state.new_list_version.is_empty() && !state.minecraft_versions.is_empty() {
             view_state.new_list_version = state.minecraft_versions[0].id.clone();
         }
-        if view_state.new_list_loader.is_empty() {
-            if let Some(loaders) = state.loaders_for_type(view_state.new_list_type) {
-                if !loaders.is_empty() {
-                    view_state.new_list_loader = loaders[0].id.clone();
-                }
-            }
+        if view_state.new_list_loader.is_empty()
+            && let Some(loaders) = state.loaders_for_type(view_state.new_list_type)
+            && !loaders.is_empty()
+        {
+            view_state.new_list_loader = loaders[0].id.clone();
         }
 
         let overlay = egui::Area::new(egui::Id::new("create_list_overlay"))
@@ -90,10 +89,9 @@ impl CreateListWindow {
 
                                 if let Some(loaders) =
                                     state.loaders_for_type(view_state.new_list_type)
+                                    && !loaders.is_empty()
                                 {
-                                    if !loaders.is_empty() {
-                                        view_state.new_list_loader = loaders[0].id.clone();
-                                    }
+                                    view_state.new_list_loader = loaders[0].id.clone();
                                 }
                             }
                         }
@@ -179,10 +177,10 @@ impl CreateListWindow {
                 ui.label("Download Directory:");
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut view_state.new_list_dir);
-                    if ui.button("Browse...").clicked() {
-                        if let Some(path) = Dialogs::pick_folder() {
-                            view_state.new_list_dir = path.to_string_lossy().to_string();
-                        }
+                    if ui.button("Browse...").clicked()
+                        && let Some(path) = Dialogs::pick_folder()
+                    {
+                        view_state.new_list_dir = path.to_string_lossy().to_string();
                     }
                 });
 

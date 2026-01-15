@@ -28,10 +28,9 @@ impl LegacyWindow {
                     egui::Sense::click(),
                 )
                 .clicked()
+                && matches!(state.legacy_state, LegacyState::Complete { .. })
             {
-                if matches!(state.legacy_state, LegacyState::Complete { .. }) {
-                    state.legacy_state = LegacyState::Idle;
-                }
+                state.legacy_state = LegacyState::Idle;
             }
         });
 
