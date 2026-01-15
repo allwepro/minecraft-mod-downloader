@@ -78,6 +78,21 @@ struct ModrinthGameVersion {
     version_type: String,
 }
 
+fn calculate_version_distance(target: &[u32], candidate: &[u32]) -> i64 {
+    let max_len = target.len().max(candidate.len());
+    let mut distance: i64 = 0;
+
+    for i in 0..max_len {
+        let target_part = target.get(i).copied().unwrap_or(0) as i64;
+        let candidate_part = candidate.get(i).copied().unwrap_or(0) as i64;
+        let diff = (target_part - candidate_part).abs();
+        let weight = 10000_i64.pow((max_len - i - 1) as u32);
+        distance += diff * weight;
+    }
+
+    distance
+}
+
 #[async_trait]
 impl ModProvider for ModrinthProvider {
     async fn search_mods(
@@ -259,15 +274,93 @@ impl ModProvider for ModrinthProvider {
                 version_match && loader_match
             })
             .or_else(|| {
-                log::warn!(
-                    "No exact match for mod {} version={} loader={}. Using first available version.",
-                    mod_id,
-                    version,
-                    loader
-                );
-                versions.first()
-            })
-            .ok_or_else(|| anyhow::anyhow!("No versions available for project {}", mod_id))?;
+                if !loader.is_empty() {
+                    log::warn!(
+                        "No exact match for mod {} version={} loader={}. Looking for closest version with same loader.",
+                        mod_id,
+                        version,
+                        loader
+                    );
+
+                    let loader_compatible: Vec<&ModrinthVersion> = versions
+                        .iter()
+                        .filter(|v| v.loaders.iter().any(|l| l.eq_ignore_ascii_case(loader)))
+                        .collect();
+
+                    if !loader_compatible.is_empty() {
+                        let target_parts: Vec<u32> = version
+                            .split('.')
+                            .filter_map(|s| s.parse::<u32>().ok())
+                            .collect();
+
+                        let mut best_match: Option<(&ModrinthVersion, i64)> = None;
+
+                        for mod_version in &loader_compatible {
+                            for game_version in &mod_version.game_versions {
+                                let game_parts: Vec<u32> = game_version
+                                    .split('.')
+                                    .filter_map(|s| s.parse::<u32>().ok())
+                                    .collect();
+
+                                let distance = calculate_version_distance(&target_parts, &game_parts);
+
+                                if distance == 0 {
+                                    log::info!(
+                                        "Found exact version match '{}' (game version {}) for mod {} with correct loader {}",
+                                        mod_version.version_number,
+                                        game_version,
+                                        mod_id,
+                                        loader
+                                    );
+                                    return Some(*mod_version);
+                                }
+
+                                match best_match {
+                                    None => best_match = Some((*mod_version, distance)),
+                                    Some((_, best_distance)) if distance < best_distance => {
+                                        best_match = Some((*mod_version, distance));
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        if let Some((best_version, distance)) = best_match {
+                            log::info!(
+                                "Using closest version '{}' for mod {} with correct loader {} (distance {} from target version {})",
+                                best_version.version_number,
+                                mod_id,
+                                loader,
+                                distance,
+                                version
+                            );
+                            return Some(best_version);
+                        }
+
+                        log::warn!(
+                            "Could not parse versions, using latest '{}' for mod {} with correct loader {}",
+                            loader_compatible[0].version_number,
+                            mod_id,
+                            loader
+                        );
+                        return Some(loader_compatible[0]);
+                    }
+
+                    log::error!(
+                        "No versions found for mod {} with loader {}. Cannot provide fallback.",
+                        mod_id,
+                        loader
+                    );
+                    None
+                } else {
+                    log::warn!(
+                        "No exact match for mod {} version={}. Using first available version.",
+                        mod_id,
+                        version
+                    );
+                    versions.first()
+                }
+            }).ok_or_else(|| anyhow::anyhow!("No versions available for project {}", mod_id))?;
 
         log::debug!(
             "Selected version '{}' for mod {} (file count: {}, id: {})",
