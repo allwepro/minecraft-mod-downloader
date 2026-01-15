@@ -50,6 +50,7 @@ impl MinecraftDetector {
     }
 
     /// Detect installed Minecraft versions by scanning versions directory
+    /// Only returns versions that have both .json and .jar files
     fn detect_installed_versions(versions_dir: &PathBuf) -> Vec<String> {
         let mut versions = Vec::new();
 
@@ -61,9 +62,12 @@ impl MinecraftDetector {
             for entry in entries.flatten() {
                 if entry.path().is_dir() {
                     if let Some(version_name) = entry.file_name().to_str() {
-                        // Check if this directory contains a version json file
+                        // Check if this directory contains both json and jar files
                         let json_file = entry.path().join(format!("{}.json", version_name));
-                        if json_file.exists() {
+                        let jar_file = entry.path().join(format!("{}.jar", version_name));
+
+                        // Only include versions with both files
+                        if json_file.exists() && jar_file.exists() {
                             versions.push(version_name.to_string());
                         }
                     }
