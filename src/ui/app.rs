@@ -844,8 +844,8 @@ impl App {
             min_memory_mb: self.launcher_min_memory,
         };
 
-        // Launch Minecraft
-        match LauncherService::launch_minecraft(&config) {
+        // Launch Minecraft using advanced launcher
+        match AdvancedLauncher::launch_minecraft(&config) {
             Ok(LaunchResult::Success { pid }) => {
                 self.launch_status = Some(format!("✅ Minecraft launched successfully! (PID: {})", pid));
             }
