@@ -169,7 +169,7 @@ impl MainPanel {
                         if sort_btn.clicked() {
                             view_state.sort_menu_open = !view_state.sort_menu_open;
                         }
-                        view_state.sort_field_rect = sort_btn.rect;
+                        view_state.sort_btn_rect = sort_btn.rect;
 
                         if ui.button("⚙ List Settings").clicked() {
                             view_state.list_settings_open = true;
@@ -584,17 +584,46 @@ impl MainPanel {
     }
 
     fn show_sort_menu(ctx: &egui::Context, view_state: &mut ViewState) {
-        let popup_pos = view_state.sort_field_rect.left_bottom() + egui::vec2(0.0, 5.0);
+        let popup_pos = view_state.sort_btn_rect.left_bottom() + egui::vec2(0.0, 5.0);
+
+        let stored_size = view_state.sort_popup_rect.size();
+        println!("stored size: {:?}", stored_size);
+        let popup_size = if stored_size.x >= 140.0 {
+            stored_size
+        } else {
+            egui::vec2(140.0, 200.0)
+        };
+        let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+
+        /*//Debug renderer for mouse regions
+        {
+            use egui::{Color32, Rounding, Stroke};
+            let painter = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("sort_menu_debug"),
+            ));
+            painter.rect_filled(
+                popup_rect,
+                Rounding::same(6.0),
+                Color32::from_rgba_unmultiplied(50, 120, 200, 30),
+            );
+            painter.rect_stroke(
+                popup_rect,
+                Rounding::same(6.0),
+                Stroke::new(2.0, Color32::from_rgb(50, 120, 200)),
+            );
+            painter.rect_stroke(
+                view_state.sort_btn_rect,
+                Rounding::same(4.0),
+                Stroke::new(2.0, Color32::from_rgb(200, 120, 50)),
+            );
+        }*/
 
         if ctx.input(|i| i.pointer.any_click()) {
-            let pointer_pos = ctx.input(|i| i.pointer.interact_pos());
-            if let Some(pos) = pointer_pos {
-                if !view_state.sort_field_rect.contains(pos) {
-                    let popup_rect = egui::Rect::from_min_size(popup_pos, egui::vec2(140.0, 200.0));
-                    if !popup_rect.contains(pos) {
-                        view_state.sort_menu_open = false;
-                        return;
-                    }
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !view_state.sort_btn_rect.contains(pos) && !popup_rect.contains(pos) {
+                    view_state.sort_menu_open = false;
+                    return;
                 }
             }
         }
@@ -656,7 +685,7 @@ impl MainPanel {
                         .selectable_value(
                             &mut view_state.current_filter_mode,
                             crate::app::FilterMode::All,
-                            "❔ All",
+                            "⭕ All",
                         )
                         .clicked()
                     {
@@ -672,9 +701,29 @@ impl MainPanel {
                     {
                         view_state.sort_menu_open = false;
                     }
+                    if ui
+                        .selectable_value(
+                            &mut view_state.current_filter_mode,
+                            crate::app::FilterMode::IncompatibleOnly,
+                            "❎ Incompatible",
+                        )
+                        .clicked()
+                    {
+                        view_state.sort_menu_open = false;
+                    }
+                    if ui
+                        .selectable_value(
+                            &mut view_state.current_filter_mode,
+                            crate::app::FilterMode::MissingOnly,
+                            "❔ Missing",
+                        )
+                        .clicked()
+                    {
+                        view_state.sort_menu_open = false;
+                    }
                 });
 
-                view_state.sort_field_rect = frame_response.response.rect;
+                view_state.sort_popup_rect = frame_response.response.rect;
             });
     }
 }

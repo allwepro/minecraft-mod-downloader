@@ -791,7 +791,7 @@ impl AppState {
 
         if matches!(
             filter_mode,
-            FilterMode::CompatibleOnly | FilterMode::IncompatibleOnly
+            FilterMode::CompatibleOnly | FilterMode::IncompatibleOnly | FilterMode::MissingOnly
         ) {
             mods = mods
                 .into_iter()
@@ -804,7 +804,12 @@ impl AppState {
                         )
                         .unwrap_or(true);
 
+                    let missing = !entry.archived
+                        && (!self.is_mod_downloaded(&entry.mod_id)
+                            || self.is_mod_updateable(&entry.mod_id));
+
                     match filter_mode {
+                        FilterMode::MissingOnly => missing,
                         FilterMode::CompatibleOnly => comp,
                         FilterMode::IncompatibleOnly => !comp,
                         FilterMode::All => true,
@@ -816,23 +821,6 @@ impl AppState {
         mods.sort_by(|a, b| match sort_mode {
             SortMode::Name => a.mod_name.to_lowercase().cmp(&b.mod_name.to_lowercase()),
             SortMode::DateAdded => a.added_at.cmp(&b.added_at),
-            SortMode::Compatibility => {
-                let ca = self
-                    .is_mod_compatible_with_context(
-                        &a.mod_id,
-                        &effective_version,
-                        &effective_loader,
-                    )
-                    .unwrap_or(true);
-                let cb = self
-                    .is_mod_compatible_with_context(
-                        &b.mod_id,
-                        &effective_version,
-                        &effective_loader,
-                    )
-                    .unwrap_or(true);
-                ca.cmp(&cb)
-            }
         });
 
         if matches!(order_mode, OrderMode::Descending) {
