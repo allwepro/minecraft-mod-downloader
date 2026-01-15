@@ -34,31 +34,62 @@ impl AdvancedLauncher {
             .join("natives");
 
         let native_jars = NativesExtractor::get_native_jars(&manifest, game_dir);
-        if !native_jars.is_empty() {
+        println!("=== NATIVES DEBUG ===");
+        println!("Found {} native JAR files", native_jars.len());
+        log::info!("Found {} native JAR files", native_jars.len());
+
+        if native_jars.is_empty() {
+            println!("WARNING: No native libraries found! This will likely cause LWJGL errors");
+            println!("Checking manifest for natives info...");
+            log::warn!("No native libraries found! This will likely cause LWJGL errors");
+            log::warn!("Checking manifest for natives info...");
+            for (i, lib) in manifest.libraries.iter().enumerate().take(5) {
+                println!("  Library {}: {} (rules: {:?})", i, lib.name, lib.rules);
+                log::warn!("  Library {}: {} (natives: {:?})", i, lib.name, lib.natives);
+            }
+        } else {
+            println!("Extracting {} native libraries", native_jars.len());
             log::info!("Extracting {} native libraries", native_jars.len());
+            for jar in &native_jars {
+                println!("  Native JAR: {}", jar.display());
+                log::info!("  Native JAR: {}", jar.display());
+            }
             NativesExtractor::extract_natives(&native_jars, &natives_dir)
                 .context("Failed to extract native libraries")?;
+            println!("Native extraction complete!");
         }
 
         // Build classpath
         let classpath = Self::build_classpath(&manifest, game_dir, version)?;
 
         // Build game arguments
-        let game_args = Self::build_game_arguments(&manifest, config)?;
+        let game_args = Self::build_game_arguments(&manifest, config, &classpath)?;
 
-        // Build JVM arguments
-        let mut jvm_args = Self::build_jvm_arguments(&manifest, config)?;
-
-        // Add classpath
-        jvm_args.push("-cp".to_string());
-        jvm_args.push(classpath);
+        // Build JVM arguments with classpath
+        let mut jvm_args = Self::build_jvm_arguments(&manifest, config, &classpath)?;
 
         // Add main class
         jvm_args.push(manifest.main_class.clone());
 
         // Combine all arguments
-        let mut all_args = jvm_args;
+        let mut all_args = jvm_args.clone();
         all_args.extend(game_args);
+
+        println!("=== LAUNCH ARGUMENTS DEBUG ===");
+        println!("Java: {}", config.profile.java_path.display());
+        println!("Working directory: {}", game_dir.display());
+        println!("Main class: {}", manifest.main_class);
+        println!("Total arguments: {}", all_args.len());
+        println!("\nJVM Arguments containing 'natives' or 'library.path':");
+        for (i, arg) in all_args.iter().enumerate() {
+            if arg.contains("natives") || arg.contains("library.path") {
+                println!("  [{}] {}", i, arg);
+            }
+        }
+        println!("\nFirst 20 arguments:");
+        for (i, arg) in all_args.iter().enumerate().take(20) {
+            println!("  [{}] {}", i, arg);
+        }
 
         log::info!("Launching Minecraft with {} arguments", all_args.len());
         log::debug!("Java: {}", config.profile.java_path.display());
@@ -154,6 +185,7 @@ impl AdvancedLauncher {
     fn build_game_arguments(
         manifest: &VersionManifest,
         config: &LaunchConfig,
+        classpath: &str,
     ) -> Result<Vec<String>> {
         let mut args = Vec::new();
 
@@ -162,18 +194,18 @@ impl AdvancedLauncher {
             for arg in &arguments.game {
                 match arg {
                     super::version_manifest::ArgumentValue::String(s) => {
-                        args.push(Self::substitute_variables(s, config));
+                        args.push(Self::substitute_variables(s, config, classpath));
                     }
                     super::version_manifest::ArgumentValue::Conditional { rules, value } => {
                         // Check if rules match
                         if Self::check_rules(rules) {
                             match value {
                                 super::version_manifest::ArgumentValueInner::String(s) => {
-                                    args.push(Self::substitute_variables(s, config));
+                                    args.push(Self::substitute_variables(s, config, classpath));
                                 }
                                 super::version_manifest::ArgumentValueInner::Array(arr) => {
                                     for s in arr {
-                                        args.push(Self::substitute_variables(s, config));
+                                        args.push(Self::substitute_variables(s, config, classpath));
                                     }
                                 }
                             }
@@ -185,7 +217,7 @@ impl AdvancedLauncher {
         // Handle legacy arguments format (pre-1.13)
         else if let Some(ref legacy_args) = manifest.minecraft_arguments {
             for arg in legacy_args.split_whitespace() {
-                args.push(Self::substitute_variables(arg, config));
+                args.push(Self::substitute_variables(arg, config, classpath));
             }
         }
         // Fallback to basic arguments
@@ -216,6 +248,7 @@ impl AdvancedLauncher {
     fn build_jvm_arguments(
         manifest: &VersionManifest,
         config: &LaunchConfig,
+        classpath: &str,
     ) -> Result<Vec<String>> {
         let mut args = Vec::new();
 
@@ -228,17 +261,17 @@ impl AdvancedLauncher {
             for arg in &arguments.jvm {
                 match arg {
                     super::version_manifest::ArgumentValue::String(s) => {
-                        args.push(Self::substitute_variables(s, config));
+                        args.push(Self::substitute_variables(s, config, classpath));
                     }
                     super::version_manifest::ArgumentValue::Conditional { rules, value } => {
                         if Self::check_rules(rules) {
                             match value {
                                 super::version_manifest::ArgumentValueInner::String(s) => {
-                                    args.push(Self::substitute_variables(s, config));
+                                    args.push(Self::substitute_variables(s, config, classpath));
                                 }
                                 super::version_manifest::ArgumentValueInner::Array(arr) => {
                                     for s in arr {
-                                        args.push(Self::substitute_variables(s, config));
+                                        args.push(Self::substitute_variables(s, config, classpath));
                                     }
                                 }
                             }
@@ -252,20 +285,22 @@ impl AdvancedLauncher {
                 "-Djava.library.path=${natives_directory}".to_string(),
                 "-Dminecraft.launcher.brand=minecraft-mod-downloader".to_string(),
                 "-Dminecraft.launcher.version=1.0".to_string(),
+                "-cp".to_string(),
+                classpath.to_string(),
             ]);
         }
 
         // Substitute variables in JVM args
         args = args
             .into_iter()
-            .map(|arg| Self::substitute_variables(&arg, config))
+            .map(|arg| Self::substitute_variables(&arg, config, classpath))
             .collect();
 
         Ok(args)
     }
 
     /// Substitute variables in argument strings
-    fn substitute_variables(template: &str, config: &LaunchConfig) -> String {
+    fn substitute_variables(template: &str, config: &LaunchConfig, classpath: &str) -> String {
         let game_dir = config.profile.game_directory.to_string_lossy();
         let natives_dir = config
             .profile
@@ -273,6 +308,10 @@ impl AdvancedLauncher {
             .join("versions")
             .join(&config.profile.minecraft_version)
             .join("natives");
+
+        if template.contains("${natives_directory}") {
+            println!("Substituting natives_directory: {}", natives_dir.display());
+        }
 
         template
             .replace("${auth_player_name}", &config.username)
@@ -290,7 +329,7 @@ impl AdvancedLauncher {
             )
             .replace("${launcher_name}", "minecraft-mod-downloader")
             .replace("${launcher_version}", "1.0")
-            .replace("${classpath}", "") // Will be added separately
+            .replace("${classpath}", classpath)
     }
 
     /// Check if rules match current system
