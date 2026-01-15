@@ -50,25 +50,23 @@ impl SidebarPanel {
                     .add_sized([25.0, 25.0], egui::Button::new("📥"))
                     .on_hover_text("Import")
                     .clicked()
+                    && let Some(path) = Dialogs::pick_import_list_file()
                 {
-                    if let Some(path) = Dialogs::pick_import_list_file() {
-                        match path.extension().and_then(|s| s.to_str()) {
-                            Some("toml") | Some("mmd") => {
-                                if let Ok(content) = std::fs::read_to_string(&path) {
-                                    if let Ok(list) = toml::from_str::<ModList>(&content) {
-                                        view_state.import_name_input =
-                                            format!("{} (Imported)", list.name);
-                                        view_state.pending_import_list = Some(list);
-                                        view_state.active_action = ListAction::Import;
-                                        view_state.import_window_open = true;
-                                    }
-                                }
+                    match path.extension().and_then(|s| s.to_str()) {
+                        Some("toml") | Some("mmd") => {
+                            if let Ok(content) = std::fs::read_to_string(&path)
+                                && let Ok(list) = toml::from_str::<ModList>(&content)
+                            {
+                                view_state.import_name_input = format!("{} (Imported)", list.name);
+                                view_state.pending_import_list = Some(list);
+                                view_state.active_action = ListAction::Import;
+                                view_state.import_window_open = true;
                             }
-                            Some("mods") | Some("all-mods") | Some("queue-mods") => {
-                                effects.extend(state.start_legacy_import(path));
-                            }
-                            _ => {}
                         }
+                        Some("mods") | Some("all-mods") | Some("queue-mods") => {
+                            effects.extend(state.start_legacy_import(path));
+                        }
+                        _ => {}
                     }
                 }
             });

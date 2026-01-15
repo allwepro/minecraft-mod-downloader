@@ -99,10 +99,10 @@ impl LegacyImportSettingsWindow {
                 ui.label("Download Directory:");
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut view_state.legacy_import_dir);
-                    if ui.button("Browse...").clicked() {
-                        if let Some(path) = Dialogs::pick_folder() {
-                            view_state.legacy_import_dir = path.to_string_lossy().to_string();
-                        }
+                    if ui.button("Browse...").clicked()
+                        && let Some(path) = Dialogs::pick_folder()
+                    {
+                        view_state.legacy_import_dir = path.to_string_lossy().to_string();
                     }
                 });
 

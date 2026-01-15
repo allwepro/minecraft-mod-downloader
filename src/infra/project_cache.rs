@@ -55,25 +55,24 @@ impl ProjectCache {
 
         {
             let memory_cache = self.memory_cache.read().await;
-            if let Some(cached) = memory_cache.get(&key) {
-                if !cached.is_expired() {
-                    return Some(cached.mod_info.clone());
-                }
+            if let Some(cached) = memory_cache.get(&key)
+                && !cached.is_expired()
+            {
+                return Some(cached.mod_info.clone());
             }
         }
 
         let cache_path = self.cache_path(&key);
-        if cache_path.exists() {
-            if let Ok(content) = tokio::fs::read_to_string(&cache_path).await {
-                if let Ok(cached) = serde_json::from_str::<CachedProject>(&content) {
-                    if !cached.is_expired() {
-                        let mut memory_cache = self.memory_cache.write().await;
-                        memory_cache.insert(key.clone(), cached.clone());
-                        return Some(cached.mod_info);
-                    } else {
-                        let _ = tokio::fs::remove_file(&cache_path).await;
-                    }
-                }
+        if cache_path.exists()
+            && let Ok(content) = tokio::fs::read_to_string(&cache_path).await
+            && let Ok(cached) = serde_json::from_str::<CachedProject>(&content)
+        {
+            if !cached.is_expired() {
+                let mut memory_cache = self.memory_cache.write().await;
+                memory_cache.insert(key.clone(), cached.clone());
+                return Some(cached.mod_info);
+            } else {
+                let _ = tokio::fs::remove_file(&cache_path).await;
             }
         }
 
@@ -108,14 +107,12 @@ impl ProjectCache {
         if let Ok(mut entries) = tokio::fs::read_dir(&self.cache_dir).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
-                if path.is_file() {
-                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                        if let Ok(cached) = serde_json::from_str::<CachedProject>(&content) {
-                            if cached.is_expired() {
-                                let _ = tokio::fs::remove_file(&path).await;
-                            }
-                        }
-                    }
+                if path.is_file()
+                    && let Ok(content) = tokio::fs::read_to_string(&path).await
+                    && let Ok(cached) = serde_json::from_str::<CachedProject>(&content)
+                    && cached.is_expired()
+                {
+                    let _ = tokio::fs::remove_file(&path).await;
                 }
             }
         }

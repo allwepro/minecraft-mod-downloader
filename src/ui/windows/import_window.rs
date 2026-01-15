@@ -77,19 +77,19 @@ impl ImportWindow {
         if should_close || !is_open || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             view_state.import_window_open = false;
             view_state.pending_import_list = None;
-        } else if should_finalize || ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            if let Some(mut list) = view_state.pending_import_list.take() {
-                list.id = format!("list_{}", chrono::Utc::now().timestamp_millis());
-                list.name = view_state.import_name_input.trim().to_string();
+        } else if (should_finalize || ctx.input(|i| i.key_pressed(egui::Key::Enter)))
+            && let Some(mut list) = view_state.pending_import_list.take()
+        {
+            list.id = format!("list_{}", chrono::Utc::now().timestamp_millis());
+            list.name = view_state.import_name_input.trim().to_string();
 
-                if list.name.is_empty() {
-                    list.name = "Unnamed List".to_string();
-                }
-
-                effects.extend(state.finalize_import(list));
-                view_state.import_window_open = false;
-                view_state.import_name_input.clear();
+            if list.name.is_empty() {
+                list.name = "Unnamed List".to_string();
             }
+
+            effects.extend(state.finalize_import(list));
+            view_state.import_window_open = false;
+            view_state.import_name_input.clear();
         }
 
         view_state.import_window_open = is_open;

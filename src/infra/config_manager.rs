@@ -36,12 +36,11 @@ impl ConfigManager {
         let mut dir = tokio::fs::read_dir(self.get_lists_dir()).await?;
 
         while let Some(entry) = dir.next_entry().await? {
-            if entry.path().extension().and_then(|s| s.to_str()) == Some("toml") {
-                if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
-                    if let Ok(list) = toml::from_str::<ModList>(&content) {
-                        lists.push(list);
-                    }
-                }
+            if entry.path().extension().and_then(|s| s.to_str()) == Some("toml")
+                && let Ok(content) = tokio::fs::read_to_string(entry.path()).await
+                && let Ok(list) = toml::from_str::<ModList>(&content)
+            {
+                lists.push(list);
             }
         }
 

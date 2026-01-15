@@ -105,58 +105,53 @@ impl MainPanel {
                         if ui
                             .add_enabled(can_interact, egui::Button::new("👥 Duplicate"))
                             .clicked()
+                            && let Some(list) = state.get_current_list().cloned()
                         {
-                            if let Some(list) = state.get_current_list().cloned() {
-                                view_state.import_name_input = format!("{} (Copy)", list.name);
-                                view_state.pending_import_list = Some(list);
-                                view_state.active_action = ListAction::Duplicate;
-                                view_state.import_window_open = true;
-                            }
+                            view_state.import_name_input = format!("{} (Copy)", list.name);
+                            view_state.pending_import_list = Some(list);
+                            view_state.active_action = ListAction::Duplicate;
+                            view_state.import_window_open = true;
                         }
 
                         if ui
                             .add_enabled(can_interact, egui::Button::new("📂 Open Folder"))
                             .on_hover_text("Open download directory")
                             .clicked()
+                            && let Some(list) = state.get_current_list()
                         {
-                            if let Some(list) = state.get_current_list() {
-                                let download_dir = if list.download_dir.is_empty() {
-                                    state.get_effective_download_dir()
-                                } else {
-                                    list.download_dir.clone()
-                                };
+                            let download_dir = if list.download_dir.is_empty() {
+                                state.get_effective_download_dir()
+                            } else {
+                                list.download_dir.clone()
+                            };
 
-                                #[cfg(target_os = "windows")]
-                                {
-                                    let _ = std::process::Command::new("explorer")
-                                        .arg(&download_dir)
-                                        .spawn();
-                                }
-                                #[cfg(target_os = "macos")]
-                                {
-                                    let _ = std::process::Command::new("open")
-                                        .arg(&download_dir)
-                                        .spawn();
-                                }
-                                #[cfg(target_os = "linux")]
-                                {
-                                    let _ = std::process::Command::new("xdg-open")
-                                        .arg(&download_dir)
-                                        .spawn();
-                                }
+                            #[cfg(target_os = "windows")]
+                            {
+                                let _ = std::process::Command::new("explorer")
+                                    .arg(&download_dir)
+                                    .spawn();
+                            }
+                            #[cfg(target_os = "macos")]
+                            {
+                                let _ = std::process::Command::new("open")
+                                    .arg(&download_dir)
+                                    .spawn();
+                            }
+                            #[cfg(target_os = "linux")]
+                            {
+                                let _ = std::process::Command::new("xdg-open")
+                                    .arg(&download_dir)
+                                    .spawn();
                             }
                         }
 
                         if ui
                             .add_enabled(can_interact, egui::Button::new("📤 Export"))
                             .clicked()
+                            && let Some(list) = state.get_current_list()
+                            && let Some(save_path) = Dialogs::save_export_list_file(&list.name)
                         {
-                            if let Some(list) = state.get_current_list() {
-                                if let Some(save_path) = Dialogs::save_export_list_file(&list.name)
-                                {
-                                    effects.extend(state.export_current_list(save_path));
-                                }
-                            }
+                            effects.extend(state.export_current_list(save_path));
                         }
 
                         let sort_label = match view_state.current_order_mode {
@@ -432,15 +427,14 @@ impl MainPanel {
                     ui.label(format!("{} by {}", version_text, info.author));
                 } else if is_loading {
                     ui.label("⏳ Loading details...");
-                } else if has_failed {
-                    if ui
+                } else if has_failed
+                    && ui
                         .button(
                             egui::RichText::new("⚠ Failed to load").color(egui::Color32::YELLOW),
                         )
                         .clicked()
-                    {
-                        effects.extend(state.force_reload_mod(mod_id));
-                    }
+                {
+                    effects.extend(state.force_reload_mod(mod_id));
                 }
 
                 let has_override = state.has_compatibility_override(mod_id);
@@ -618,13 +612,13 @@ impl MainPanel {
             );
         }*/
 
-        if ctx.input(|i| i.pointer.any_click()) {
-            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
-                if !view_state.sort_btn_rect.contains(pos) && !popup_rect.contains(pos) {
-                    view_state.sort_menu_open = false;
-                    return;
-                }
-            }
+        if ctx.input(|i| i.pointer.any_click())
+            && let Some(pos) = ctx.input(|i| i.pointer.interact_pos())
+            && !view_state.sort_btn_rect.contains(pos)
+            && !popup_rect.contains(pos)
+        {
+            view_state.sort_menu_open = false;
+            return;
         }
 
         egui::Area::new(egui::Id::new("sort_menu"))
