@@ -297,6 +297,10 @@ impl AppState {
     }
 
     fn default_dir_fallback(&self) -> String {
+        if let Some(path) = crate::infra::ConfigManager::get_default_minecraft_download_dir() {
+            return path.to_string_lossy().to_string();
+        }
+
         dirs::download_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("minecraft")

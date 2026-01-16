@@ -13,9 +13,7 @@ impl ListSettingsWindow {
     ) -> Vec<Effect> {
         let mut effects = Vec::new();
 
-        if let Some(list) = state.get_current_list()
-            && view_state.list_settings_version.is_empty()
-        {
+        if let Some(list) = state.get_current_list() {
             view_state.list_settings_version = list.version.clone();
             view_state.list_settings_loader = list.loader.id.clone();
             view_state.list_settings_dir = if list.download_dir.is_empty() {

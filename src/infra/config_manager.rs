@@ -88,7 +88,9 @@ impl ConfigManager {
         #[cfg(target_os = "windows")]
         {
             if let Ok(appdata) = std::env::var("APPDATA") {
-                let path = std::path::PathBuf::from(appdata).join(".minecraft").join("mods");
+                let path = std::path::PathBuf::from(appdata)
+                    .join(".minecraft")
+                    .join("mods");
                 if !path.exists() {
                     let _ = std::fs::create_dir_all(&path);
                 }
@@ -111,7 +113,9 @@ impl ConfigManager {
         #[cfg(target_os = "linux")]
         {
             if let Ok(home) = std::env::var("HOME") {
-                let path = std::path::PathBuf::from(home).join(".minecraft").join("mods");
+                let path = std::path::PathBuf::from(home)
+                    .join(".minecraft")
+                    .join("mods");
                 if !path.exists() {
                     let _ = std::fs::create_dir_all(&path);
                 }
@@ -121,5 +125,4 @@ impl ConfigManager {
 
         None
     }
-
 }
