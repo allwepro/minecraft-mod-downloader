@@ -371,9 +371,7 @@ impl AppState {
         let current_loader = self.get_effective_loader();
 
         log::info!(
-            "=== Invalidate and reload for version={} loader={} ===",
-            current_version,
-            current_loader
+            "=== Invalidate and reload for version={current_version} loader={current_loader} ==="
         );
         log::info!(
             "Cache has {} entries before reload:",
@@ -414,11 +412,11 @@ impl AppState {
 
     pub fn load_mod_details_if_needed(&mut self, mod_id: &str) -> Vec<Effect> {
         if self.mods_being_loaded.contains(mod_id) {
-            log::debug!("Mod {} already being loaded", mod_id);
+            log::debug!("Mod {mod_id} already being loaded");
             return Vec::new();
         }
         if self.mods_failed_loading.contains(mod_id) {
-            log::debug!("Mod {} previously failed", mod_id);
+            log::debug!("Mod {mod_id} previously failed");
             return Vec::new();
         }
 
@@ -430,33 +428,17 @@ impl AppState {
         if let Some(info) = self.cached_mods.get(&key) {
             if !info.version.is_empty() {
                 log::debug!(
-                    "Mod {} has complete cached info for {}/{}, skipping fetch",
-                    mod_id,
-                    version,
-                    loader
+                    "Mod {mod_id} has complete cached info for {version}/{loader}, skipping fetch"
                 );
                 return Vec::new();
             }
-            log::debug!(
-                "Mod {} has incomplete info (empty version), fetching details",
-                mod_id
-            );
+            log::debug!("Mod {mod_id} has incomplete info (empty version), fetching details");
         } else {
-            log::debug!(
-                "Mod {} not in cache for {}/{}, fetching",
-                mod_id,
-                version,
-                loader
-            );
+            log::debug!("Mod {mod_id} not in cache for {version}/{loader}, fetching");
         }
 
         self.mods_being_loaded.insert(mod_id.to_string());
-        log::debug!(
-            "Triggering fetch for mod {} with version={} loader={}",
-            mod_id,
-            version,
-            loader
-        );
+        log::debug!("Triggering fetch for mod {mod_id} with version={version} loader={loader}");
 
         vec![Effect::FetchModDetails {
             mod_id: mod_id.to_string(),
@@ -928,8 +910,7 @@ impl AppState {
 
         if metadata.is_none() {
             log::debug!(
-                "Metadata not loaded yet for {}, skipping unknown file detection",
-                download_dir
+                "Metadata not loaded yet for {download_dir}, skipping unknown file detection"
             );
             return Vec::new();
         }
@@ -963,14 +944,14 @@ impl AppState {
                     let current_type = current_list.map(|l| l.content_type).unwrap_or_default();
                     let expected_ext = current_type.fileext();
                     let base_filename = filename.strip_suffix(".archived").unwrap_or(filename);
-                    if !base_filename.ends_with(&format!(".{}", expected_ext)) {
+                    if !base_filename.ends_with(&format!(".{expected_ext}")) {
                         continue;
                     }
 
                     let is_known = known_filenames.contains(filename);
 
                     if !is_known {
-                        log::debug!("Found unknown file: {}", filename);
+                        log::debug!("Found unknown file: {filename}");
                         unknown_files.push(filename.to_string());
                     }
                 }
