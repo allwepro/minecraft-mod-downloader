@@ -572,8 +572,8 @@ impl AppState {
                     download_dir,
                     mod_id: mod_id.to_string(),
                 });
-                return effects;
             }
+            return effects;
         }
         Vec::new()
     }
