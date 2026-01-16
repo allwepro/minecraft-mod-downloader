@@ -1,5 +1,6 @@
 use crate::app::{AppRuntime, AppState, Effect};
 use crate::domain::ProjectType;
+use crate::infra::ConfigManager;
 use crate::ui::{ViewState, dialogs::Dialogs};
 use eframe::egui;
 
@@ -25,6 +26,11 @@ impl CreateListWindow {
             && !loaders.is_empty()
         {
             view_state.new_list_loader = loaders[0].id.clone();
+        }
+        if view_state.new_list_dir.is_empty() {
+            if let Some(default_dir) = ConfigManager::get_default_minecraft_download_dir() {
+                view_state.new_list_dir = default_dir.to_string_lossy().to_string();
+            }
         }
 
         let overlay = egui::Area::new(egui::Id::new("create_list_overlay"))
