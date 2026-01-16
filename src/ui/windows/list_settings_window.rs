@@ -120,7 +120,7 @@ impl ListSettingsWindow {
                     ui.horizontal(|ui| {
                         ui.text_edit_singleline(&mut view_state.list_settings_dir);
                         if ui.button("📁 Browse").clicked()
-                            && let Some(path) = Dialogs::pick_folder()
+                            && let Some(path) = Dialogs::pick_minecraft_mods_folder()
                         {
                             view_state.list_settings_dir = path.display().to_string();
                         }

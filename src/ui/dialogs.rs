@@ -4,8 +4,18 @@ use std::path::PathBuf;
 pub struct Dialogs;
 
 impl Dialogs {
-    pub fn pick_folder() -> Option<PathBuf> {
-        FileDialog::new().pick_folder()
+
+    pub fn pick_minecraft_mods_folder() -> Option<PathBuf> {
+        if let Some(default_path) = crate::infra::ConfigManager::get_default_minecraft_download_dir() {
+            return FileDialog::new()
+                .set_title("Select Minecraft Mods Folder")
+                .set_directory(&default_path)
+                .pick_folder();
+        }
+
+        FileDialog::new()
+            .set_title("Select Minecraft Mods Folder")
+            .pick_folder()
     }
 
     pub fn save_export_list_file(default_name: &str) -> Option<PathBuf> {
