@@ -178,7 +178,7 @@ impl CreateListWindow {
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut view_state.new_list_dir);
                     if ui.button("Browse...").clicked()
-                        && let Some(path) = Dialogs::pick_folder()
+                        && let Some(path) = Dialogs::pick_minecraft_mods_folder()
                     {
                         view_state.new_list_dir = path.to_string_lossy().to_string();
                     }
