@@ -76,8 +76,7 @@ impl LegacyWindow {
                             ui.add_space(10.0);
                             ui.label(message);
                             ui.add(
-                                egui::ProgressBar::new(progress)
-                                    .text(format!("{}/{}", current, total)),
+                                egui::ProgressBar::new(progress).text(format!("{current}/{total}")),
                             );
                             ui.add_space(10.0);
                         });
@@ -102,18 +101,18 @@ impl LegacyWindow {
                             } else {
                                 "Export Results"
                             });
-                            ui.label(format!("✅ Success: {}", success_count));
+                            ui.label(format!("✅ Success: {success_count}"));
 
                             if fail_count > 0 {
                                 ui.colored_label(
                                     egui::Color32::LIGHT_RED,
-                                    format!("❌ Failed: {}", fail_count),
+                                    format!("❌ Failed: {fail_count}"),
                                 );
                             }
                             if warn_count > 0 {
                                 ui.colored_label(
                                     egui::Color32::GOLD,
-                                    format!("⚠️ Warnings: {}", warn_count),
+                                    format!("⚠️ Warnings: {warn_count}"),
                                 );
                             }
 

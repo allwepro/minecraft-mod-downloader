@@ -119,10 +119,10 @@ impl ProjectCache {
     }
 
     fn make_key(mod_id: &str, version: &str, loader: &str) -> String {
-        format!("{}_{}_{}", mod_id, version, loader)
+        format!("{mod_id}_{version}_{loader}")
     }
 
     fn cache_path(&self, key: &str) -> PathBuf {
-        self.cache_dir.join(format!("{}.json", key))
+        self.cache_dir.join(format!("{key}.json"))
     }
 }
