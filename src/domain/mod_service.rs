@@ -63,29 +63,21 @@ impl ModService {
             cache_check(&pool, version, loader)
         } {
             if !info.version.is_empty() {
-                log::debug!("Returning cached complete info for {}", identifier);
+                log::debug!("Returning cached complete info for {identifier}");
                 return Ok(info);
             }
-            log::debug!(
-                "Cached info for {} has empty version, fetching fresh",
-                identifier
-            );
+            log::debug!("Cached info for {identifier} has empty version, fetching fresh");
         }
 
         if let Some(cached_info) = self.disk_cache.get(identifier, version, loader).await {
-            log::debug!("Returning disk-cached info for {}", identifier);
+            log::debug!("Returning disk-cached info for {identifier}");
             let mut pool = self.pool.lock().await;
             return Ok(pool.insert(cached_info, version.to_string(), loader.to_string()));
         }
 
         let _permit = self.api_service.limiter.acquire(1).await;
 
-        log::debug!(
-            "Fetching mod details for {} (version={} loader={})",
-            identifier,
-            version,
-            loader
-        );
+        log::debug!("Fetching mod details for {identifier} (version={version} loader={loader})");
 
         let details = self
             .api_service
@@ -196,10 +188,10 @@ impl ModInfoPool {
             && existing.matches_context(&version, &loader)
         {
             if !existing.info.version.is_empty() {
-                log::debug!("Keeping existing complete cache entry for {}", id);
+                log::debug!("Keeping existing complete cache entry for {id}");
                 return existing.info.clone();
             }
-            log::debug!("Replacing incomplete cache entry for {} with new data", id);
+            log::debug!("Replacing incomplete cache entry for {id} with new data");
         }
 
         if self.cache.len() >= self.max_size {

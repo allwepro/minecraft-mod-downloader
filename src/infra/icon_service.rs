@@ -34,7 +34,7 @@ impl IconService {
                     self.loading.remove(&url);
                 }
                 Err(e) => {
-                    log::error!("Failed to decode image for {}: {}", url, e);
+                    log::error!("Failed to decode image for {url}: {e}");
                     self.loading.remove(&url);
                 }
             }

@@ -110,10 +110,10 @@ impl ModProvider for ModrinthProvider {
         let mut facets = vec![format!("\"project_type:{}\"", project_type.id())];
 
         if !version.is_empty() {
-            facets.push(format!("\"versions:{}\"", version));
+            facets.push(format!("\"versions:{version}\""));
         }
         if !loader.is_empty() && *project_type == ProjectType::Mod {
-            facets.push(format!("\"categories:{}\"", loader));
+            facets.push(format!("\"categories:{loader}\""));
         }
 
         let url = format!(
@@ -121,7 +121,7 @@ impl ModProvider for ModrinthProvider {
             base,
             facets
                 .iter()
-                .map(|f| format!("[{}]", f))
+                .map(|f| format!("[{f}]"))
                 .collect::<Vec<_>>()
                 .join(",")
         );
@@ -174,9 +174,9 @@ impl ModProvider for ModrinthProvider {
         version: &str,
         loader: &str,
     ) -> anyhow::Result<ModInfo> {
-        let project_url = format!("https://api.modrinth.com/v2/project/{}", mod_id);
-        let versions_url = format!("https://api.modrinth.com/v2/project/{}/version", mod_id);
-        let team_url = format!("https://api.modrinth.com/v2/project/{}/members", mod_id);
+        let project_url = format!("https://api.modrinth.com/v2/project/{mod_id}");
+        let versions_url = format!("https://api.modrinth.com/v2/project/{mod_id}/version");
+        let team_url = format!("https://api.modrinth.com/v2/project/{mod_id}/members");
 
         let project_response = self
             .client
@@ -187,7 +187,7 @@ impl ModProvider for ModrinthProvider {
 
         let project_text = project_response.text().await?;
         let project: ModrinthProjectDetails = serde_json::from_str(&project_text)
-            .map_err(|e| anyhow::anyhow!("Failed to parse project: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse project: {e}"))?;
 
         let author = match self
             .client
@@ -236,7 +236,7 @@ impl ModProvider for ModrinthProvider {
 
         let versions_text = versions_response.text().await?;
         let versions: Vec<ModrinthVersion> = serde_json::from_str(&versions_text)
-            .map_err(|e| anyhow::anyhow!("Failed to parse versions: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse versions: {e}"))?;
 
         log::debug!(
             "Mod {} has {} versions. Looking for version={} loader={}",
@@ -275,10 +275,7 @@ impl ModProvider for ModrinthProvider {
             .or_else(|| {
                 if !loader.is_empty() {
                     log::warn!(
-                        "No exact match for mod {} version={} loader={}. Looking for closest version with same loader.",
-                        mod_id,
-                        version,
-                        loader
+                        "No exact match for mod {mod_id} version={version} loader={loader}. Looking for closest version with same loader."
                     );
 
                     let loader_compatible: Vec<&ModrinthVersion> = versions
@@ -346,20 +343,16 @@ impl ModProvider for ModrinthProvider {
                     }
 
                     log::error!(
-                        "No versions found for mod {} with loader {}. Cannot provide fallback.",
-                        mod_id,
-                        loader
+                        "No versions found for mod {mod_id} with loader {loader}. Cannot provide fallback."
                     );
                     None
                 } else {
                     log::warn!(
-                        "No exact match for mod {} version={}. Using first available version.",
-                        mod_id,
-                        version
+                        "No exact match for mod {mod_id} version={version}. Using first available version."
                     );
                     versions.first()
                 }
-            }).ok_or_else(|| anyhow::anyhow!("No versions available for project {}", mod_id))?;
+            }).ok_or_else(|| anyhow::anyhow!("No versions available for project {mod_id}"))?;
 
         log::debug!(
             "Selected version '{}' for mod {} (file count: {}, id: {})",

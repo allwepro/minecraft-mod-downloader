@@ -22,7 +22,7 @@ pub fn sanitize_filename(name: &str) -> String {
 pub fn generate_mod_filename(mod_info: &ModInfo) -> String {
     let sanitized_name = sanitize_filename(&mod_info.name);
     let extension = mod_info.project_type.fileext();
-    format!("{}.{}", sanitized_name, extension)
+    format!("{sanitized_name}.{extension}")
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]

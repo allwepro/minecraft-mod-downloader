@@ -180,7 +180,7 @@ impl AppRuntime {
                             let _ = tx.send(Event::SearchResults(cached)).await;
                         }
                         Err(_) => {
-                            log::warn!("Failed to search: {}", query);
+                            log::warn!("Failed to search: {query}");
                         }
                     }
                 });
@@ -208,7 +208,7 @@ impl AppRuntime {
                                 .await;
                         }
                         Err(e) => {
-                            log::warn!("Failed to fetch details for {}: {}", mod_id, e);
+                            log::warn!("Failed to fetch details for {mod_id}: {e}");
                             let _ = tx.send(Event::ModDetailsFailed { mod_id }).await;
                         }
                     }
@@ -259,7 +259,7 @@ impl AppRuntime {
                         )
                         .await
                         {
-                            log::warn!("Failed to update download metadata: {}", e);
+                            log::warn!("Failed to update download metadata: {e}");
                         }
                     }
 
@@ -340,7 +340,7 @@ impl AppRuntime {
                     if let Err(e) =
                         crate::infra::remove_metadata_entry(download_path, &mod_id).await
                     {
-                        log::warn!("Failed to remove metadata entry for {}: {}", mod_id, e);
+                        log::warn!("Failed to remove metadata entry for {mod_id}: {e}");
                     }
                 });
             }
@@ -390,9 +390,9 @@ impl AppRuntime {
 
                     if file_path.exists() {
                         if let Err(e) = tokio::fs::remove_file(&file_path).await {
-                            log::warn!("Failed to delete unknown file {}: {}", filename, e);
+                            log::warn!("Failed to delete unknown file {filename}: {e}");
                         } else {
-                            log::info!("Deleted unknown file: {}", filename);
+                            log::info!("Deleted unknown file: {filename}");
                         }
                     }
                 });
@@ -415,22 +415,19 @@ impl AppRuntime {
                         let original_file = entry.file.clone();
                         let version = entry.version.clone();
                         let file_path = download_path.join(&original_file);
-                        let archived_path =
-                            download_path.join(format!("{}.archived", original_file));
+                        let archived_path = download_path.join(format!("{original_file}.archived"));
 
                         if file_path.exists() {
                             if let Err(e) = tokio::fs::rename(&file_path, &archived_path).await {
-                                log::warn!("Failed to archive mod file {}: {}", original_file, e);
+                                log::warn!("Failed to archive mod file {original_file}: {e}");
                             } else {
                                 log::info!(
-                                    "Archived mod file: {} -> {}.archived",
-                                    original_file,
-                                    original_file
+                                    "Archived mod file: {original_file} -> {original_file}.archived"
                                 );
 
                                 metadata.update_entry(
                                     mod_id.clone(),
-                                    format!("{}.archived", original_file),
+                                    format!("{original_file}.archived"),
                                     version,
                                 );
 
@@ -438,7 +435,7 @@ impl AppRuntime {
                                     crate::infra::write_download_metadata(download_path, &metadata)
                                         .await
                                 {
-                                    log::warn!("Failed to update metadata after archiving: {}", e);
+                                    log::warn!("Failed to update metadata after archiving: {e}");
                                 } else {
                                     let _ = tx
                                         .send(Event::MetadataLoaded {
@@ -477,16 +474,10 @@ impl AppRuntime {
                             if archived_path.exists() {
                                 if let Err(e) = tokio::fs::rename(&archived_path, &file_path).await
                                 {
-                                    log::warn!(
-                                        "Failed to unarchive mod file {}: {}",
-                                        archived_file,
-                                        e
-                                    );
+                                    log::warn!("Failed to unarchive mod file {archived_file}: {e}");
                                 } else {
                                     log::info!(
-                                        "Unarchived mod file: {} -> {}",
-                                        archived_file,
-                                        original_file
+                                        "Unarchived mod file: {archived_file} -> {original_file}"
                                     );
 
                                     metadata.update_entry(
@@ -502,8 +493,7 @@ impl AppRuntime {
                                     .await
                                     {
                                         log::warn!(
-                                            "Failed to update metadata after unarchiving: {}",
-                                            e
+                                            "Failed to update metadata after unarchiving: {e}"
                                         );
                                     } else {
                                         let _ = tx
@@ -532,7 +522,7 @@ impl AppRuntime {
                                 crate::infra::write_download_metadata(download_path, &metadata)
                                     .await
                             {
-                                log::warn!("Failed to write validated metadata: {}", e);
+                                log::warn!("Failed to write validated metadata: {e}");
                             } else {
                                 let _ = tx
                                     .send(Event::MetadataLoaded {
@@ -543,7 +533,7 @@ impl AppRuntime {
                             }
                         }
                         Err(e) => {
-                            log::debug!("Could not read metadata for validation: {}", e);
+                            log::debug!("Could not read metadata for validation: {e}");
                             let _ = tx
                                 .send(Event::MetadataLoaded {
                                     download_dir: dir_clone,

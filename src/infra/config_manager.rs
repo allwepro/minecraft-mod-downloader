@@ -48,7 +48,7 @@ impl ConfigManager {
     }
 
     pub async fn delete_list(&self, list_id: &str) -> anyhow::Result<()> {
-        let path = self.get_lists_dir().join(format!("{}.toml", list_id));
+        let path = self.get_lists_dir().join(format!("{list_id}.toml"));
         tokio::fs::remove_file(path).await?;
         Ok(())
     }
