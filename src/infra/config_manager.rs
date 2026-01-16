@@ -83,4 +83,43 @@ impl ConfigManager {
     pub fn get_cache_dir(&self) -> std::path::PathBuf {
         self.config_dir.clone().join("cache")
     }
+
+    pub fn get_default_minecraft_download_dir() -> Option<std::path::PathBuf> {
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(appdata) = std::env::var("APPDATA") {
+                let path = std::path::PathBuf::from(appdata).join(".minecraft").join("mods");
+                if !path.exists() {
+                    let _ = std::fs::create_dir_all(&path);
+                }
+                return Some(path);
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(home) = std::env::var("HOME") {
+                let path = std::path::PathBuf::from(home)
+                    .join("Library/Application Support/minecraft/mods");
+                if !path.exists() {
+                    let _ = std::fs::create_dir_all(&path);
+                }
+                return Some(path);
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(home) = std::env::var("HOME") {
+                let path = std::path::PathBuf::from(home).join(".minecraft").join("mods");
+                if !path.exists() {
+                    let _ = std::fs::create_dir_all(&path);
+                }
+                return Some(path);
+            }
+        }
+
+        None
+    }
+
 }

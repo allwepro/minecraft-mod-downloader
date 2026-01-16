@@ -100,7 +100,7 @@ impl LegacyImportSettingsWindow {
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut view_state.legacy_import_dir);
                     if ui.button("Browse...").clicked()
-                        && let Some(path) = Dialogs::pick_folder()
+                        && let Some(path) = Dialogs::pick_minecraft_mods_folder()
                     {
                         view_state.legacy_import_dir = path.to_string_lossy().to_string();
                     }
