@@ -53,10 +53,7 @@ impl DownloadMetadata {
         }
 
         for mod_id in to_remove {
-            log::debug!(
-                "Removing stale metadata entry for {} (file no longer exists)",
-                mod_id
-            );
+            log::debug!("Removing stale metadata entry for {mod_id} (file no longer exists)");
             self.mods.remove(&mod_id);
         }
     }

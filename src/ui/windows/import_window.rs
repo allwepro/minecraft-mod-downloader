@@ -61,7 +61,7 @@ impl ImportWindow {
                 ui.text_edit_singleline(&mut view_state.import_name_input);
 
                 ui.add_space(8.0);
-                ui.label(egui::RichText::new(format!("Contains {} items", mod_count)).weak());
+                ui.label(egui::RichText::new(format!("Contains {mod_count} items")).weak());
 
                 ui.add_space(12.0);
                 ui.horizontal(|ui| {

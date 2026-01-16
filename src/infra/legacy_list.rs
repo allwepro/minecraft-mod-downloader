@@ -24,7 +24,7 @@ impl LegacyListService {
             Err(e) => {
                 let _ = tx
                     .send(Event::LegacyListFailed {
-                        error: format!("Failed to read file: {}", e),
+                        error: format!("Failed to read file: {e}"),
                         is_import: true,
                     })
                     .await;
@@ -48,7 +48,7 @@ impl LegacyListService {
                 .send(Event::LegacyListProgress {
                     current: idx + 1,
                     total: slugs.len(),
-                    message: format!("Resolving '{}'...", slug),
+                    message: format!("Resolving '{slug}'..."),
                 })
                 .await;
 
@@ -61,7 +61,7 @@ impl LegacyListService {
                     successful_mods.push(info);
                 }
                 Err(e) => {
-                    log::warn!("Failed to resolve slug '{}': {}", slug, e);
+                    log::warn!("Failed to resolve slug '{slug}': {e}");
                     failed.push(slug.clone());
                 }
             }
@@ -96,7 +96,7 @@ impl LegacyListService {
                 .send(Event::LegacyListProgress {
                     current: idx + 1,
                     total: mod_ids.len(),
-                    message: format!("Resolving '{}'...", mod_id),
+                    message: format!("Resolving '{mod_id}'..."),
                 })
                 .await;
 
@@ -108,7 +108,7 @@ impl LegacyListService {
                 Ok(mod_info) => {
                     let info_ref = mod_info.as_ref();
                     if info_ref.slug.is_empty() {
-                        warnings.push(format!("Mod '{}' has no slug, skipping", mod_id));
+                        warnings.push(format!("Mod '{mod_id}' has no slug, skipping"));
                         failed.push(mod_id.clone());
                     } else {
                         slugs.push(info_ref.slug.clone());
@@ -116,7 +116,7 @@ impl LegacyListService {
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to resolve ID '{}': {}", mod_id, e);
+                    log::warn!("Failed to resolve ID '{mod_id}': {e}");
                     failed.push(mod_id.clone());
                 }
             }
@@ -132,7 +132,7 @@ impl LegacyListService {
         if let Err(e) = tokio::fs::write(&temp_path, content).await {
             let _ = tx
                 .send(Event::LegacyListFailed {
-                    error: format!("Failed to write file: {}", e),
+                    error: format!("Failed to write file: {e}"),
                     is_import: false,
                 })
                 .await;
@@ -142,7 +142,7 @@ impl LegacyListService {
         if let Err(e) = tokio::fs::rename(temp_path, &path).await {
             let _ = tx
                 .send(Event::LegacyListFailed {
-                    error: format!("Failed to finalize file: {}", e),
+                    error: format!("Failed to finalize file: {e}"),
                     is_import: false,
                 })
                 .await;

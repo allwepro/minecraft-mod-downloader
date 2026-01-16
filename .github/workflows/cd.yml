@@ -43,35 +43,41 @@ jobs:
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
-      
+        continue-on-error: true
+
       - name: Configure sccache env
+        shell: bash
         run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          if command -v sccache >/dev/null 2>&1 && sccache --start-server >/dev/null 2>&1; then
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+            echo "Sccache is enabled"
+          else
+            echo "Sccache failed to start or is missing; falling back to default compiler"
+          fi
 
       - name: Build Binary
         run: cargo build --release --target ${{ matrix.target }} --verbose
 
       - name: Create Archive (Unix)
         if: matrix.os != 'windows-latest'
-        shell: bash
         run: |
-          cd target/${{ matrix.target }}/release
-          tar -czf ../../../${{ env.BIN_NAME }}-${{ matrix.archive_name }}.tar.gz ${{ env.BIN_NAME }}
-          cd -
+          tar -czf "${{ env.BIN_NAME }}-${{ matrix.archive_name }}.tar.gz" \
+            -C "target/${{ matrix.target }}/release" "${{ env.BIN_NAME }}"
 
       - name: Create Archive (Windows)
         if: matrix.os == 'windows-latest'
-        shell: powershell
+        shell: pwsh
         run: |
-          cd target/${{ matrix.target }}/release
-          Compress-Archive -Path ${{ env.BIN_NAME }}.exe -DestinationPath ..\..\..\${{ env.BIN_NAME }}-${{ matrix.archive_name }}.zip
+          Compress-Archive \
+            -Path "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe" \
+            -DestinationPath "${{ env.BIN_NAME }}-${{ matrix.archive_name }}.zip"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.archive_name }}
-          path: ${{ env.BIN_NAME }}-*.*
+          path: ${{ env.BIN_NAME }}-${{ matrix.archive_name }}.*
           retention-days: 1
 
   create-release:
@@ -80,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -88,13 +94,10 @@ jobs:
           pattern: build-*
           merge-multiple: true
 
-      - name: Display structure of downloaded files
-        run: ls -R artifacts
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
           generate_release_notes: true
-          draft: true # Can check manually if it all works before publishing
+          draft: true
           prerelease: false

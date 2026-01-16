@@ -13,7 +13,7 @@ impl Dialogs {
             .add_filter("MMD List", &["mmd"])
             .add_filter("Legacy Mod List", &["mods", "all-mods", "queue-mods"])
             .set_title("Export List")
-            .set_file_name(format!("{}.mmd", default_name))
+            .set_file_name(format!("{default_name}.mmd"))
             .save_file()
     }
 
