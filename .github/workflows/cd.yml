@@ -69,8 +69,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive \
-            -Path "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe" \
+          Compress-Archive `
+            -Path "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe" `
             -DestinationPath "${{ env.BIN_NAME }}-${{ matrix.archive_name }}.zip"
 
       - name: Upload Artifacts
