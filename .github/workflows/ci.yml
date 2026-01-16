@@ -1,14 +1,13 @@
 name: Rust CI
 
 on:
-  push:
-    branches:
-      - main
-      - dev
   pull_request:
     branches:
       - main
       - dev
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
 
 permissions:
   contents: read
