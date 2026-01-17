@@ -28,7 +28,8 @@ impl CreateListWindow {
             view_state.new_list_loader = loaders[0].id.clone();
         }
         if view_state.new_list_dir.is_empty()
-            && let Some(default_dir) = ConfigManager::get_default_minecraft_download_dir()
+            && let Some(default_dir) =
+                ConfigManager::get_default_minecraft_download_dir(ProjectType::Mod)
         {
             view_state.new_list_dir = default_dir.to_string_lossy().to_string();
         }
