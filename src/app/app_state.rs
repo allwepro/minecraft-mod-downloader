@@ -296,8 +296,10 @@ impl AppState {
             .unwrap_or_default()
     }
 
-    fn default_dir_fallback(&self) -> String {
-        if let Some(path) = crate::infra::ConfigManager::get_default_minecraft_download_dir() {
+    fn default_dir_fallback(&self, project_type: ProjectType) -> String {
+        if let Some(path) =
+            crate::infra::ConfigManager::get_default_minecraft_download_dir(project_type)
+        {
             return path.to_string_lossy().to_string();
         }
 
@@ -322,7 +324,7 @@ impl AppState {
         };
 
         let dir = if list.download_dir.is_empty() {
-            self.default_dir_fallback()
+            self.default_dir_fallback(list.content_type)
         } else {
             list.download_dir.clone()
         };
@@ -360,7 +362,7 @@ impl AppState {
 
     pub fn get_effective_download_dir(&self) -> String {
         let Some(list) = self.get_current_list() else {
-            return self.default_dir_fallback();
+            return self.default_dir_fallback(ProjectType::Mod);
         };
 
         if let Some((_, _, d)) = self.get_cached_effective_settings(&list.id) {
