@@ -113,9 +113,22 @@ impl ConfigManager {
         #[cfg(target_os = "linux")]
         {
             if let Ok(home) = std::env::var("HOME") {
-                let path = std::path::PathBuf::from(home)
-                    .join(".minecraft")
-                    .join("mods");
+                let home_path = std::path::PathBuf::from(&home);
+
+                let flatpak_path =
+                    home_path.join(".var/app/net.minecraft.launcher/data/.minecraft/mods");
+                if flatpak_path.exists() || Self::is_running_in_flatpak() {
+                    let _ = std::fs::create_dir_all(&flatpak_path);
+                    return Some(flatpak_path);
+                }
+
+                let snap_path = home_path.join("snap/minecraft-launcher/common/.minecraft/mods");
+                if snap_path.exists() || Self::is_running_in_snap() {
+                    let _ = std::fs::create_dir_all(&snap_path);
+                    return Some(snap_path);
+                }
+
+                let path = home_path.join(".minecraft").join("mods");
                 if !path.exists() {
                     let _ = std::fs::create_dir_all(&path);
                 }
@@ -124,5 +137,15 @@ impl ConfigManager {
         }
 
         None
+    }
+
+    #[cfg(target_os = "linux")]
+    fn is_running_in_flatpak() -> bool {
+        std::path::Path::new("/.flatpak-info").exists()
+    }
+
+    #[cfg(target_os = "linux")]
+    fn is_running_in_snap() -> bool {
+        std::env::var("SNAP").is_ok()
     }
 }
