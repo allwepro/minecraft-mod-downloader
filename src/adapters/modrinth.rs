@@ -430,6 +430,7 @@ impl ModProvider for ModrinthProvider {
         &self,
         project_type: ProjectType,
     ) -> anyhow::Result<Vec<ModLoader>> {
+        //for dynamic loading https://api.modrinth.com/v2/tag/loader
         Ok(match project_type {
             ProjectType::Mod => vec![
                 ModLoader {

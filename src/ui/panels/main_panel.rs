@@ -168,7 +168,7 @@ impl MainPanel {
 
                         if ui.button("⚙ List Settings").clicked() {
                             view_state.list_settings_open = true;
-                            view_state.list_settings_version.clear();
+                            view_state.list_settings_initial_load = true;
                         }
                     }
                 });
