@@ -167,14 +167,13 @@ impl CollectionImportWindow {
         if should_close || (!is_open && !view_state.collection_import_loading) {
             view_state.collection_import_window_open = false;
             view_state.reset_collection_import();
-        } else if should_import {
-            if let Some(collection_id) =
+        } else if should_import
+            && let Some(collection_id) =
                 Self::parse_collection_id(&view_state.collection_import_input)
-            {
-                view_state.collection_import_loading = true;
-                view_state.collection_import_error = None;
-                effects.push(Effect::ImportModrinthCollection { collection_id });
-            }
+        {
+            view_state.collection_import_loading = true;
+            view_state.collection_import_error = None;
+            effects.push(Effect::ImportModrinthCollection { collection_id });
         }
 
         view_state.collection_import_window_open = is_open || view_state.collection_import_loading;

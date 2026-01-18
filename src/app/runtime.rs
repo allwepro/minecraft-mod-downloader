@@ -551,13 +551,7 @@ impl AppRuntime {
 
                 self.rt_handle.spawn(async move {
                     match modrinth.fetch_collection(&collection_id).await {
-                        Ok((
-                            name,
-                            _,
-                            recommended_version,
-                            recommended_loader,
-                            projects,
-                        )) => {
+                        Ok((name, _, recommended_version, recommended_loader, projects)) => {
                             let _ = tx
                                 .send(Event::ModrinthCollectionLoaded {
                                     name,

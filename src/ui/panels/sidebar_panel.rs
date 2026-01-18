@@ -107,10 +107,11 @@ impl SidebarPanel {
 
                         if ui.input(|i| i.pointer.any_click()) && !import_btn.clicked() {
                             let pointer_pos = ui.input(|i| i.pointer.interact_pos());
-                            if let Some(pos) = pointer_pos {
-                                if !popup_rect.contains(pos) && !import_btn.rect.contains(pos) {
-                                    view_state.import_popup_open = false;
-                                }
+                            if let Some(pos) = pointer_pos
+                                && !popup_rect.contains(pos)
+                                && !import_btn.rect.contains(pos)
+                            {
+                                view_state.import_popup_open = false;
                             }
                         }
                     }
