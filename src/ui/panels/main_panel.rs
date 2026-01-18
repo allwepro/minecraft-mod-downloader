@@ -434,10 +434,11 @@ impl MainPanel {
                         ui.label("⏳ Loading details...");
                     } else if has_failed
                         && ui
-                        .button(
-                            egui::RichText::new("⚠ Failed to load").color(egui::Color32::YELLOW),
-                        )
-                        .clicked()
+                            .button(
+                                egui::RichText::new("⚠ Failed to load")
+                                    .color(egui::Color32::YELLOW),
+                            )
+                            .clicked()
                     {
                         effects.extend(state.force_reload_mod(mod_id));
                     }
@@ -529,7 +530,8 @@ impl MainPanel {
                                 {
                                     effects.extend(state.start_download(mod_id));
                                 }
-                                if (any == DownloadStatus::Complete || is_downloaded) && !is_updateable
+                                if (any == DownloadStatus::Complete || is_downloaded)
+                                    && !is_updateable
                                 {
                                     ui.label("✅");
                                 }
