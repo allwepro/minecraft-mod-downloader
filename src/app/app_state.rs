@@ -6,6 +6,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+#[derive(Clone, Debug)]
+pub struct PendingCollection {
+    pub name: String,
+    pub recommended_version: String,
+    pub recommended_loader: String,
+    pub projects: Vec<(String, String)>, // (project_id, project_name)
+}
+
 pub struct AppState {
     pub minecraft_versions: Vec<MinecraftVersion>,
     pub mod_loaders: Vec<ModLoader>,
@@ -27,6 +35,8 @@ pub struct AppState {
     pub effective_settings_cache: HashMap<String, (String, String, String)>,
     pub cached_mods: HashMap<(String, String, String), Arc<ModInfo>>,
     metadata_cache: HashMap<String, DownloadMetadata>,
+    pub pending_collection: Option<PendingCollection>,
+    pub collection_import_error: Option<String>,
 }
 
 impl AppState {
@@ -53,6 +63,8 @@ impl AppState {
             effective_settings_cache: HashMap::new(),
             cached_mods: HashMap::new(),
             metadata_cache: HashMap::new(),
+            pending_collection: None,
+            collection_import_error: None,
         };
 
         (state, vec![Effect::LoadInitialData])
@@ -250,6 +262,22 @@ impl AppState {
                     metadata,
                 } => {
                     self.metadata_cache.insert(download_dir, metadata);
+                }
+                Event::ModrinthCollectionLoaded {
+                    name,
+                    recommended_version,
+                    recommended_loader,
+                    projects,
+                } => {
+                    self.pending_collection = Some(PendingCollection {
+                        name,
+                        recommended_version,
+                        recommended_loader,
+                        projects,
+                    });
+                }
+                Event::ModrinthCollectionFailed { error } => {
+                    self.collection_import_error = Some(error);
                 }
             }
         }
@@ -789,7 +817,7 @@ impl AppState {
 
                 let missing = !entry.archived
                     && (!self.is_mod_downloaded(&entry.mod_id)
-                        || self.is_mod_updateable(&entry.mod_id));
+                        || self.is_mod_updatable(&entry.mod_id));
 
                 match filter_mode {
                     FilterMode::MissingOnly => missing,
@@ -834,7 +862,7 @@ impl AppState {
         }
     }
 
-    pub fn is_mod_updateable(&self, mod_id: &str) -> bool {
+    pub fn is_mod_updatable(&self, mod_id: &str) -> bool {
         let Some(mod_info) = self.get_cached_mod(mod_id) else {
             return false;
         };

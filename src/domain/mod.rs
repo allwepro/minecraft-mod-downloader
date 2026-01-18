@@ -225,4 +225,13 @@ pub enum Event {
         download_dir: String,
         metadata: DownloadMetadata,
     },
+    ModrinthCollectionLoaded {
+        name: String,
+        recommended_version: String,
+        recommended_loader: String,
+        projects: Vec<(String, String)>, // (project_id, project_name)
+    },
+    ModrinthCollectionFailed {
+        error: String,
+    },
 }

@@ -46,13 +46,7 @@ struct ModrinthProjectDetails {
     #[serde(default)]
     team: String,
     downloads: u32,
-    #[allow(dead_code)]
-    #[serde(default)]
-    versions: Vec<String>,
     icon_url: String,
-    #[allow(dead_code)]
-    #[serde(default)]
-    categories: Vec<String>,
     project_type: String,
 }
 
@@ -68,14 +62,28 @@ struct ModrinthVersion {
 #[derive(Deserialize)]
 struct ModrinthFile {
     url: String,
-    #[allow(dead_code)]
-    filename: String,
 }
 
 #[derive(Deserialize)]
 struct ModrinthGameVersion {
     version: String,
     version_type: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct ModrinthCollection {
+    #[serde(default)]
+    name: String,
+    #[serde(default, alias = "title")]
+    description: String,
+    #[serde(default, alias = "project_ids")]
+    projects: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ModrinthProjectBasic {
+    id: String,
+    title: String,
 }
 
 fn calculate_version_distance(target: &[u32], candidate: &[u32]) -> i64 {
@@ -342,8 +350,8 @@ impl ModProvider for ModrinthProvider {
                         return Some(loader_compatible[0]);
                     }
 
-                    log::error!(
-                        "No versions found for mod {mod_id} with loader {loader}. Cannot provide fallback."
+                    log::warn!(
+                        "No versions found for mod {mod_id} with loader {loader}. Mod may be incompatible."
                     );
                     None
                 } else {
@@ -352,33 +360,59 @@ impl ModProvider for ModrinthProvider {
                     );
                     versions.first()
                 }
-            }).ok_or_else(|| anyhow::anyhow!("No versions available for project {mod_id}"))?;
-
-        log::debug!(
-            "Selected version '{}' for mod {} (file count: {}, id: {})",
-            compatible_version.version_number,
-            mod_id,
-            compatible_version.files.len(),
-            compatible_version.id
-        );
-
-        let download_url = compatible_version
-            .files
-            .first()
-            .map(|f| {
-                log::debug!("Download URL: {}", f.url);
-                f.url.clone()
-            })
-            .unwrap_or_else(|| {
-                log::warn!(
-                    "No files available for mod {} version {}",
-                    mod_id,
-                    compatible_version.version_number
-                );
-                String::new()
             });
 
-        let version_number = compatible_version.version_number.clone();
+        let (version_number, download_url, supported_versions, supported_loaders) =
+            if let Some(compatible_version) = compatible_version {
+                log::debug!(
+                    "Selected version '{}' for mod {} (file count: {}, id: {})",
+                    compatible_version.version_number,
+                    mod_id,
+                    compatible_version.files.len(),
+                    compatible_version.id
+                );
+
+                let download_url = compatible_version
+                    .files
+                    .first()
+                    .map(|f| {
+                        log::debug!("Download URL: {}", f.url);
+                        f.url.clone()
+                    })
+                    .unwrap_or_default();
+
+                (
+                    compatible_version.version_number.clone(),
+                    download_url,
+                    compatible_version.game_versions.clone(),
+                    compatible_version.loaders.clone(),
+                )
+            } else {
+                log::info!(
+                    "Using fallback for mod {mod_id}: no compatible version for {version}/{loader}"
+                );
+
+                let all_versions: Vec<String> = versions
+                    .iter()
+                    .flat_map(|v| v.game_versions.clone())
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect();
+
+                let all_loaders: Vec<String> = versions
+                    .iter()
+                    .flat_map(|v| v.loaders.clone())
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect();
+
+                (
+                    String::new(), // No specific version
+                    String::new(), // No download URL
+                    all_versions,
+                    all_loaders,
+                )
+            };
 
         log::debug!(
             "Creating ModInfo: version='{}' (len={}), download_url='{}' (len={})",
@@ -398,8 +432,8 @@ impl ModProvider for ModrinthProvider {
             icon_url: project.icon_url,
             download_count: project.downloads,
             download_url,
-            supported_versions: compatible_version.game_versions.clone(),
-            supported_loaders: compatible_version.loaders.clone(),
+            supported_versions,
+            supported_loaders,
             project_type,
         })
     }
@@ -597,5 +631,191 @@ impl ModProvider for ModrinthProvider {
 
     fn get_project_link(&self, project_type: &ProjectType, mod_id: &str) -> String {
         format!("https://modrinth.com/{}/{}", project_type.id(), mod_id)
+    }
+}
+
+impl ModrinthProvider {
+    pub async fn fetch_collection(
+        &self,
+        collection_id: &str,
+    ) -> anyhow::Result<(String, String, String, String, Vec<(String, String)>)> {
+        let collection_url = format!("https://api.modrinth.com/v3/collection/{collection_id}");
+
+        log::info!("Fetching collection from: {}", collection_url);
+
+        let response = self
+            .client
+            .get(&collection_url)
+            .header("User-Agent", "MinecraftModDownloader/1.0")
+            .send()
+            .await?;
+
+        let status = response.status();
+        log::info!("Collection API response status: {}", status);
+
+        if status == reqwest::StatusCode::NOT_FOUND {
+            anyhow::bail!(
+                "Collection not found. Make sure the collection ID is correct and the collection is public."
+            );
+        }
+
+        if !status.is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            log::error!("Collection API error: {} - {}", status, error_text);
+            anyhow::bail!("API error: {} - {}", status, error_text);
+        }
+
+        let response_text = response.text().await?;
+        log::info!(
+            "Collection API response length: {} bytes",
+            response_text.len()
+        );
+        log::debug!(
+            "Collection API response: {}",
+            &response_text[..response_text.len().min(1000)]
+        );
+
+        let collection: ModrinthCollection = serde_json::from_str(&response_text).map_err(|e| {
+            log::error!(
+                "Failed to parse: {} - Response: {}",
+                e,
+                &response_text[..response_text.len().min(500)]
+            );
+            anyhow::anyhow!("Failed to parse collection: {}", e)
+        })?;
+
+        log::info!(
+            "Parsed collection '{}' with {} projects",
+            collection.name,
+            collection.projects.len()
+        );
+
+        if collection.projects.is_empty() {
+            return Ok((
+                collection.name,
+                collection.description,
+                String::new(),
+                String::new(),
+                Vec::new(),
+            ));
+        }
+
+        let project_ids = collection.projects.join(r#"",""#);
+        let projects_url = format!(
+            r#"https://api.modrinth.com/v2/projects?ids=["{}"]"#,
+            project_ids
+        );
+
+        log::debug!("Fetching projects from: {}", projects_url);
+
+        let projects_response = self
+            .client
+            .get(&projects_url)
+            .header("User-Agent", "MinecraftModDownloader/1.0")
+            .send()
+            .await?;
+
+        let projects_status = projects_response.status();
+        if !projects_status.is_success() {
+            let error_text = projects_response.text().await.unwrap_or_default();
+            log::warn!("Projects API error: {} - {}", projects_status, error_text);
+            // Return collection with just IDs if we can't fetch project names
+            let result: Vec<(String, String)> = collection
+                .projects
+                .into_iter()
+                .map(|id| (id.clone(), id))
+                .collect();
+            return Ok((
+                collection.name,
+                collection.description,
+                String::new(),
+                String::new(),
+                result,
+            ));
+        }
+
+        let projects: Vec<ModrinthProjectBasic> = projects_response.json().await?;
+
+        let project_map: std::collections::HashMap<String, String> = projects
+            .into_iter()
+            .map(|p| (p.id.clone(), p.title))
+            .collect();
+
+        let (recommended_version, recommended_loader) = self
+            .extract_recommended_from_projects(&collection.projects)
+            .await;
+
+        let result: Vec<(String, String)> = collection
+            .projects
+            .into_iter()
+            .map(|id| {
+                let name = project_map.get(&id).cloned().unwrap_or_else(|| id.clone());
+                (id, name)
+            })
+            .collect();
+
+        Ok((
+            collection.name,
+            collection.description,
+            recommended_version,
+            recommended_loader,
+            result,
+        ))
+    }
+
+    async fn extract_recommended_from_projects(&self, project_ids: &[String]) -> (String, String) {
+        use std::collections::HashMap;
+
+        let mut version_counts: HashMap<String, usize> = HashMap::new();
+        let mut loader_counts: HashMap<String, usize> = HashMap::new();
+
+        for project_id in project_ids.iter().take(5) {
+            match self.get_project_versions(project_id).await {
+                Ok(versions) => {
+                    for version in versions.iter().take(3) {
+                        for game_version in &version.game_versions {
+                            *version_counts.entry(game_version.clone()).or_insert(0) += 1;
+                        }
+                        for loader in &version.loaders {
+                            *loader_counts.entry(loader.clone()).or_insert(0) += 1;
+                        }
+                    }
+                }
+                Err(e) => log::debug!("Failed to fetch versions for {project_id}: {e}"),
+            }
+        }
+
+        let recommended_version = version_counts
+            .into_iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|(v, _)| v)
+            .unwrap_or_else(|| "1.20.1".to_string());
+
+        let recommended_loader = loader_counts
+            .into_iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|(l, _)| l)
+            .unwrap_or_else(|| "fabric".to_string());
+
+        log::info!(
+            "Recommended settings for collection: version={}, loader={}",
+            recommended_version,
+            recommended_loader
+        );
+
+        (recommended_version, recommended_loader)
+    }
+
+    async fn get_project_versions(&self, project_id: &str) -> anyhow::Result<Vec<ModrinthVersion>> {
+        let versions_url = format!("https://api.modrinth.com/v2/project/{project_id}/version");
+        let response = self
+            .client
+            .get(&versions_url)
+            .header("User-Agent", "MinecraftModDownloader/1.0")
+            .send()
+            .await?;
+
+        let versions: Vec<ModrinthVersion> = response.json().await?;
+        Ok(versions)
     }
 }

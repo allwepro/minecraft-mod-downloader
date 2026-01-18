@@ -6,8 +6,8 @@ mod windows;
 use panels::{MainPanel, SidebarPanel, TopPanel};
 pub use view_state::ViewState;
 use windows::{
-    CreateListWindow, ImportWindow, LegacyImportSettingsWindow, LegacyWindow, ListSettingsWindow,
-    SearchWindow, SettingsWindow,
+    CollectionImportWindow, CreateListWindow, ImportWindow, LegacyImportSettingsWindow,
+    LegacyWindow, ListSettingsWindow, SearchWindow, SettingsWindow,
 };
 
 use crate::app::{AppRuntime, AppState, Effect};
@@ -160,6 +160,12 @@ impl App {
         if self.view_state.legacy_import_settings_open {
             let window_effects =
                 LegacyImportSettingsWindow::show(ctx, &mut self.state, &mut self.view_state);
+            effects.extend(window_effects);
+        }
+
+        if self.view_state.collection_import_window_open {
+            let window_effects =
+                CollectionImportWindow::show(ctx, &mut self.state, &mut self.view_state);
             effects.extend(window_effects);
         }
 

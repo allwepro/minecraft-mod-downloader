@@ -61,6 +61,15 @@ pub struct ViewState {
     pub legacy_import_dir: String,
     pub legacy_import_mods: Option<Vec<Arc<ModInfo>>>,
     pub legacy_import_name: String,
+
+    // Collection import
+    pub collection_import_window_open: bool,
+    pub collection_import_input: String,
+    pub collection_import_loading: bool,
+    pub collection_import_error: Option<String>,
+
+    // Import popup state
+    pub import_popup_open: bool,
 }
 
 impl Default for ViewState {
@@ -107,6 +116,11 @@ impl Default for ViewState {
             legacy_import_dir: String::new(),
             legacy_import_mods: None,
             legacy_import_name: String::new(),
+            collection_import_window_open: false,
+            collection_import_input: String::new(),
+            collection_import_loading: false,
+            collection_import_error: None,
+            import_popup_open: false,
         }
     }
 }
@@ -120,6 +134,7 @@ impl ViewState {
         self.list_settings_open = false;
         self.create_list_window_open = false;
         self.legacy_import_settings_open = false;
+        self.collection_import_window_open = false;
     }
 
     pub fn reset_list_settings(&mut self) {
@@ -142,5 +157,11 @@ impl ViewState {
         self.legacy_import_dir.clear();
         self.legacy_import_mods = None;
         self.legacy_import_name.clear();
+    }
+
+    pub fn reset_collection_import(&mut self) {
+        self.collection_import_input.clear();
+        self.collection_import_loading = false;
+        self.collection_import_error = None;
     }
 }
