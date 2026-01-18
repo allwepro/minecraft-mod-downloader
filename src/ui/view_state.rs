@@ -39,6 +39,7 @@ pub struct ViewState {
     pub scroll_to_mod_id: Option<String>,
 
     // List settings inputs
+    pub list_settings_initial_load: bool,
     pub list_settings_version: String,
     pub list_settings_loader: String,
     pub list_settings_dir: String,
@@ -52,6 +53,7 @@ pub struct ViewState {
     pub new_list_version: String,
     pub new_list_loader: String,
     pub new_list_dir: String,
+    pub new_list_dir_edited: bool,
 
     // Legacy import/export
     pub legacy_import_version: String,
@@ -89,9 +91,11 @@ impl Default for ViewState {
             show_archived: false,
             show_unknown_mods: false,
             scroll_to_mod_id: None,
+            list_settings_initial_load: true,
             list_settings_version: String::new(),
             list_settings_loader: String::new(),
             list_settings_dir: String::new(),
+            new_list_dir_edited: false,
             app_settings_default_name: String::new(),
             new_list_name: String::new(),
             new_list_type: ProjectType::default(),
