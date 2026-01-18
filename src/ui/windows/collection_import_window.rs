@@ -4,6 +4,40 @@ use crate::ui::ViewState;
 use chrono::Utc;
 use eframe::egui;
 
+fn get_download_dir_for_type(state: &AppState, project_type: ProjectType) -> String {
+    let base_dir = if state.current_list_id.is_some() {
+        state.get_effective_download_dir()
+    } else {
+        String::new()
+    };
+
+    if base_dir.is_empty() {
+        return String::new();
+    }
+
+    match project_type {
+        ProjectType::Mod => {
+            format!("{}/mods", base_dir)
+        }
+        ProjectType::ResourcePack => {
+            format!("{}/resourcepacks", base_dir)
+        }
+        ProjectType::Shader => {
+            format!("{}/shaderpacks", base_dir)
+        }
+        ProjectType::Datapack => {
+            format!("{}/datapacks", base_dir)
+        }
+        ProjectType::Modpack => {
+            // Modpacks usually go to the base directory or a modpacks folder
+            base_dir
+        }
+        ProjectType::Plugin => {
+            format!("{}/plugins", base_dir)
+        }
+    }
+}
+
 pub struct CollectionImportWindow;
 
 impl CollectionImportWindow {
@@ -49,6 +83,28 @@ impl CollectionImportWindow {
                 })
                 .collect();
 
+            let (primary_content_type, download_dir) = if filtered_projects.is_empty() {
+                (ProjectType::Mod, String::new())
+            } else {
+                let mut unique_types: Vec<ProjectType> = filtered_projects
+                    .iter()
+                    .map(|(_, _, pt)| *pt)
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect();
+                unique_types.sort_by_key(|pt| format!("{:?}", pt));
+
+                let content_type = if unique_types.len() == 1 {
+                    unique_types[0]
+                } else {
+                    // Multiple types - use Mod as primary
+                    ProjectType::Mod
+                };
+
+                let dir = get_download_dir_for_type(state, content_type);
+                (content_type, dir)
+            };
+
             let mods: Vec<ModEntry> = filtered_projects
                 .into_iter()
                 .map(|(project_id, project_name, _)| ModEntry {
@@ -70,8 +126,8 @@ impl CollectionImportWindow {
                     id: collection.recommended_loader.clone(),
                     name: collection.recommended_loader.clone(),
                 },
-                download_dir: String::new(),
-                content_type: ProjectType::Mod,
+                download_dir,
+                content_type: primary_content_type,
             };
 
             view_state.import_name_input = collection.name;
