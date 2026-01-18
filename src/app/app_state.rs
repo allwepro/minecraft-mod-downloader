@@ -135,13 +135,11 @@ impl AppState {
                     self.default_list_name = default_list_name;
                     self.initial_loading = false;
 
+                    // Preloading just mod loaders
                     self.loaders_by_type.insert(ProjectType::Mod, mod_loaders);
                     self.loaders_loading.remove(&ProjectType::Mod);
 
                     self.effective_settings_cache.clear();
-
-                    let download_dir = self.get_effective_download_dir();
-                    effects.push(Effect::ValidateMetadata { download_dir });
 
                     effects.extend(self.invalidate_and_reload());
                 }
@@ -337,9 +335,8 @@ impl AppState {
     }
 
     pub fn get_effective_version(&self) -> String {
-        let Some(list) = self.get_current_list() else {
-            return self.default_version_fallback();
-        };
+        // The state of an unknown current list is an error, so it panics to prevent issues from providing arbitrary data.
+        let list = self.get_current_list().unwrap();
 
         if let Some((v, _, _)) = self.get_cached_effective_settings(&list.id) {
             return v;
@@ -349,9 +346,8 @@ impl AppState {
     }
 
     pub fn get_effective_loader(&self) -> String {
-        let Some(list) = self.get_current_list() else {
-            return self.default_loader_fallback(ProjectType::Mod);
-        };
+        // The state of an unknown current list is an error, so it panics to prevent issues from providing arbitrary data.
+        let list = self.get_current_list().unwrap();
 
         if let Some((_, l, _)) = self.get_cached_effective_settings(&list.id) {
             return l;
@@ -361,9 +357,8 @@ impl AppState {
     }
 
     pub fn get_effective_download_dir(&self) -> String {
-        let Some(list) = self.get_current_list() else {
-            return self.default_dir_fallback(ProjectType::Mod);
-        };
+        // The state of an unknown current list is an error, so it panics to prevent issues from providing arbitrary data.
+        let list = self.get_current_list().unwrap();
 
         if let Some((_, _, d)) = self.get_cached_effective_settings(&list.id) {
             return d;
@@ -373,6 +368,10 @@ impl AppState {
     }
 
     pub fn invalidate_and_reload(&mut self) -> Vec<Effect> {
+        if self.current_list_id.is_none() {
+            log::info!("No current list selected, skipping invalidate_and_reload");
+            return Vec::new();
+        }
         let current_version = self.get_effective_version();
         let current_loader = self.get_effective_loader();
 
@@ -685,7 +684,7 @@ impl AppState {
             .loaders_for_type(content_type)
             .and_then(|loaders| loaders.iter().find(|l| l.id == loader).cloned())
             .or_else(|| self.mod_loaders.iter().find(|l| l.id == loader).cloned())
-            .unwrap_or(crate::domain::ModLoader {
+            .unwrap_or(ModLoader {
                 id: loader.clone(),
                 name: loader.clone(),
             });

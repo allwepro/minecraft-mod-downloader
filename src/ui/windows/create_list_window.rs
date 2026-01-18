@@ -27,11 +27,12 @@ impl CreateListWindow {
         {
             view_state.new_list_loader = loaders[0].id.clone();
         }
-        if view_state.new_list_dir.is_empty()
+        if (view_state.new_list_dir.is_empty() || !view_state.new_list_dir_edited)
             && let Some(default_dir) =
-                ConfigManager::get_default_minecraft_download_dir(ProjectType::Mod)
+                ConfigManager::get_default_minecraft_download_dir(view_state.new_list_type)
         {
             view_state.new_list_dir = default_dir.to_string_lossy().to_string();
+            view_state.new_list_dir_edited = false;
         }
 
         let overlay = egui::Area::new(egui::Id::new("create_list_overlay"))
@@ -183,10 +184,17 @@ impl CreateListWindow {
 
                 ui.label("Download Directory:");
                 ui.horizontal(|ui| {
-                    ui.text_edit_singleline(&mut view_state.new_list_dir);
-                    if ui.button("Browse...").clicked()
-                        && let Some(path) = Dialogs::pick_minecraft_mods_folder()
+                    if ui
+                        .text_edit_singleline(&mut view_state.new_list_dir)
+                        .changed()
                     {
+                        view_state.new_list_dir_edited = true;
+                    };
+                    if ui.button("Browse...").clicked()
+                        && let Some(path) =
+                            Dialogs::pick_minecraft_mods_folder(view_state.new_list_type)
+                    {
+                        view_state.new_list_dir_edited = true;
                         view_state.new_list_dir = path.to_string_lossy().to_string();
                     }
                 });
