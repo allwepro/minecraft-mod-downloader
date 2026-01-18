@@ -75,7 +75,7 @@ struct ModrinthCollection {
     #[serde(default)]
     name: String,
     #[serde(default, alias = "title")]
-    description: String,
+    description: Option<String>,
     #[serde(default, alias = "project_ids")]
     projects: Vec<String>,
 }
@@ -704,7 +704,7 @@ impl ModrinthProvider {
         if collection.projects.is_empty() {
             return Ok((
                 collection.name,
-                collection.description,
+                collection.description.unwrap_or_default(),
                 String::new(),
                 String::new(),
                 Vec::new(),
@@ -738,7 +738,7 @@ impl ModrinthProvider {
                 .collect();
             return Ok((
                 collection.name,
-                collection.description,
+                collection.description.unwrap_or_default(),
                 String::new(),
                 String::new(),
                 result,
@@ -772,7 +772,7 @@ impl ModrinthProvider {
             .into_iter()
             .map(|id| {
                 if let Some((name, pt)) = project_map.get(&id) {
-                    (id, name.clone(), pt.clone())
+                    (id, name.clone(), *pt)
                 } else {
                     (id.clone(), id, ProjectType::Mod)
                 }
@@ -781,7 +781,7 @@ impl ModrinthProvider {
 
         Ok((
             collection.name,
-            collection.description,
+            collection.description.unwrap_or_default(),
             recommended_version,
             recommended_loader,
             result,
