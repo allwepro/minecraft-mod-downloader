@@ -71,16 +71,17 @@ impl CollectionImportWindow {
             view_state.reset_collection_import();
 
             // Projects are already filtered by the API based on selected_type
-            let filtered_projects: Vec<(String, String, ProjectType)> = collection
-                .projects
-                .into_iter()
-                .collect();
+            let filtered_projects: Vec<(String, String, ProjectType)> =
+                collection.projects.into_iter().collect();
 
             let (primary_content_type, download_dir) = if filtered_projects.is_empty() {
                 (ProjectType::Mod, String::new())
             } else {
                 // Since all projects are of the same type (filtered by API), use that type
-                let content_type = filtered_projects.first().map(|(_, _, pt)| *pt).unwrap_or(ProjectType::Mod);
+                let content_type = filtered_projects
+                    .first()
+                    .map(|(_, _, pt)| *pt)
+                    .unwrap_or(ProjectType::Mod);
                 let dir = get_download_dir_for_type(state, content_type);
                 (content_type, dir)
             };

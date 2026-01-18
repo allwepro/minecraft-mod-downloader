@@ -553,7 +553,10 @@ impl AppRuntime {
                 let tx = self.event_tx.clone();
 
                 self.rt_handle.spawn(async move {
-                    match modrinth.fetch_collection(&collection_id, selected_type).await {
+                    match modrinth
+                        .fetch_collection(&collection_id, selected_type)
+                        .await
+                    {
                         Ok((name, _, recommended_version, recommended_loader, projects)) => {
                             let _ = tx
                                 .send(Event::ModrinthCollectionLoaded {
