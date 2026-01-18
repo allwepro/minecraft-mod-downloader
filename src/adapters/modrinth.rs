@@ -84,6 +84,7 @@ struct ModrinthCollection {
 struct ModrinthProjectBasic {
     id: String,
     title: String,
+    project_type: String,
 }
 
 fn calculate_version_distance(target: &[u32], candidate: &[u32]) -> i64 {
@@ -588,6 +589,10 @@ impl ModProvider for ModrinthProvider {
                 id: "datapack".to_string(),
                 name: "Vanilla".to_string(),
             }],
+            ProjectType::Modpack => vec![ModLoader {
+                id: "modpack".to_string(),
+                name: "Modpack".to_string(),
+            }],
         })
     }
 
@@ -638,7 +643,13 @@ impl ModrinthProvider {
     pub async fn fetch_collection(
         &self,
         collection_id: &str,
-    ) -> anyhow::Result<(String, String, String, String, Vec<(String, String)>)> {
+    ) -> anyhow::Result<(
+        String,
+        String,
+        String,
+        String,
+        Vec<(String, String, ProjectType)>,
+    )> {
         let collection_url = format!("https://api.modrinth.com/v3/collection/{collection_id}");
 
         log::info!("Fetching collection from: {}", collection_url);
@@ -720,10 +731,10 @@ impl ModrinthProvider {
             let error_text = projects_response.text().await.unwrap_or_default();
             log::warn!("Projects API error: {} - {}", projects_status, error_text);
             // Return collection with just IDs if we can't fetch project names
-            let result: Vec<(String, String)> = collection
+            let result: Vec<(String, String, ProjectType)> = collection
                 .projects
                 .into_iter()
-                .map(|id| (id.clone(), id))
+                .map(|id| (id.clone(), id, ProjectType::Mod))
                 .collect();
             return Ok((
                 collection.name,
@@ -736,21 +747,35 @@ impl ModrinthProvider {
 
         let projects: Vec<ModrinthProjectBasic> = projects_response.json().await?;
 
-        let project_map: std::collections::HashMap<String, String> = projects
+        let project_map: std::collections::HashMap<String, (String, ProjectType)> = projects
             .into_iter()
-            .map(|p| (p.id.clone(), p.title))
+            .map(|p| {
+                let pt = match p.project_type.as_str() {
+                    "mod" => ProjectType::Mod,
+                    "resourcepack" => ProjectType::ResourcePack,
+                    "shader" => ProjectType::Shader,
+                    "datapack" => ProjectType::Datapack,
+                    "modpack" => ProjectType::Modpack,
+                    "plugin" => ProjectType::Plugin,
+                    _ => ProjectType::Mod,
+                };
+                (p.id.clone(), (p.title, pt))
+            })
             .collect();
 
         let (recommended_version, recommended_loader) = self
             .extract_recommended_from_projects(&collection.projects)
             .await;
 
-        let result: Vec<(String, String)> = collection
+        let result: Vec<(String, String, ProjectType)> = collection
             .projects
             .into_iter()
             .map(|id| {
-                let name = project_map.get(&id).cloned().unwrap_or_else(|| id.clone());
-                (id, name)
+                if let Some((name, pt)) = project_map.get(&id) {
+                    (id, name.clone(), pt.clone())
+                } else {
+                    (id.clone(), id, ProjectType::Mod)
+                }
             })
             .collect();
 

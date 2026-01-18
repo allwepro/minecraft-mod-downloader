@@ -36,10 +36,22 @@ impl CollectionImportWindow {
             view_state.collection_import_window_open = false;
             view_state.reset_collection_import();
 
-            let mods: Vec<ModEntry> = collection
+            let filtered_projects: Vec<(String, String, ProjectType)> = collection
                 .projects
                 .into_iter()
-                .map(|(project_id, project_name)| ModEntry {
+                .filter(|(_, _, project_type)| match project_type {
+                    ProjectType::Mod => view_state.collection_import_filter_mods,
+                    ProjectType::ResourcePack => view_state.collection_import_filter_resourcepacks,
+                    ProjectType::Shader => view_state.collection_import_filter_shaders,
+                    ProjectType::Datapack => view_state.collection_import_filter_datapacks,
+                    ProjectType::Modpack => view_state.collection_import_filter_modpacks,
+                    ProjectType::Plugin => view_state.collection_import_filter_plugins,
+                })
+                .collect();
+
+            let mods: Vec<ModEntry> = filtered_projects
+                .into_iter()
+                .map(|(project_id, project_name, _)| ModEntry {
                     mod_id: project_id,
                     mod_name: project_name,
                     added_at: Utc::now(),
@@ -126,6 +138,52 @@ impl CollectionImportWindow {
                     )
                     .small()
                     .weak(),
+                );
+
+                ui.add_space(12.0);
+
+                ui.label("Select content types to import:");
+                ui.add_space(4.0);
+
+                let filter_enabled = !view_state.collection_import_loading;
+                ui.add_enabled(
+                    filter_enabled,
+                    egui::Checkbox::new(&mut view_state.collection_import_filter_mods, "🔧 Mods"),
+                );
+                ui.add_enabled(
+                    filter_enabled,
+                    egui::Checkbox::new(
+                        &mut view_state.collection_import_filter_resourcepacks,
+                        "🎨 Resourcepacks",
+                    ),
+                );
+                ui.add_enabled(
+                    filter_enabled,
+                    egui::Checkbox::new(
+                        &mut view_state.collection_import_filter_shaders,
+                        "✨ Shader",
+                    ),
+                );
+                ui.add_enabled(
+                    filter_enabled,
+                    egui::Checkbox::new(
+                        &mut view_state.collection_import_filter_datapacks,
+                        "📦 Datapacks",
+                    ),
+                );
+                ui.add_enabled(
+                    filter_enabled,
+                    egui::Checkbox::new(
+                        &mut view_state.collection_import_filter_modpacks,
+                        "📚 Modpacks",
+                    ),
+                );
+                ui.add_enabled(
+                    filter_enabled,
+                    egui::Checkbox::new(
+                        &mut view_state.collection_import_filter_plugins,
+                        "⚙️ Plugins",
+                    ),
                 );
 
                 if let Some(ref error) = view_state.collection_import_error {

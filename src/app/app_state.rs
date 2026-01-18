@@ -11,7 +11,7 @@ pub struct PendingCollection {
     pub name: String,
     pub recommended_version: String,
     pub recommended_loader: String,
-    pub projects: Vec<(String, String)>, // (project_id, project_name)
+    pub projects: Vec<(String, String, ProjectType)>, // (project_id, project_name, project_type)
 }
 
 pub struct AppState {

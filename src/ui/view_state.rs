@@ -67,6 +67,12 @@ pub struct ViewState {
     pub collection_import_input: String,
     pub collection_import_loading: bool,
     pub collection_import_error: Option<String>,
+    pub collection_import_filter_mods: bool,
+    pub collection_import_filter_resourcepacks: bool,
+    pub collection_import_filter_shaders: bool,
+    pub collection_import_filter_datapacks: bool,
+    pub collection_import_filter_modpacks: bool,
+    pub collection_import_filter_plugins: bool,
 
     // Import popup state
     pub import_popup_open: bool,
@@ -120,6 +126,12 @@ impl Default for ViewState {
             collection_import_input: String::new(),
             collection_import_loading: false,
             collection_import_error: None,
+            collection_import_filter_mods: true,
+            collection_import_filter_resourcepacks: true,
+            collection_import_filter_shaders: true,
+            collection_import_filter_datapacks: true,
+            collection_import_filter_modpacks: true,
+            collection_import_filter_plugins: true,
             import_popup_open: false,
         }
     }
@@ -163,5 +175,11 @@ impl ViewState {
         self.collection_import_input.clear();
         self.collection_import_loading = false;
         self.collection_import_error = None;
+        self.collection_import_filter_mods = true;
+        self.collection_import_filter_resourcepacks = true;
+        self.collection_import_filter_shaders = true;
+        self.collection_import_filter_datapacks = true;
+        self.collection_import_filter_modpacks = true;
+        self.collection_import_filter_plugins = true;
     }
 }
