@@ -70,37 +70,17 @@ impl CollectionImportWindow {
             view_state.collection_import_window_open = false;
             view_state.reset_collection_import();
 
+            // Projects are already filtered by the API based on selected_type
             let filtered_projects: Vec<(String, String, ProjectType)> = collection
                 .projects
                 .into_iter()
-                .filter(|(_, _, project_type)| match project_type {
-                    ProjectType::Mod => view_state.collection_import_filter_mods,
-                    ProjectType::ResourcePack => view_state.collection_import_filter_resourcepacks,
-                    ProjectType::Shader => view_state.collection_import_filter_shaders,
-                    ProjectType::Datapack => view_state.collection_import_filter_datapacks,
-                    ProjectType::Modpack => view_state.collection_import_filter_modpacks,
-                    ProjectType::Plugin => view_state.collection_import_filter_plugins,
-                })
                 .collect();
 
             let (primary_content_type, download_dir) = if filtered_projects.is_empty() {
                 (ProjectType::Mod, String::new())
             } else {
-                let mut unique_types: Vec<ProjectType> = filtered_projects
-                    .iter()
-                    .map(|(_, _, pt)| *pt)
-                    .collect::<std::collections::HashSet<_>>()
-                    .into_iter()
-                    .collect();
-                unique_types.sort_by_key(|pt| format!("{:?}", pt));
-
-                let content_type = if unique_types.len() == 1 {
-                    unique_types[0]
-                } else {
-                    // Multiple types - use Mod as primary
-                    ProjectType::Mod
-                };
-
+                // Since all projects are of the same type (filtered by API), use that type
+                let content_type = filtered_projects.first().map(|(_, _, pt)| *pt).unwrap_or(ProjectType::Mod);
                 let dir = get_download_dir_for_type(state, content_type);
                 (content_type, dir)
             };
@@ -198,49 +178,35 @@ impl CollectionImportWindow {
 
                 ui.add_space(12.0);
 
-                ui.label("Select content types to import:");
+                ui.label("Select content type to import:");
                 ui.add_space(4.0);
 
-                let filter_enabled = !view_state.collection_import_loading;
-                ui.add_enabled(
-                    filter_enabled,
-                    egui::Checkbox::new(&mut view_state.collection_import_filter_mods, "🔧 Mods"),
-                );
-                ui.add_enabled(
-                    filter_enabled,
-                    egui::Checkbox::new(
-                        &mut view_state.collection_import_filter_resourcepacks,
-                        "🎨 Resourcepacks",
-                    ),
-                );
-                ui.add_enabled(
-                    filter_enabled,
-                    egui::Checkbox::new(
-                        &mut view_state.collection_import_filter_shaders,
-                        "✨ Shader",
-                    ),
-                );
-                ui.add_enabled(
-                    filter_enabled,
-                    egui::Checkbox::new(
-                        &mut view_state.collection_import_filter_datapacks,
-                        "📦 Datapacks",
-                    ),
-                );
-                ui.add_enabled(
-                    filter_enabled,
-                    egui::Checkbox::new(
-                        &mut view_state.collection_import_filter_modpacks,
-                        "📚 Modpacks",
-                    ),
-                );
-                ui.add_enabled(
-                    filter_enabled,
-                    egui::Checkbox::new(
-                        &mut view_state.collection_import_filter_plugins,
-                        "⚙️ Plugins",
-                    ),
-                );
+                let content_types = vec![
+                    (ProjectType::Mod, "🔧 Mods"),
+                    (ProjectType::ResourcePack, "🎨 Resourcepacks"),
+                    (ProjectType::Shader, "✨ Shader"),
+                    (ProjectType::Datapack, "📦 Datapacks"),
+                    (ProjectType::Modpack, "📚 Modpacks"),
+                    (ProjectType::Plugin, "⚙️ Plugins"),
+                ];
+
+                let selected_text = content_types
+                    .iter()
+                    .find(|(pt, _)| *pt == view_state.collection_import_selected_type)
+                    .map(|(_, label)| label)
+                    .unwrap_or(&"Mods");
+
+                egui::ComboBox::from_id_salt("collection_import_type")
+                    .selected_text(*selected_text)
+                    .show_ui(ui, |ui| {
+                        for (content_type, label) in content_types {
+                            ui.selectable_value(
+                                &mut view_state.collection_import_selected_type,
+                                content_type,
+                                label,
+                            );
+                        }
+                    });
 
                 if let Some(ref error) = view_state.collection_import_error {
                     ui.add_space(8.0);
@@ -289,12 +255,7 @@ impl CollectionImportWindow {
             view_state.collection_import_error = None;
             effects.push(Effect::ImportModrinthCollection {
                 collection_id,
-                filter_mods: view_state.collection_import_filter_mods,
-                filter_resourcepacks: view_state.collection_import_filter_resourcepacks,
-                filter_shaders: view_state.collection_import_filter_shaders,
-                filter_datapacks: view_state.collection_import_filter_datapacks,
-                filter_modpacks: view_state.collection_import_filter_modpacks,
-                filter_plugins: view_state.collection_import_filter_plugins,
+                selected_type: view_state.collection_import_selected_type,
             });
         }
 

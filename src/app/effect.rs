@@ -88,11 +88,6 @@ pub enum Effect {
 
     ImportModrinthCollection {
         collection_id: String,
-        filter_mods: bool,
-        filter_resourcepacks: bool,
-        filter_shaders: bool,
-        filter_datapacks: bool,
-        filter_modpacks: bool,
-        filter_plugins: bool,
+        selected_type: ProjectType,
     },
 }

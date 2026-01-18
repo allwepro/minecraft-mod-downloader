@@ -547,29 +547,13 @@ impl AppRuntime {
 
             Effect::ImportModrinthCollection {
                 collection_id,
-                filter_mods,
-                filter_resourcepacks,
-                filter_shaders,
-                filter_datapacks,
-                filter_modpacks,
-                filter_plugins,
+                selected_type,
             } => {
                 let modrinth = self.api_service.modrinth.clone();
                 let tx = self.event_tx.clone();
 
                 self.rt_handle.spawn(async move {
-                    match modrinth
-                        .fetch_collection(
-                            &collection_id,
-                            filter_mods,
-                            filter_resourcepacks,
-                            filter_shaders,
-                            filter_datapacks,
-                            filter_modpacks,
-                            filter_plugins,
-                        )
-                        .await
-                    {
+                    match modrinth.fetch_collection(&collection_id, selected_type).await {
                         Ok((name, _, recommended_version, recommended_loader, projects)) => {
                             let _ = tx
                                 .send(Event::ModrinthCollectionLoaded {
