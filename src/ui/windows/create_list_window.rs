@@ -184,11 +184,15 @@ impl CreateListWindow {
 
                 ui.label("Download Directory:");
                 ui.horizontal(|ui| {
-                    if ui.text_edit_singleline(&mut view_state.new_list_dir).changed() {
+                    if ui
+                        .text_edit_singleline(&mut view_state.new_list_dir)
+                        .changed()
+                    {
                         view_state.new_list_dir_edited = true;
                     };
                     if ui.button("Browse...").clicked()
-                        && let Some(path) = Dialogs::pick_minecraft_mods_folder(view_state.new_list_type)
+                        && let Some(path) =
+                            Dialogs::pick_minecraft_mods_folder(view_state.new_list_type)
                     {
                         view_state.new_list_dir_edited = true;
                         view_state.new_list_dir = path.to_string_lossy().to_string();

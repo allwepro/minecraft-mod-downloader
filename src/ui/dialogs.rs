@@ -15,9 +15,7 @@ impl Dialogs {
                 .pick_folder();
         }
 
-        FileDialog::new()
-            .set_title("Select Folder")
-            .pick_folder()
+        FileDialog::new().set_title("Select Folder").pick_folder()
     }
 
     pub fn save_export_list_file(default_name: &str) -> Option<PathBuf> {
