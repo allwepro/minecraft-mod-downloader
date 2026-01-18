@@ -36,6 +36,7 @@ pub struct ViewState {
     pub sort_popup_rect: egui::Rect,
     pub show_archived: bool,
     pub show_unknown_mods: bool,
+    pub scroll_to_mod_id: Option<String>,
 
     // List settings inputs
     pub list_settings_version: String,
@@ -87,6 +88,7 @@ impl Default for ViewState {
             sort_popup_rect: egui::Rect::NOTHING,
             show_archived: false,
             show_unknown_mods: false,
+            scroll_to_mod_id: None,
             list_settings_version: String::new(),
             list_settings_loader: String::new(),
             list_settings_dir: String::new(),
