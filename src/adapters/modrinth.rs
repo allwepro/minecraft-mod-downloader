@@ -643,6 +643,12 @@ impl ModrinthProvider {
     pub async fn fetch_collection(
         &self,
         collection_id: &str,
+        filter_mods: bool,
+        filter_resourcepacks: bool,
+        filter_shaders: bool,
+        filter_datapacks: bool,
+        filter_modpacks: bool,
+        filter_plugins: bool,
     ) -> anyhow::Result<(
         String,
         String,
@@ -767,15 +773,27 @@ impl ModrinthProvider {
             .extract_recommended_from_projects(&collection.projects)
             .await;
 
+        // Filter projects based on selected types
         let result: Vec<(String, String, ProjectType)> = collection
             .projects
             .into_iter()
-            .map(|id| {
-                if let Some((name, pt)) = project_map.get(&id) {
-                    (id, name.clone(), *pt)
-                } else {
-                    (id.clone(), id, ProjectType::Mod)
-                }
+            .filter_map(|id| {
+                project_map.get(&id).and_then(|(name, pt)| {
+                    let is_filtered = match pt {
+                        ProjectType::Mod => filter_mods,
+                        ProjectType::ResourcePack => filter_resourcepacks,
+                        ProjectType::Shader => filter_shaders,
+                        ProjectType::Datapack => filter_datapacks,
+                        ProjectType::Modpack => filter_modpacks,
+                        ProjectType::Plugin => filter_plugins,
+                    };
+
+                    if is_filtered {
+                        Some((id, name.clone(), *pt))
+                    } else {
+                        None
+                    }
+                })
             })
             .collect();
 

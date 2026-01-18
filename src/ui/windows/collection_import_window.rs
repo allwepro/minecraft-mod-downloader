@@ -287,7 +287,15 @@ impl CollectionImportWindow {
         {
             view_state.collection_import_loading = true;
             view_state.collection_import_error = None;
-            effects.push(Effect::ImportModrinthCollection { collection_id });
+            effects.push(Effect::ImportModrinthCollection {
+                collection_id,
+                filter_mods: view_state.collection_import_filter_mods,
+                filter_resourcepacks: view_state.collection_import_filter_resourcepacks,
+                filter_shaders: view_state.collection_import_filter_shaders,
+                filter_datapacks: view_state.collection_import_filter_datapacks,
+                filter_modpacks: view_state.collection_import_filter_modpacks,
+                filter_plugins: view_state.collection_import_filter_plugins,
+            });
         }
 
         view_state.collection_import_window_open = is_open || view_state.collection_import_loading;
