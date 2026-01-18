@@ -776,6 +776,11 @@ impl AppState {
         order_mode: OrderMode,
         filter_mode: FilterMode,
     ) -> Vec<ModEntry> {
+        // If no list is selected, return empty
+        if self.current_list_id.is_none() {
+            return Vec::new();
+        }
+
         let query = query.to_lowercase();
         let effective_version = self.get_effective_version();
         let effective_loader = self.get_effective_loader();
@@ -880,6 +885,11 @@ impl AppState {
     }
 
     pub fn get_missing_mod_ids(&self, filtered_mods: &[ModEntry]) -> Vec<String> {
+        // If no list is selected, return empty
+        if self.current_list_id.is_none() {
+            return Vec::new();
+        }
+
         let download_dir = self.get_effective_download_dir();
         let effective_version = self.get_effective_version();
         let effective_loader = self.get_effective_loader();
