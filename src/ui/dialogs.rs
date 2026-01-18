@@ -5,18 +5,18 @@ use std::path::PathBuf;
 pub struct Dialogs;
 
 impl Dialogs {
-    pub fn pick_minecraft_mods_folder() -> Option<PathBuf> {
+    pub fn pick_minecraft_mods_folder(project_type: ProjectType) -> Option<PathBuf> {
         if let Some(default_path) =
-            crate::infra::ConfigManager::get_default_minecraft_download_dir(ProjectType::Mod)
+            crate::infra::ConfigManager::get_default_minecraft_download_dir(project_type)
         {
             return FileDialog::new()
-                .set_title("Select Minecraft Mods Folder")
+                .set_title("Select Folder")
                 .set_directory(&default_path)
                 .pick_folder();
         }
 
         FileDialog::new()
-            .set_title("Select Minecraft Mods Folder")
+            .set_title("Select Folder")
             .pick_folder()
     }
 
@@ -26,6 +26,7 @@ impl Dialogs {
             .add_filter("Legacy Mod List", &["mods", "all-mods", "queue-mods"])
             .set_title("Export List")
             .set_file_name(format!("{default_name}.mmd"))
+            //.set_directory(dirs::desktop_dir().unwrap_or_else(|| PathBuf::from(".")))
             .save_file()
     }
 
@@ -33,6 +34,8 @@ impl Dialogs {
         FileDialog::new()
             .add_filter("MMD List", &["mmd"])
             .add_filter("Legacy Mod List", &["mods", "all-mods", "queue-mods"])
+            .set_title("Import List")
+            //.set_directory(dirs::desktop_dir().unwrap_or_else(|| PathBuf::from(".")))
             .pick_file()
     }
 }
