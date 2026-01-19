@@ -2,6 +2,7 @@ use crate::app::{AppRuntime, AppState, Effect, ListAction};
 use crate::domain::ModList;
 use crate::ui::{ViewState, dialogs::Dialogs};
 use eframe::egui;
+use egui::Color32;
 
 pub struct SidebarPanel;
 
@@ -16,8 +17,8 @@ impl SidebarPanel {
 
         egui::SidePanel::left("sidebar_panel")
             .resizable(true)
-            .default_width(180.0)
-            .width_range(150.0..=400.0)
+            .default_width(250.0)
+            .width_range(200.0..=500.0)
             .show(ctx, |ui| {
                 ui.add_space(4.0);
                 ui.add(
@@ -28,7 +29,7 @@ impl SidebarPanel {
 
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    let button_width = ui.available_width() - 35.0; // Space for one small button
+                    let button_width = ui.available_width() - 35.0;
                     if ui
                         .add_sized([button_width, 25.0], egui::Button::new("➕ New List"))
                         .clicked()
@@ -71,7 +72,14 @@ impl SidebarPanel {
                             .show(ui.ctx(), |ui| {
                                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                                     ui.set_min_width(150.0);
-                                    if ui.button("📄 From File...").clicked() {
+                                    if ui
+                                        .add(
+                                            egui::Button::new("📄 From File")
+                                                .min_size(egui::vec2(150.0, 0.0))
+                                                .fill(Color32::TRANSPARENT),
+                                        )
+                                        .clicked()
+                                    {
                                         view_state.import_popup_open = false;
                                         if let Some(path) = Dialogs::pick_import_list_file() {
                                             match path.extension().and_then(|s| s.to_str()) {
@@ -97,7 +105,14 @@ impl SidebarPanel {
                                             }
                                         }
                                     }
-                                    if ui.button("🔗 Modrinth Collection...").clicked() {
+                                    if ui
+                                        .add(
+                                            egui::Button::new("🌐 Modrinth Collection")
+                                                .min_size(egui::vec2(150.0, 0.0))
+                                                .fill(Color32::TRANSPARENT),
+                                        )
+                                        .clicked()
+                                    {
                                         view_state.import_popup_open = false;
                                         view_state.reset_collection_import();
                                         view_state.collection_import_window_open = true;

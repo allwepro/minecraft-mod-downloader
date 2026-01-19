@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub mod mod_source;
@@ -36,8 +37,6 @@ pub enum ProjectType {
     Shader,
     #[serde(rename = "datapack")]
     Datapack,
-    #[serde(rename = "modpack")]
-    Modpack,
     #[serde(rename = "plugin")]
     Plugin,
 }
@@ -49,7 +48,6 @@ impl ProjectType {
             ProjectType::ResourcePack => "resourcepack",
             ProjectType::Shader => "shader",
             ProjectType::Datapack => "datapack",
-            ProjectType::Modpack => "modpack",
             ProjectType::Plugin => "plugin",
         }
     }
@@ -60,7 +58,6 @@ impl ProjectType {
             ProjectType::ResourcePack => "Resource Pack",
             ProjectType::Shader => "Shader",
             ProjectType::Datapack => "Data Pack",
-            ProjectType::Modpack => "Modpack",
             ProjectType::Plugin => "Plugin",
         }
     }
@@ -71,7 +68,6 @@ impl ProjectType {
             ProjectType::ResourcePack => "zip",
             ProjectType::Shader => "zip",
             ProjectType::Datapack => "zip",
-            ProjectType::Modpack => "zip",
             ProjectType::Plugin => "jar",
         }
     }
@@ -82,7 +78,6 @@ impl ProjectType {
             ProjectType::ResourcePack => "🖼",
             ProjectType::Shader => "✨",
             ProjectType::Datapack => "📦",
-            ProjectType::Modpack => "📚",
             ProjectType::Plugin => "🔌",
         }
     }
@@ -231,10 +226,9 @@ pub enum Event {
         download_dir: String,
         metadata: DownloadMetadata,
     },
-    ModrinthCollectionLoaded {
+    ModrinthCollection {
         name: String,
-        recommended_version: String,
-        recommended_loader: String,
+        project_type_suggestions: HashMap<ProjectType, (String, ModLoader)>, // (recommended_version, recommended_loader)
         projects: Vec<(String, String, ProjectType)>, // (project_id, project_name, project_type)
     },
     ModrinthCollectionFailed {

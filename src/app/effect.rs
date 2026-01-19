@@ -88,6 +88,5 @@ pub enum Effect {
 
     ImportModrinthCollection {
         collection_id: String,
-        selected_type: ProjectType,
     },
 }

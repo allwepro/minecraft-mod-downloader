@@ -545,24 +545,17 @@ impl AppRuntime {
                 });
             }
 
-            Effect::ImportModrinthCollection {
-                collection_id,
-                selected_type,
-            } => {
+            Effect::ImportModrinthCollection { collection_id } => {
                 let modrinth = self.api_service.modrinth.clone();
                 let tx = self.event_tx.clone();
 
                 self.rt_handle.spawn(async move {
-                    match modrinth
-                        .fetch_collection(&collection_id, selected_type)
-                        .await
-                    {
-                        Ok((name, _, recommended_version, recommended_loader, projects)) => {
+                    match modrinth.fetch_collection(&collection_id).await {
+                        Ok((name, project_type_suggestions, projects)) => {
                             let _ = tx
-                                .send(Event::ModrinthCollectionLoaded {
+                                .send(Event::ModrinthCollection {
                                     name,
-                                    recommended_version,
-                                    recommended_loader,
+                                    project_type_suggestions,
                                     projects,
                                 })
                                 .await;

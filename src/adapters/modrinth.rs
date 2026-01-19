@@ -2,6 +2,7 @@ use crate::domain::{MinecraftVersion, ModInfo, ModLoader, ModProvider, ProjectTy
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct ModrinthProvider {
@@ -46,7 +47,13 @@ struct ModrinthProjectDetails {
     #[serde(default)]
     team: String,
     downloads: u32,
+    #[allow(dead_code)]
+    #[serde(default)]
+    versions: Vec<String>,
     icon_url: String,
+    #[allow(dead_code)]
+    #[serde(default)]
+    categories: Vec<String>,
     project_type: String,
 }
 
@@ -74,17 +81,20 @@ struct ModrinthGameVersion {
 struct ModrinthCollection {
     #[serde(default)]
     name: String,
+    #[allow(dead_code)]
     #[serde(default, alias = "title")]
     description: Option<String>,
-    #[serde(default, alias = "project_ids")]
-    projects: Vec<String>,
+    #[serde(default)]
+    projects: Vec<serde_json::Value>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct ModrinthProjectBasic {
     id: String,
     title: String,
     project_type: String,
+    #[serde(default)]
+    loaders: Vec<String>,
 }
 
 fn calculate_version_distance(target: &[u32], candidate: &[u32]) -> i64 {
@@ -376,10 +386,7 @@ impl ModProvider for ModrinthProvider {
                 let download_url = compatible_version
                     .files
                     .first()
-                    .map(|f| {
-                        log::debug!("Download URL: {}", f.url);
-                        f.url.clone()
-                    })
+                    .map(|f| f.url.clone())
                     .unwrap_or_default();
 
                 (
@@ -407,12 +414,7 @@ impl ModProvider for ModrinthProvider {
                     .into_iter()
                     .collect();
 
-                (
-                    String::new(), // No specific version
-                    String::new(), // No download URL
-                    all_versions,
-                    all_loaders,
-                )
+                (String::new(), String::new(), all_versions, all_loaders)
             };
 
         log::debug!(
@@ -589,10 +591,6 @@ impl ModProvider for ModrinthProvider {
                 id: "datapack".to_string(),
                 name: "Vanilla".to_string(),
             }],
-            ProjectType::Modpack => vec![ModLoader {
-                id: "modpack".to_string(),
-                name: "Modpack".to_string(),
-            }],
         })
     }
 
@@ -643,17 +641,12 @@ impl ModrinthProvider {
     pub async fn fetch_collection(
         &self,
         collection_id: &str,
-        selected_type: ProjectType,
     ) -> anyhow::Result<(
         String,
-        String,
-        String,
-        String,
+        HashMap<ProjectType, (String, ModLoader)>,
         Vec<(String, String, ProjectType)>,
     )> {
         let collection_url = format!("https://api.modrinth.com/v3/collection/{collection_id}");
-
-        log::info!("Fetching collection from: {}", collection_url);
 
         let response = self
             .client
@@ -663,7 +656,6 @@ impl ModrinthProvider {
             .await?;
 
         let status = response.status();
-        log::info!("Collection API response status: {}", status);
 
         if status == reqwest::StatusCode::NOT_FOUND {
             anyhow::bail!(
@@ -673,52 +665,41 @@ impl ModrinthProvider {
 
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            log::error!("Collection API error: {} - {}", status, error_text);
-            anyhow::bail!("API error: {} - {}", status, error_text);
+            anyhow::bail!("API error: {status} - {error_text}");
         }
 
         let response_text = response.text().await?;
-        log::info!(
-            "Collection API response length: {} bytes",
-            response_text.len()
-        );
-        log::debug!(
-            "Collection API response: {}",
-            &response_text[..response_text.len().min(1000)]
-        );
-
-        let collection: ModrinthCollection = serde_json::from_str(&response_text).map_err(|e| {
-            log::error!(
-                "Failed to parse: {} - Response: {}",
-                e,
-                &response_text[..response_text.len().min(500)]
-            );
-            anyhow::anyhow!("Failed to parse collection: {}", e)
-        })?;
-
-        log::info!(
-            "Parsed collection '{}' with {} projects",
-            collection.name,
-            collection.projects.len()
-        );
+        let collection: ModrinthCollection = serde_json::from_str(&response_text)
+            .map_err(|e| anyhow::anyhow!("Failed to parse collection: {e}"))?;
 
         if collection.projects.is_empty() {
-            return Ok((
-                collection.name,
-                collection.description.unwrap_or_default(),
-                String::new(),
-                String::new(),
-                Vec::new(),
-            ));
+            return Ok((collection.name, HashMap::new(), Vec::new()));
         }
 
-        let project_ids = collection.projects.join(r#"",""#);
-        let projects_url = format!(
-            r#"https://api.modrinth.com/v2/projects?ids=["{}"]"#,
-            project_ids
-        );
+        let project_ids: Vec<String> = collection
+            .projects
+            .iter()
+            .filter_map(|v| {
+                if let Some(s) = v.as_str() {
+                    Some(s.to_string())
+                } else if let Some(obj) = v.as_object() {
+                    obj.get("id")
+                        .or_else(|| obj.get("project_id"))
+                        .and_then(|id| id.as_str())
+                        .map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-        log::debug!("Fetching projects from: {}", projects_url);
+        if project_ids.is_empty() {
+            return Ok((collection.name, HashMap::new(), Vec::new()));
+        }
+
+        let project_ids_str = project_ids.join(r#"",""#);
+        let projects_url =
+            format!(r#"https://api.modrinth.com/v2/projects?ids=["{project_ids_str}"]"#);
 
         let projects_response = self
             .client
@@ -730,121 +711,190 @@ impl ModrinthProvider {
         let projects_status = projects_response.status();
         if !projects_status.is_success() {
             let error_text = projects_response.text().await.unwrap_or_default();
-            log::warn!("Projects API error: {} - {}", projects_status, error_text);
-            // Return collection with just IDs if we can't fetch project names
-            let result: Vec<(String, String, ProjectType)> = collection
-                .projects
-                .into_iter()
-                .map(|id| (id.clone(), id, ProjectType::Mod))
-                .collect();
-            return Ok((
-                collection.name,
-                collection.description.unwrap_or_default(),
-                String::new(),
-                String::new(),
-                result,
-            ));
+            anyhow::bail!("API error: {projects_status} - {error_text}");
         }
 
-        let projects: Vec<ModrinthProjectBasic> = projects_response.json().await?;
+        let projects_text = projects_response.text().await?;
+        let projects: Vec<ModrinthProjectBasic> = serde_json::from_str(&projects_text)
+            .map_err(|e| anyhow::anyhow!("Failed to parse projects: {e}"))?;
 
-        let project_map: std::collections::HashMap<String, (String, ProjectType)> = projects
-            .into_iter()
-            .map(|p| {
-                let pt = match p.project_type.as_str() {
-                    "mod" => ProjectType::Mod,
-                    "resourcepack" => ProjectType::ResourcePack,
-                    "shader" => ProjectType::Shader,
-                    "datapack" => ProjectType::Datapack,
-                    "modpack" => ProjectType::Modpack,
-                    "plugin" => ProjectType::Plugin,
-                    _ => ProjectType::Mod,
-                };
-                (p.id.clone(), (p.title, pt))
-            })
-            .collect();
+        let plugin_loaders = self
+            .get_mod_loaders_for_type(ProjectType::Plugin)
+            .await
+            .unwrap_or_default();
+        let plugin_loader_ids: Vec<String> = plugin_loaders.iter().map(|l| l.id.clone()).collect();
 
-        let (recommended_version, recommended_loader) = self
-            .extract_recommended_from_projects(&collection.projects)
-            .await;
+        let datapack_loaders = self
+            .get_mod_loaders_for_type(ProjectType::Datapack)
+            .await
+            .unwrap_or_default();
+        let datapack_loader_ids: Vec<String> =
+            datapack_loaders.iter().map(|l| l.id.clone()).collect();
 
-        // Filter projects based on selected type
-        let result: Vec<(String, String, ProjectType)> = collection
-            .projects
-            .into_iter()
-            .filter_map(|id| {
-                project_map.get(&id).and_then(|(name, pt)| {
-                    if *pt == selected_type {
-                        Some((id, name.clone(), *pt))
+        let mod_loaders = self
+            .get_mod_loaders_for_type(ProjectType::Mod)
+            .await
+            .unwrap_or_default();
+        let mod_loader_ids: Vec<String> = mod_loaders.iter().map(|l| l.id.clone()).collect();
+
+        let valid_projects: Vec<(String, String, ProjectType)> = projects
+            .iter()
+            .filter_map(|p| {
+                if p.project_type == "modpack" {
+                    return None;
+                }
+
+                let project_type = if !p.loaders.is_empty() {
+                    let is_plugin = p.loaders.iter().any(|l| plugin_loader_ids.contains(l));
+                    let is_datapack = p.loaders.iter().any(|l| datapack_loader_ids.contains(l));
+                    let is_mod = p.loaders.iter().any(|l| mod_loader_ids.contains(l));
+
+                    let declared_type = match p.project_type.as_str() {
+                        "mod" if is_mod => Some(ProjectType::Mod),
+                        "plugin" if is_plugin => Some(ProjectType::Plugin),
+                        "datapack" if is_datapack => Some(ProjectType::Datapack),
+                        "resourcepack" => Some(ProjectType::ResourcePack),
+                        "shader" => Some(ProjectType::Shader),
+                        _ => None,
+                    };
+
+                    if declared_type.is_some() {
+                        declared_type
+                    } else if is_plugin {
+                        Some(ProjectType::Plugin)
+                    } else if is_datapack {
+                        Some(ProjectType::Datapack)
+                    } else if is_mod {
+                        Some(ProjectType::Mod)
                     } else {
-                        None
+                        match p.project_type.as_str() {
+                            "mod" => Some(ProjectType::Mod),
+                            "resourcepack" => Some(ProjectType::ResourcePack),
+                            "shader" => Some(ProjectType::Shader),
+                            "datapack" => Some(ProjectType::Datapack),
+                            "plugin" => Some(ProjectType::Plugin),
+                            _ => None,
+                        }
                     }
-                })
+                } else {
+                    match p.project_type.as_str() {
+                        "mod" => Some(ProjectType::Mod),
+                        "resourcepack" => Some(ProjectType::ResourcePack),
+                        "shader" => Some(ProjectType::Shader),
+                        "datapack" => Some(ProjectType::Datapack),
+                        "plugin" => Some(ProjectType::Plugin),
+                        _ => None,
+                    }
+                };
+
+                project_type.map(|pt| (p.id.clone(), p.title.clone(), pt))
             })
             .collect();
 
-        Ok((
-            collection.name,
-            collection.description.unwrap_or_default(),
-            recommended_version,
-            recommended_loader,
-            result,
-        ))
-    }
+        if valid_projects.is_empty() {
+            return Ok((collection.name, HashMap::new(), Vec::new()));
+        }
 
-    async fn extract_recommended_from_projects(&self, project_ids: &[String]) -> (String, String) {
-        use std::collections::HashMap;
+        let mut projects_by_type: HashMap<ProjectType, Vec<&(String, String, ProjectType)>> =
+            HashMap::new();
+        for project in &valid_projects {
+            projects_by_type.entry(project.2).or_default().push(project);
+        }
 
-        let mut version_counts: HashMap<String, usize> = HashMap::new();
-        let mut loader_counts: HashMap<String, usize> = HashMap::new();
+        let mut result: HashMap<ProjectType, (String, ModLoader)> = HashMap::new();
 
-        for project_id in project_ids.iter().take(5) {
-            match self.get_project_versions(project_id).await {
-                Ok(versions) => {
-                    for version in versions.iter().take(3) {
-                        for game_version in &version.game_versions {
-                            *version_counts.entry(game_version.clone()).or_insert(0) += 1;
-                        }
-                        for loader in &version.loaders {
-                            *loader_counts.entry(loader.clone()).or_insert(0) += 1;
-                        }
+        for (project_type, type_projects) in &projects_by_type {
+            let sample_size = type_projects.len().min(3);
+            let mut sample_versions: Vec<Vec<ModrinthVersion>> = Vec::new();
+
+            for project in type_projects.iter().take(sample_size) {
+                let versions_url =
+                    format!("https://api.modrinth.com/v2/project/{}/version", project.0);
+
+                if let Ok(resp) = self
+                    .client
+                    .get(&versions_url)
+                    .header("User-Agent", "MinecraftModDownloader/1.0")
+                    .send()
+                    .await
+                {
+                    if let Ok(versions) = resp.json::<Vec<ModrinthVersion>>().await {
+                        sample_versions.push(versions);
                     }
                 }
-                Err(e) => log::debug!("Failed to fetch versions for {project_id}: {e}"),
             }
+
+            if sample_versions.is_empty() {
+                continue;
+            }
+
+            let mut loader_counts: HashMap<String, usize> = HashMap::new();
+            for versions in &sample_versions {
+                for version in versions {
+                    for loader in &version.loaders {
+                        *loader_counts.entry(loader.clone()).or_insert(0) += 1;
+                    }
+                }
+            }
+
+            let most_common_loader = loader_counts
+                .into_iter()
+                .max_by_key(|(_, count)| *count)
+                .map(|(loader, _)| loader)
+                .unwrap_or_else(|| match project_type {
+                    ProjectType::Mod => "fabric".to_string(),
+                    ProjectType::Plugin => "paper".to_string(),
+                    ProjectType::ResourcePack => "minecraft".to_string(),
+                    ProjectType::Shader => "iris".to_string(),
+                    ProjectType::Datapack => "datapack".to_string(),
+                });
+
+            let mut common_game_versions: Option<std::collections::HashSet<String>> = None;
+            for versions in &sample_versions {
+                let game_versions: std::collections::HashSet<String> = versions
+                    .iter()
+                    .flat_map(|v| v.game_versions.iter().cloned())
+                    .collect();
+
+                common_game_versions = match common_game_versions {
+                    None => Some(game_versions),
+                    Some(existing) => {
+                        Some(existing.intersection(&game_versions).cloned().collect())
+                    }
+                };
+            }
+
+            let most_recent_version = if let Some(common_versions) = common_game_versions {
+                let mut sorted_versions: Vec<String> = common_versions.into_iter().collect();
+                sorted_versions.sort_by(|a, b| {
+                    let a_parts: Vec<u32> = a.split('.').filter_map(|s| s.parse().ok()).collect();
+                    let b_parts: Vec<u32> = b.split('.').filter_map(|s| s.parse().ok()).collect();
+                    b_parts.cmp(&a_parts)
+                });
+                sorted_versions.first().cloned().unwrap_or_default()
+            } else {
+                String::new()
+            };
+
+            let loader_name = if most_common_loader.is_empty() {
+                String::new()
+            } else {
+                most_common_loader
+                    .chars()
+                    .next()
+                    .map(|c| c.to_uppercase().to_string())
+                    .unwrap_or_default()
+                    + &most_common_loader[1..]
+            };
+
+            let mod_loader = ModLoader {
+                id: most_common_loader.clone(),
+                name: loader_name,
+            };
+
+            result.insert(*project_type, (most_recent_version, mod_loader));
         }
 
-        let recommended_version = version_counts
-            .into_iter()
-            .max_by_key(|(_, count)| *count)
-            .map(|(v, _)| v)
-            .unwrap_or_else(|| "1.20.1".to_string());
-
-        let recommended_loader = loader_counts
-            .into_iter()
-            .max_by_key(|(_, count)| *count)
-            .map(|(l, _)| l)
-            .unwrap_or_else(|| "fabric".to_string());
-
-        log::info!(
-            "Recommended settings for collection: version={}, loader={}",
-            recommended_version,
-            recommended_loader
-        );
-
-        (recommended_version, recommended_loader)
-    }
-
-    async fn get_project_versions(&self, project_id: &str) -> anyhow::Result<Vec<ModrinthVersion>> {
-        let versions_url = format!("https://api.modrinth.com/v2/project/{project_id}/version");
-        let response = self
-            .client
-            .get(&versions_url)
-            .header("User-Agent", "MinecraftModDownloader/1.0")
-            .send()
-            .await?;
-
-        let versions: Vec<ModrinthVersion> = response.json().await?;
-        Ok(versions)
+        Ok((collection.name, result, valid_projects))
     }
 }

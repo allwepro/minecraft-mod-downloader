@@ -6,14 +6,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-#[derive(Clone, Debug)]
-pub struct PendingCollection {
-    pub name: String,
-    pub recommended_version: String,
-    pub recommended_loader: String,
-    pub projects: Vec<(String, String, ProjectType)>, // (project_id, project_name, project_type)
-}
-
 pub struct AppState {
     pub minecraft_versions: Vec<MinecraftVersion>,
     pub mod_loaders: Vec<ModLoader>,
@@ -263,16 +255,14 @@ impl AppState {
                 } => {
                     self.metadata_cache.insert(download_dir, metadata);
                 }
-                Event::ModrinthCollectionLoaded {
+                Event::ModrinthCollection {
                     name,
-                    recommended_version,
-                    recommended_loader,
+                    project_type_suggestions,
                     projects,
                 } => {
                     self.pending_collection = Some(PendingCollection {
                         name,
-                        recommended_version,
-                        recommended_loader,
+                        project_type_suggestions,
                         projects,
                     });
                 }

@@ -66,6 +66,7 @@ pub struct ViewState {
     pub collection_import_window_open: bool,
     pub collection_import_input: String,
     pub collection_import_loading: bool,
+    pub collection_import_finalizing: bool,
     pub collection_import_error: Option<String>,
     pub collection_import_selected_type: ProjectType,
 
@@ -120,6 +121,7 @@ impl Default for ViewState {
             collection_import_window_open: false,
             collection_import_input: String::new(),
             collection_import_loading: false,
+            collection_import_finalizing: false,
             collection_import_error: None,
             collection_import_selected_type: ProjectType::Mod,
             import_popup_open: false,
@@ -164,6 +166,7 @@ impl ViewState {
     pub fn reset_collection_import(&mut self) {
         self.collection_import_input.clear();
         self.collection_import_loading = false;
+        self.collection_import_finalizing = false;
         self.collection_import_error = None;
         self.collection_import_selected_type = ProjectType::Mod;
     }

@@ -91,7 +91,7 @@ impl ConfigManager {
             ProjectType::Mod => "mods",
             ProjectType::ResourcePack => "resourcepacks",
             ProjectType::Shader => "shaderpacks",
-            ProjectType::Datapack | ProjectType::Modpack | ProjectType::Plugin => return None,
+            ProjectType::Datapack | ProjectType::Plugin => return None,
         };
 
         #[cfg(target_os = "windows")]

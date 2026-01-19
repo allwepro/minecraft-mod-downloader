@@ -2,16 +2,25 @@ mod app_state;
 mod effect;
 mod runtime;
 
+use crate::domain::{ModLoader, ProjectType};
 pub use app_state::AppState;
 pub use effect::Effect;
 pub use runtime::AppRuntime;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(PartialEq, Default)]
 pub enum ListAction {
     #[default]
     Import,
     Duplicate,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingCollection {
+    pub name: String,
+    pub project_type_suggestions: HashMap<ProjectType, (String, ModLoader)>, // (recommended_version, recommended_loader)
+    pub projects: Vec<(String, String, ProjectType)>, // (project_id, project_name, project_type)
 }
 
 #[derive(PartialEq)]
