@@ -31,6 +31,7 @@ impl CollectionImportWindow {
         view_state: &mut ViewState,
     ) -> Vec<Effect> {
         let mut effects = Vec::new();
+        let mut should_import = false;
 
         let available_types = if state.pending_collection.is_some() {
             view_state.collection_import_loading = false;
@@ -44,6 +45,10 @@ impl CollectionImportWindow {
                     .collect();
                 if !types.is_empty() {
                     view_state.collection_import_selected_type = types[0];
+
+                    if types.len() == 1 {
+                        should_import = true;
+                    }
                 }
             }
             let collection = state.pending_collection.as_ref().unwrap();
@@ -81,7 +86,6 @@ impl CollectionImportWindow {
             }
         });
 
-        let mut should_import = false;
         let mut is_open = view_state.collection_import_window_open;
 
         egui::Window::new("Import Modrinth Collection")

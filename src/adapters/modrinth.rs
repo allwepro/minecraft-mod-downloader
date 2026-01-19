@@ -817,10 +817,9 @@ impl ModrinthProvider {
                     .header("User-Agent", "MinecraftModDownloader/1.0")
                     .send()
                     .await
+                    && let Ok(versions) = resp.json::<Vec<ModrinthVersion>>().await
                 {
-                    if let Ok(versions) = resp.json::<Vec<ModrinthVersion>>().await {
-                        sample_versions.push(versions);
-                    }
+                    sample_versions.push(versions);
                 }
             }
 
