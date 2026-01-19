@@ -390,7 +390,7 @@ impl MainPanel {
 
         let compatibility = state.is_mod_compatible(mod_id);
         let is_missing = !entry.archived && !state.is_mod_downloaded(mod_id);
-        let is_updateable = !entry.archived && state.is_mod_updateable(mod_id);
+        let is_updatable = !entry.archived && state.is_mod_updatable(mod_id);
         let should_scroll = view_state.scroll_to_mod_id.as_ref() == Some(mod_id);
 
         let response = egui::Frame::NONE.show(ui, |ui| {
@@ -447,7 +447,7 @@ impl MainPanel {
                     let raw_compatibility = state.is_mod_compatible_raw(mod_id);
 
                     ui.horizontal(|ui| {
-                        if is_updateable {
+                        if is_updatable {
                             ui.colored_label(
                                 egui::Color32::from_rgb(100, 200, 255),
                                 "🔄 Update Available",
@@ -519,7 +519,7 @@ impl MainPanel {
                             any => {
                                 let enabled =
                                     mod_info.is_some() && !matches!(compatibility, Some(false));
-                                let button_text = if is_updateable {
+                                let button_text = if is_updatable {
                                     "🔄 Update"
                                 } else {
                                     "Download"
@@ -531,7 +531,7 @@ impl MainPanel {
                                     effects.extend(state.start_download(mod_id));
                                 }
                                 if (any == DownloadStatus::Complete || is_downloaded)
-                                    && !is_updateable
+                                    && !is_updatable
                                 {
                                     ui.label("✅");
                                 }

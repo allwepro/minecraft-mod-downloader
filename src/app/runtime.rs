@@ -544,6 +544,33 @@ impl AppRuntime {
                     }
                 });
             }
+
+            Effect::ImportModrinthCollection { collection_id } => {
+                let modrinth = self.api_service.modrinth.clone();
+                let tx = self.event_tx.clone();
+
+                self.rt_handle.spawn(async move {
+                    match modrinth.fetch_collection(&collection_id).await {
+                        Ok((name, project_type_suggestions, projects)) => {
+                            let _ = tx
+                                .send(Event::ModrinthCollection {
+                                    name,
+                                    project_type_suggestions,
+                                    projects,
+                                })
+                                .await;
+                        }
+                        Err(e) => {
+                            log::error!("Failed to fetch Modrinth collection: {e}");
+                            let _ = tx
+                                .send(Event::ModrinthCollectionFailed {
+                                    error: e.to_string(),
+                                })
+                                .await;
+                        }
+                    }
+                });
+            }
         }
     }
 }

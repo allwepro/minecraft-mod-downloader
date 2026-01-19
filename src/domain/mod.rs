@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub mod mod_source;
@@ -224,5 +225,13 @@ pub enum Event {
     MetadataLoaded {
         download_dir: String,
         metadata: DownloadMetadata,
+    },
+    ModrinthCollection {
+        name: String,
+        project_type_suggestions: HashMap<ProjectType, (String, ModLoader)>, // (recommended_version, recommended_loader)
+        projects: Vec<(String, String, ProjectType)>, // (project_id, project_name, project_type)
+    },
+    ModrinthCollectionFailed {
+        error: String,
     },
 }
