@@ -85,4 +85,8 @@ pub enum Effect {
     ValidateMetadata {
         download_dir: String,
     },
+
+    ImportModrinthCollection {
+        collection_id: String,
+    },
 }
