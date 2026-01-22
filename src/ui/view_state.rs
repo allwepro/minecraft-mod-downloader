@@ -3,6 +3,9 @@ use crate::domain::{ModInfo, ModList, ProjectType};
 use std::sync::Arc;
 
 pub struct ViewState {
+    // Launcher UI state
+    pub launcher_open: bool,
+
     // List management UI state
     pub list_search_query: String,
     pub show_rename_input: bool,
@@ -77,6 +80,7 @@ pub struct ViewState {
 impl Default for ViewState {
     fn default() -> Self {
         Self {
+            launcher_open: false,
             list_search_query: String::new(),
             show_rename_input: false,
             rename_list_input: String::new(),

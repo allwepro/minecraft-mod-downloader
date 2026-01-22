@@ -92,21 +92,23 @@ impl App {
         let top_effects = TopPanel::show(ctx, &mut self.view_state, &mut self.runtime);
         self.run_effects(top_effects);
 
-        let sidebar_effects = SidebarPanel::show(
-            ctx,
-            &mut self.state,
-            &mut self.view_state,
-            &mut self.runtime,
-        );
-        self.run_effects(sidebar_effects);
+        if !self.view_state.launcher_open {
+            let sidebar_effects = SidebarPanel::show(
+                ctx,
+                &mut self.state,
+                &mut self.view_state,
+                &mut self.runtime,
+            );
+            self.run_effects(sidebar_effects);
 
-        let main_effects = MainPanel::show(
-            ctx,
-            &mut self.state,
-            &mut self.view_state,
-            &mut self.runtime,
-        );
-        self.run_effects(main_effects);
+            let main_effects = MainPanel::show(
+                ctx,
+                &mut self.state,
+                &mut self.view_state,
+                &mut self.runtime,
+            );
+            self.run_effects(main_effects);
+        }
     }
 
     fn render_windows(&mut self, ctx: &egui::Context) {

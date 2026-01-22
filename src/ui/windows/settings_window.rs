@@ -48,20 +48,28 @@ impl SettingsWindow {
             .default_width(400.0)
             .open(&mut is_open)
             .show(ctx, |ui| {
-                ui.heading("Application Settings");
-                ui.separator();
+                if !view_state.launcher_open {
+                    ui.heading("Downloader Settings");
+                    ui.separator();
 
-                ui.label("Default list name:");
-                ui.text_edit_singleline(&mut view_state.app_settings_default_name);
+                    ui.label("Default list name:");
+                    ui.text_edit_singleline(&mut view_state.app_settings_default_name);
+                } else {
+                    ui.heading("Launcher Settings");
+                    ui.separator();
+                    ui.label("No settings available yet!");
+                }
 
                 ui.add_space(10.0);
 
                 if ui.button("💾 Save Settings").clicked() {
-                    state.default_list_name = view_state.app_settings_default_name.clone();
-                    effects.push(Effect::SaveConfig {
-                        current_list_id: state.current_list_id.clone(),
-                        default_list_name: state.default_list_name.clone(),
-                    });
+                    if !view_state.launcher_open {
+                        state.default_list_name = view_state.app_settings_default_name.clone();
+                        effects.push(Effect::SaveConfig {
+                            current_list_id: state.current_list_id.clone(),
+                            default_list_name: state.default_list_name.clone(),
+                        });
+                    }
                     should_close = true;
                 }
             });
