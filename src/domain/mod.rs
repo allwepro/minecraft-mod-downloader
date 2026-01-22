@@ -117,6 +117,17 @@ pub enum Command {
         mod_info: ModInfo,
         download_dir: String,
     },
+    LegacyListImport {
+        path: std::path::PathBuf,
+        version: String,
+        loader: String,
+    },
+    LegacyListExport {
+        path: std::path::PathBuf,
+        mod_ids: Vec<String>,
+        version: String,
+        loader: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
