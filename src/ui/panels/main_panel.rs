@@ -187,6 +187,18 @@ impl MainPanel {
                     view_state.search_window_open = true;
                 }
 
+                ui.add_space(10.0);
+
+                ui.add(
+                    egui::TextEdit::singleline(&mut view_state.search_query)
+                        .hint_text("🔍 Search resources...")
+                        .desired_width(200.0)
+                );
+                if !view_state.search_query.is_empty() && ui.button("❌").clicked() {
+                    view_state.search_query.clear();
+                }
+
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let filtered_mods = state.get_filtered_mods(
                         &view_state.search_query,
@@ -277,6 +289,30 @@ impl MainPanel {
 
                     let unknown_files = state.get_unknown_mod_files();
 
+                    let search_query_lower = view_state.search_query.to_lowercase();
+                    let filtered_unknown_files: Vec<_> = if search_query_lower.is_empty() {
+                        unknown_files.clone()
+                    } else {
+                        unknown_files
+                            .iter()
+                            .filter(|filename| filename.to_lowercase().contains(&search_query_lower))
+                            .cloned()
+                            .collect()
+                    };
+
+                    let mut show_archived = view_state.show_archived;
+                    let mut show_unknown_mods = view_state.show_unknown_mods;
+
+                    if !search_query_lower.is_empty() {
+                        if !archived_mods.is_empty() {
+                            show_archived = true;
+                        }
+                        if !filtered_unknown_files.is_empty() {
+                            show_unknown_mods = true;
+                        }
+                    }
+
+
                     ui.add_space(10.0);
 
                     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -296,7 +332,7 @@ impl MainPanel {
                             ui.add_space(8.0);
                             ui.separator();
                             ui.horizontal(|ui| {
-                                let icon = if view_state.show_archived {
+                                let icon = if show_archived {
                                     "🔽"
                                 } else {
                                     "▶"
@@ -309,7 +345,7 @@ impl MainPanel {
                                 }
                             });
 
-                            if view_state.show_archived {
+                            if show_archived {
                                 ui.add_space(4.0);
                                 for entry in &archived_mods {
                                     Self::render_mod_entry(
@@ -329,16 +365,21 @@ impl MainPanel {
                             ui.add_space(8.0);
                             ui.separator();
                             ui.horizontal(|ui| {
-                                let icon = if view_state.show_unknown_mods {
+                                let icon = if show_unknown_mods {
                                     "🔽"
                                 } else {
                                     "▶"
+                                };
+                                let display_count = if search_query_lower.is_empty() {
+                                    unknown_files.len()
+                                } else {
+                                    filtered_unknown_files.len()
                                 };
                                 if ui
                                     .button(format!(
                                         "{} Unknown Files ({})",
                                         icon,
-                                        unknown_files.len()
+                                        display_count
                                     ))
                                     .on_hover_text("Files in download folder without metadata")
                                     .clicked()
@@ -347,9 +388,9 @@ impl MainPanel {
                                 }
                             });
 
-                            if view_state.show_unknown_mods {
+                            if show_unknown_mods {
                                 ui.add_space(4.0);
-                                for filename in &unknown_files {
+                                for filename in &filtered_unknown_files {
                                     Self::render_unknown_mod_entry(
                                         ui,
                                         filename,
