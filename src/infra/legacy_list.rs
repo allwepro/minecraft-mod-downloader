@@ -70,6 +70,7 @@ impl LegacyListService {
 
         let _ = tx
             .send(Event::LegacyListComplete {
+                suggested_name: path.file_stem().and_then(|s| s.to_str()).unwrap_or("Imported List").to_string(),
                 successful: successful_mods,
                 failed,
                 warnings,
@@ -151,6 +152,7 @@ impl LegacyListService {
 
         let _ = tx
             .send(Event::LegacyListComplete {
+                suggested_name: path.file_stem().and_then(|s| s.to_str()).unwrap_or("Exported List").to_string(),
                 successful: successful_mods,
                 failed,
                 warnings,

@@ -75,6 +75,9 @@ impl ConfigManager {
         let config = AppConfig {
             current_list_id: None,
             default_list_name: "New List".to_string(),
+            selected_version: String::new(),
+            selected_loader: String::new(),
+            download_dir: String::new(),
         };
         self.save_config(&config).await?;
         Ok(config)

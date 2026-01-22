@@ -14,7 +14,7 @@ mod mod_copier;
 mod natives_extractor;
 
 // Origin/main exports
-pub use api_service::ApiService;
+pub use api_service::{ApiService, ConnectionLimiter};
 pub use config_manager::ConfigManager;
 pub use download_metadata::{
     DownloadMetadata, read_download_metadata, remove_metadata_entry, update_metadata_entry,
