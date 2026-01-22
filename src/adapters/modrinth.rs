@@ -1,4 +1,4 @@
-use crate::domain::{MinecraftVersion, ModInfo, ModLoader, ModProvider};
+use crate::domain::{MinecraftVersion, ModInfo, ModLoader, ModProvider, ProjectType};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -78,12 +78,14 @@ impl ModProvider for ModrinthProvider {
         query: &str,
         version: &str,
         loader: &str,
+        project_type: &ProjectType,
     ) -> anyhow::Result<Vec<ModInfo>> {
         let url = format!(
-            "https://api.modrinth.com/v2/search?query={}&facets=[[\"versions:{}\"],[\"categories:{}\"]]",
+            "https://api.modrinth.com/v2/search?query={}&facets=[[\"versions:{}\"],[\"categories:{}\"],[\"project_type:{}\"]]",
             urlencoding::encode(query),
             version,
-            loader
+            loader,
+            project_type.id()
         );
 
         let response: ModrinthSearchResult = self
@@ -99,9 +101,10 @@ impl ModProvider for ModrinthProvider {
             .hits
             .into_iter()
             .map(|hit| ModInfo {
-                id: hit.project_id,
+                id: hit.project_id.clone(),
                 slug: hit.slug,
                 name: hit.title,
+                icon_url: format!("https://cdn.modrinth.com/data/{}/icon.png", hit.project_id),
                 description: hit.description,
                 version: "Latest".to_string(),
                 author: hit.author,
@@ -109,6 +112,7 @@ impl ModProvider for ModrinthProvider {
                 download_url: String::new(),
                 supported_versions: hit.versions,
                 supported_loaders: hit.categories,
+                project_type: *project_type,
             })
             .collect();
 
@@ -162,9 +166,10 @@ impl ModProvider for ModrinthProvider {
             .unwrap_or_default();
 
         Ok(ModInfo {
-            id: project.id,
+            id: project.id.clone(),
             slug: project.slug,
             name: project.title,
+            icon_url: format!("https://cdn.modrinth.com/data/{}/icon.png", project.id),
             description: project.description,
             version: compatible_version.version_number.clone(),
             author: project.team,
@@ -172,6 +177,7 @@ impl ModProvider for ModrinthProvider {
             download_url,
             supported_versions: compatible_version.game_versions.clone(),
             supported_loaders: compatible_version.loaders.clone(),
+            project_type: ProjectType::Mod,
         })
     }
 
@@ -198,25 +204,49 @@ impl ModProvider for ModrinthProvider {
         Ok(versions)
     }
 
-    async fn get_mod_loaders(&self) -> anyhow::Result<Vec<ModLoader>> {
-        Ok(vec![
-            ModLoader {
-                id: "fabric".to_string(),
-                name: "Fabric".to_string(),
-            },
-            ModLoader {
-                id: "forge".to_string(),
-                name: "Forge".to_string(),
-            },
-            ModLoader {
-                id: "neoforge".to_string(),
-                name: "NeoForge".to_string(),
-            },
-            ModLoader {
-                id: "quilt".to_string(),
-                name: "Quilt".to_string(),
-            },
-        ])
+    async fn get_mod_loaders_for_type(
+        &self,
+        project_type: ProjectType,
+    ) -> anyhow::Result<Vec<ModLoader>> {
+        match project_type {
+            ProjectType::Mod => Ok(vec![
+                ModLoader {
+                    id: "fabric".to_string(),
+                    name: "Fabric".to_string(),
+                },
+                ModLoader {
+                    id: "forge".to_string(),
+                    name: "Forge".to_string(),
+                },
+                ModLoader {
+                    id: "neoforge".to_string(),
+                    name: "NeoForge".to_string(),
+                },
+                ModLoader {
+                    id: "quilt".to_string(),
+                    name: "Quilt".to_string(),
+                },
+            ]),
+            ProjectType::Plugin => Ok(vec![
+                ModLoader {
+                    id: "paper".to_string(),
+                    name: "Paper".to_string(),
+                },
+                ModLoader {
+                    id: "spigot".to_string(),
+                    name: "Spigot".to_string(),
+                },
+                ModLoader {
+                    id: "bukkit".to_string(),
+                    name: "Bukkit".to_string(),
+                },
+            ]),
+            _ => Ok(vec![]),
+        }
+    }
+
+    fn get_project_link(&self, project_type: &ProjectType, mod_id: &str) -> String {
+        format!("https://modrinth.com/{}/{}", project_type.id(), mod_id)
     }
 
     async fn download_mod(
