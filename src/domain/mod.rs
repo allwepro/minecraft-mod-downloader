@@ -191,6 +191,13 @@ pub struct AppConfig {
     pub current_list_id: Option<String>,
     #[serde(default = "default_list_name")]
     pub default_list_name: String,
+    // Launcher-specific fields
+    #[serde(default)]
+    pub selected_version: String,
+    #[serde(default)]
+    pub selected_loader: String,
+    #[serde(default)]
+    pub download_dir: String,
 }
 
 fn default_list_name() -> String {
