@@ -114,7 +114,7 @@ pub enum Command {
         loader: String,
     },
     DownloadMod {
-        mod_info: ModInfo,
+        mod_info: Arc<ModInfo>,
         download_dir: String,
     },
     LegacyListImport {
