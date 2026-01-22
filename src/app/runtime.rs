@@ -94,11 +94,17 @@ impl AppRuntime {
                         cm.load_config().await.unwrap_or_else(|_| AppConfig {
                             current_list_id: None,
                             default_list_name: "New List".to_string(),
+                            selected_version: String::new(),
+                            selected_loader: String::new(),
+                            download_dir: String::new(),
                         })
                     } else {
                         cm.create_default_config().await.unwrap_or(AppConfig {
                             current_list_id: None,
                             default_list_name: "New List".to_string(),
+                            selected_version: String::new(),
+                            selected_loader: String::new(),
+                            download_dir: String::new(),
                         })
                     };
 
@@ -289,6 +295,9 @@ impl AppRuntime {
                 let config = AppConfig {
                     current_list_id,
                     default_list_name,
+                    selected_version: String::new(),
+                    selected_loader: String::new(),
+                    download_dir: String::new(),
                 };
                 self.rt_handle.spawn(async move {
                     let _ = cm.save_config(&config).await;

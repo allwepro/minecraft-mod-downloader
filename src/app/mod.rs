@@ -31,15 +31,6 @@ pub enum LegacyState {
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DownloadStatus {
-    Idle,
-    Queued,
-    Downloading,
-    Complete,
-    Failed,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum SortMode {
     #[default]
