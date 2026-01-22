@@ -36,11 +36,7 @@ impl TopPanel {
     }
 }
 
-fn tab_button(
-    ui: &mut egui::Ui,
-    text: &str,
-    is_selected: bool,
-) -> egui::Response {
+fn tab_button(ui: &mut egui::Ui, text: &str, is_selected: bool) -> egui::Response {
     let bg_color = if is_selected {
         Color32::from_rgba_unmultiplied(0, 0, 0, 130)
     } else {

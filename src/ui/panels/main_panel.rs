@@ -192,12 +192,11 @@ impl MainPanel {
                 ui.add(
                     egui::TextEdit::singleline(&mut view_state.search_query)
                         .hint_text("🔍 Search resources...")
-                        .desired_width(200.0)
+                        .desired_width(200.0),
                 );
                 if !view_state.search_query.is_empty() && ui.button("❌").clicked() {
                     view_state.search_query.clear();
                 }
-
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let filtered_mods = state.get_filtered_mods(
@@ -295,7 +294,9 @@ impl MainPanel {
                     } else {
                         unknown_files
                             .iter()
-                            .filter(|filename| filename.to_lowercase().contains(&search_query_lower))
+                            .filter(|filename| {
+                                filename.to_lowercase().contains(&search_query_lower)
+                            })
                             .cloned()
                             .collect()
                     };
@@ -311,7 +312,6 @@ impl MainPanel {
                             show_unknown_mods = true;
                         }
                     }
-
 
                     ui.add_space(10.0);
 
@@ -332,11 +332,7 @@ impl MainPanel {
                             ui.add_space(8.0);
                             ui.separator();
                             ui.horizontal(|ui| {
-                                let icon = if show_archived {
-                                    "🔽"
-                                } else {
-                                    "▶"
-                                };
+                                let icon = if show_archived { "🔽" } else { "▶" };
                                 if ui
                                     .button(format!("{} Archived ({})", icon, archived_mods.len()))
                                     .clicked()
@@ -365,22 +361,14 @@ impl MainPanel {
                             ui.add_space(8.0);
                             ui.separator();
                             ui.horizontal(|ui| {
-                                let icon = if show_unknown_mods {
-                                    "🔽"
-                                } else {
-                                    "▶"
-                                };
+                                let icon = if show_unknown_mods { "🔽" } else { "▶" };
                                 let display_count = if search_query_lower.is_empty() {
                                     unknown_files.len()
                                 } else {
                                     filtered_unknown_files.len()
                                 };
                                 if ui
-                                    .button(format!(
-                                        "{} Unknown Files ({})",
-                                        icon,
-                                        display_count
-                                    ))
+                                    .button(format!("{} Unknown Files ({})", icon, display_count))
                                     .on_hover_text("Files in download folder without metadata")
                                     .clicked()
                                 {

@@ -48,7 +48,6 @@ impl SettingsWindow {
             .default_width(400.0)
             .open(&mut is_open)
             .show(ctx, |ui| {
-
                 if !view_state.launcher_open {
                     ui.heading("Downloader Settings");
                     ui.separator();
