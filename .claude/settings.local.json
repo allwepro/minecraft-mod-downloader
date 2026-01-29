@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/maximakishin/Documents/minecraft-mod-downloader show origin/dev:src/ui/app.rs)",
+      "Bash(git -C /Users/maximakishin/Documents/minecraft-mod-downloader show origin/dev:src/main.rs)",
+      "Bash(git -C /Users/maximakishin/Documents/minecraft-mod-downloader show origin/dev:src/ui/mod.rs)",
+      "Bash(git -C /Users/maximakishin/Documents/minecraft-mod-downloader show origin/dev:src/app/mod.rs)",
+      "Bash(git -C /Users/maximakishin/Documents/minecraft-mod-downloader show origin/dev:src/app/effect.rs)"
+    ]
+  }
+}

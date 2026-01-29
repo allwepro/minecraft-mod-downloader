@@ -103,7 +103,7 @@ impl NativesExtractor {
 
     /// Get list of native library JARs from manifest
     pub fn get_native_jars(
-        manifest: &crate::domain::VersionManifest,
+        manifest: &crate::launcher::domain::VersionManifest,
         game_dir: &Path,
     ) -> Vec<PathBuf> {
         let mut native_jars = Vec::new();

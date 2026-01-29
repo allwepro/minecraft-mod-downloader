@@ -16,17 +16,29 @@ impl TopPanel {
             ui.horizontal(|ui| {
                 ui.heading("Minecraft Mod Downloader");
 
+                ui.add_space(20.0);
+
+                // Tab switching
+                ui.style_mut().spacing.item_spacing.x = 0.0;
+
+                let launcher_btn =
+                    ui.selectable_label(view_state.launcher_open, "🚀 Minecraft Launcher");
+                if launcher_btn.clicked() {
+                    view_state.launcher_open = true;
+                }
+
+                let downloader_btn =
+                    ui.selectable_label(!view_state.launcher_open, "📦 Resource Downloader");
+                if downloader_btn.clicked() {
+                    view_state.launcher_open = false;
+                }
+
+                ui.style_mut().spacing.item_spacing.x = 8.0; // Reset spacing
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("⚙ Settings").clicked() {
                         view_state.settings_window_open = true;
                     }
-
-                    /*if let Some(list_id) = &state.current_list_id {
-                        if let Some(current_list) = state.get_list_by_id(list_id) {
-                            ui.separator();
-                            ui.label(format!("📋 {}", current_list.name));
-                        }
-                    }*/
                 });
             });
         });

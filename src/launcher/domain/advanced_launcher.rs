@@ -1,5 +1,5 @@
 use super::{LaunchConfig, LaunchResult, VersionManifest};
-use crate::infra::NativesExtractor;
+use crate::launcher::infra::NativesExtractor;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;

@@ -1,4 +1,4 @@
-use crate::domain::MinecraftInstallation;
+use crate::launcher::domain::MinecraftInstallation;
 use std::path::PathBuf;
 
 pub struct MinecraftDetector;

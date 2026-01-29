@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub mod mod_source;
@@ -9,18 +10,7 @@ pub use mod_source::ModProvider;
 pub mod mod_service;
 
 use crate::infra::DownloadMetadata;
-pub use mod_service::{ModService, ModInfoPool};
-
-// Launcher modules
-pub mod launcher;
-pub mod launcher_service;
-pub mod version_manifest;
-pub mod advanced_launcher;
-
-pub use launcher::{JavaInstallation, LaunchConfig, LaunchProfile, LaunchResult, MinecraftInstallation};
-pub use launcher_service::LauncherService;
-pub use version_manifest::VersionManifest;
-pub use advanced_launcher::AdvancedLauncher;
+pub use mod_service::ModService;
 
 pub fn sanitize_filename(name: &str) -> String {
     name.chars()
@@ -93,43 +83,6 @@ impl ProjectType {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DownloadStatus {
-    Idle,
-    Queued,
-    Downloading,
-    Complete,
-    Failed,
-}
-
-pub enum Command {
-    SearchMods {
-        query: String,
-        version: String,
-        loader: String,
-    },
-    FetchModDetails {
-        mod_id: String,
-        version: String,
-        loader: String,
-    },
-    DownloadMod {
-        mod_info: Arc<ModInfo>,
-        download_dir: String,
-    },
-    LegacyListImport {
-        path: std::path::PathBuf,
-        version: String,
-        loader: String,
-    },
-    LegacyListExport {
-        path: std::path::PathBuf,
-        mod_ids: Vec<String>,
-        version: String,
-        loader: String,
-    },
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModInfo {
     pub id: String,
@@ -191,13 +144,6 @@ pub struct AppConfig {
     pub current_list_id: Option<String>,
     #[serde(default = "default_list_name")]
     pub default_list_name: String,
-    // Launcher-specific fields
-    #[serde(default)]
-    pub selected_version: String,
-    #[serde(default)]
-    pub selected_loader: String,
-    #[serde(default)]
-    pub download_dir: String,
 }
 
 fn default_list_name() -> String {
@@ -279,5 +225,13 @@ pub enum Event {
     MetadataLoaded {
         download_dir: String,
         metadata: DownloadMetadata,
+    },
+    ModrinthCollection {
+        name: String,
+        project_type_suggestions: HashMap<ProjectType, (String, ModLoader)>, // (recommended_version, recommended_loader)
+        projects: Vec<(String, String, ProjectType)>, // (project_id, project_name, project_type)
+    },
+    ModrinthCollectionFailed {
+        error: String,
     },
 }

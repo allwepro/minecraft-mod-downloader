@@ -1,4 +1,4 @@
-use crate::domain::JavaInstallation;
+use crate::launcher::domain::JavaInstallation;
 use std::path::PathBuf;
 use std::process::Command;
 
