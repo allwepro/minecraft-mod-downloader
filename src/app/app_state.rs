@@ -27,8 +27,6 @@ pub struct AppState {
     pub effective_settings_cache: HashMap<String, (String, String, String)>,
     pub cached_mods: HashMap<(String, String, String), Arc<ModInfo>>,
     metadata_cache: HashMap<String, DownloadMetadata>,
-    pub pending_collection: Option<PendingCollection>,
-    pub collection_import_error: Option<String>,
 }
 
 impl AppState {
@@ -55,8 +53,6 @@ impl AppState {
             effective_settings_cache: HashMap::new(),
             cached_mods: HashMap::new(),
             metadata_cache: HashMap::new(),
-            pending_collection: None,
-            collection_import_error: None,
         };
 
         (state, vec![Effect::LoadInitialData])
@@ -139,11 +135,13 @@ impl AppState {
                     self.default_list_name = default_list_name;
                     self.initial_loading = false;
 
-                    // Preloading just mod loaders
                     self.loaders_by_type.insert(ProjectType::Mod, mod_loaders);
                     self.loaders_loading.remove(&ProjectType::Mod);
 
                     self.effective_settings_cache.clear();
+
+                    let download_dir = self.get_effective_download_dir();
+                    effects.push(Effect::ValidateMetadata { download_dir });
 
                     effects.extend(self.invalidate_and_reload());
                 }
@@ -255,20 +253,6 @@ impl AppState {
                 } => {
                     self.metadata_cache.insert(download_dir, metadata);
                 }
-                Event::ModrinthCollection {
-                    name,
-                    project_type_suggestions,
-                    projects,
-                } => {
-                    self.pending_collection = Some(PendingCollection {
-                        name,
-                        project_type_suggestions,
-                        projects,
-                    });
-                }
-                Event::ModrinthCollectionFailed { error } => {
-                    self.collection_import_error = Some(error);
-                }
             }
         }
 
@@ -312,13 +296,7 @@ impl AppState {
             .unwrap_or_default()
     }
 
-    fn default_dir_fallback(&self, project_type: ProjectType) -> String {
-        if let Some(path) =
-            crate::infra::ConfigManager::get_default_minecraft_download_dir(project_type)
-        {
-            return path.to_string_lossy().to_string();
-        }
-
+    fn default_dir_fallback(&self) -> String {
         dirs::download_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("minecraft")
@@ -340,7 +318,7 @@ impl AppState {
         };
 
         let dir = if list.download_dir.is_empty() {
-            self.default_dir_fallback(list.content_type)
+            self.default_dir_fallback()
         } else {
             list.download_dir.clone()
         };
@@ -353,8 +331,9 @@ impl AppState {
     }
 
     pub fn get_effective_version(&self) -> String {
-        // The state of an unknown current list is an error, so it panics to prevent issues from providing arbitrary data.
-        let list = self.get_current_list().unwrap();
+        let Some(list) = self.get_current_list() else {
+            return self.default_version_fallback();
+        };
 
         if let Some((v, _, _)) = self.get_cached_effective_settings(&list.id) {
             return v;
@@ -364,8 +343,9 @@ impl AppState {
     }
 
     pub fn get_effective_loader(&self) -> String {
-        // The state of an unknown current list is an error, so it panics to prevent issues from providing arbitrary data.
-        let list = self.get_current_list().unwrap();
+        let Some(list) = self.get_current_list() else {
+            return self.default_loader_fallback(ProjectType::Mod);
+        };
 
         if let Some((_, l, _)) = self.get_cached_effective_settings(&list.id) {
             return l;
@@ -375,8 +355,9 @@ impl AppState {
     }
 
     pub fn get_effective_download_dir(&self) -> String {
-        // The state of an unknown current list is an error, so it panics to prevent issues from providing arbitrary data.
-        let list = self.get_current_list().unwrap();
+        let Some(list) = self.get_current_list() else {
+            return self.default_dir_fallback();
+        };
 
         if let Some((_, _, d)) = self.get_cached_effective_settings(&list.id) {
             return d;
@@ -386,10 +367,6 @@ impl AppState {
     }
 
     pub fn invalidate_and_reload(&mut self) -> Vec<Effect> {
-        if self.current_list_id.is_none() {
-            log::info!("No current list selected, skipping invalidate_and_reload");
-            return Vec::new();
-        }
         let current_version = self.get_effective_version();
         let current_loader = self.get_effective_loader();
 
@@ -595,8 +572,8 @@ impl AppState {
                     download_dir,
                     mod_id: mod_id.to_string(),
                 });
+                return effects;
             }
-            return effects;
         }
         Vec::new()
     }
@@ -702,7 +679,7 @@ impl AppState {
             .loaders_for_type(content_type)
             .and_then(|loaders| loaders.iter().find(|l| l.id == loader).cloned())
             .or_else(|| self.mod_loaders.iter().find(|l| l.id == loader).cloned())
-            .unwrap_or(ModLoader {
+            .unwrap_or(crate::domain::ModLoader {
                 id: loader.clone(),
                 name: loader.clone(),
             });
@@ -766,11 +743,6 @@ impl AppState {
         order_mode: OrderMode,
         filter_mode: FilterMode,
     ) -> Vec<ModEntry> {
-        // If no list is selected, return empty
-        if self.current_list_id.is_none() {
-            return Vec::new();
-        }
-
         let query = query.to_lowercase();
         let effective_version = self.get_effective_version();
         let effective_loader = self.get_effective_loader();
@@ -812,7 +784,7 @@ impl AppState {
 
                 let missing = !entry.archived
                     && (!self.is_mod_downloaded(&entry.mod_id)
-                        || self.is_mod_updatable(&entry.mod_id));
+                        || self.is_mod_updateable(&entry.mod_id));
 
                 match filter_mode {
                     FilterMode::MissingOnly => missing,
@@ -857,7 +829,7 @@ impl AppState {
         }
     }
 
-    pub fn is_mod_updatable(&self, mod_id: &str) -> bool {
+    pub fn is_mod_updateable(&self, mod_id: &str) -> bool {
         let Some(mod_info) = self.get_cached_mod(mod_id) else {
             return false;
         };
@@ -875,11 +847,6 @@ impl AppState {
     }
 
     pub fn get_missing_mod_ids(&self, filtered_mods: &[ModEntry]) -> Vec<String> {
-        // If no list is selected, return empty
-        if self.current_list_id.is_none() {
-            return Vec::new();
-        }
-
         let download_dir = self.get_effective_download_dir();
         let effective_version = self.get_effective_version();
         let effective_loader = self.get_effective_loader();

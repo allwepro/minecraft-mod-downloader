@@ -1,6 +1,5 @@
-//#![windows_subsystem = "windows"]
 mod adapters;
-mod app;
+mod app;  // Origin/main app architecture (for future integration)
 mod domain;
 mod infra;
 mod ui;
@@ -32,13 +31,13 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 700.0])
             .with_min_inner_size([1000.0, 400.0])
-            .with_title("Minecraft Launcher/Resource Downloader")
+            .with_title("Minecraft Mod Downloader")
             .with_icon(icon_data),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Minecraft Launcher/Resource Downloader",
+        "Minecraft Mod Downloader",
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);

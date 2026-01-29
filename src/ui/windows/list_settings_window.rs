@@ -13,10 +13,9 @@ impl ListSettingsWindow {
     ) -> Vec<Effect> {
         let mut effects = Vec::new();
 
-        if view_state.list_settings_initial_load
-            && let Some(list) = state.get_current_list()
+        if let Some(list) = state.get_current_list()
+            && view_state.list_settings_version.is_empty()
         {
-            view_state.list_settings_initial_load = false;
             view_state.list_settings_version = list.version.clone();
             view_state.list_settings_loader = list.loader.id.clone();
             view_state.list_settings_dir = if list.download_dir.is_empty() {
@@ -121,7 +120,7 @@ impl ListSettingsWindow {
                     ui.horizontal(|ui| {
                         ui.text_edit_singleline(&mut view_state.list_settings_dir);
                         if ui.button("📁 Browse").clicked()
-                            && let Some(path) = Dialogs::pick_minecraft_mods_folder(content_type)
+                            && let Some(path) = Dialogs::pick_folder()
                         {
                             view_state.list_settings_dir = path.display().to_string();
                         }

@@ -94,11 +94,17 @@ impl AppRuntime {
                         cm.load_config().await.unwrap_or_else(|_| AppConfig {
                             current_list_id: None,
                             default_list_name: "New List".to_string(),
+                            selected_version: String::new(),
+                            selected_loader: String::new(),
+                            download_dir: String::new(),
                         })
                     } else {
                         cm.create_default_config().await.unwrap_or(AppConfig {
                             current_list_id: None,
                             default_list_name: "New List".to_string(),
+                            selected_version: String::new(),
+                            selected_loader: String::new(),
+                            download_dir: String::new(),
                         })
                     };
 
@@ -289,6 +295,9 @@ impl AppRuntime {
                 let config = AppConfig {
                     current_list_id,
                     default_list_name,
+                    selected_version: String::new(),
+                    selected_loader: String::new(),
+                    download_dir: String::new(),
                 };
                 self.rt_handle.spawn(async move {
                     let _ = cm.save_config(&config).await;
@@ -538,33 +547,6 @@ impl AppRuntime {
                                 .send(Event::MetadataLoaded {
                                     download_dir: dir_clone,
                                     metadata: crate::infra::DownloadMetadata::new(),
-                                })
-                                .await;
-                        }
-                    }
-                });
-            }
-
-            Effect::ImportModrinthCollection { collection_id } => {
-                let modrinth = self.api_service.modrinth.clone();
-                let tx = self.event_tx.clone();
-
-                self.rt_handle.spawn(async move {
-                    match modrinth.fetch_collection(&collection_id).await {
-                        Ok((name, project_type_suggestions, projects)) => {
-                            let _ = tx
-                                .send(Event::ModrinthCollection {
-                                    name,
-                                    project_type_suggestions,
-                                    projects,
-                                })
-                                .await;
-                        }
-                        Err(e) => {
-                            log::error!("Failed to fetch Modrinth collection: {e}");
-                            let _ = tx
-                                .send(Event::ModrinthCollectionFailed {
-                                    error: e.to_string(),
                                 })
                                 .await;
                         }

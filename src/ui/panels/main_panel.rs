@@ -168,7 +168,7 @@ impl MainPanel {
 
                         if ui.button("⚙ List Settings").clicked() {
                             view_state.list_settings_open = true;
-                            view_state.list_settings_initial_load = true;
+                            view_state.list_settings_version.clear();
                         }
                     }
                 });
@@ -185,17 +185,6 @@ impl MainPanel {
                     .clicked()
                 {
                     view_state.search_window_open = true;
-                }
-
-                ui.add_space(10.0);
-
-                ui.add(
-                    egui::TextEdit::singleline(&mut view_state.search_query)
-                        .hint_text("🔍 Search resources...")
-                        .desired_width(200.0),
-                );
-                if !view_state.search_query.is_empty() && ui.button("❌").clicked() {
-                    view_state.search_query.clear();
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -288,31 +277,6 @@ impl MainPanel {
 
                     let unknown_files = state.get_unknown_mod_files();
 
-                    let search_query_lower = view_state.search_query.to_lowercase();
-                    let filtered_unknown_files: Vec<_> = if search_query_lower.is_empty() {
-                        unknown_files.clone()
-                    } else {
-                        unknown_files
-                            .iter()
-                            .filter(|filename| {
-                                filename.to_lowercase().contains(&search_query_lower)
-                            })
-                            .cloned()
-                            .collect()
-                    };
-
-                    let mut show_archived = view_state.show_archived;
-                    let mut show_unknown_mods = view_state.show_unknown_mods;
-
-                    if !search_query_lower.is_empty() {
-                        if !archived_mods.is_empty() {
-                            show_archived = true;
-                        }
-                        if !filtered_unknown_files.is_empty() {
-                            show_unknown_mods = true;
-                        }
-                    }
-
                     ui.add_space(10.0);
 
                     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -324,7 +288,6 @@ impl MainPanel {
                                 state,
                                 runtime,
                                 &mut effects,
-                                view_state,
                             );
                         }
 
@@ -332,7 +295,11 @@ impl MainPanel {
                             ui.add_space(8.0);
                             ui.separator();
                             ui.horizontal(|ui| {
-                                let icon = if show_archived { "🔽" } else { "▶" };
+                                let icon = if view_state.show_archived {
+                                    "🔽"
+                                } else {
+                                    "▶"
+                                };
                                 if ui
                                     .button(format!("{} Archived ({})", icon, archived_mods.len()))
                                     .clicked()
@@ -341,7 +308,7 @@ impl MainPanel {
                                 }
                             });
 
-                            if show_archived {
+                            if view_state.show_archived {
                                 ui.add_space(4.0);
                                 for entry in &archived_mods {
                                     Self::render_mod_entry(
@@ -351,7 +318,6 @@ impl MainPanel {
                                         state,
                                         runtime,
                                         &mut effects,
-                                        view_state,
                                     );
                                 }
                             }
@@ -361,14 +327,17 @@ impl MainPanel {
                             ui.add_space(8.0);
                             ui.separator();
                             ui.horizontal(|ui| {
-                                let icon = if show_unknown_mods { "🔽" } else { "▶" };
-                                let display_count = if search_query_lower.is_empty() {
-                                    unknown_files.len()
+                                let icon = if view_state.show_unknown_mods {
+                                    "🔽"
                                 } else {
-                                    filtered_unknown_files.len()
+                                    "▶"
                                 };
                                 if ui
-                                    .button(format!("{} Unknown Files ({})", icon, display_count))
+                                    .button(format!(
+                                        "{} Unknown Files ({})",
+                                        icon,
+                                        unknown_files.len()
+                                    ))
                                     .on_hover_text("Files in download folder without metadata")
                                     .clicked()
                                 {
@@ -376,9 +345,9 @@ impl MainPanel {
                                 }
                             });
 
-                            if show_unknown_mods {
+                            if view_state.show_unknown_mods {
                                 ui.add_space(4.0);
-                                for filename in &filtered_unknown_files {
+                                for filename in &unknown_files {
                                     Self::render_unknown_mod_entry(
                                         ui,
                                         filename,
@@ -407,7 +376,6 @@ impl MainPanel {
         state: &mut AppState,
         runtime: &mut AppRuntime,
         effects: &mut Vec<Effect>,
-        view_state: &mut ViewState,
     ) {
         let mod_id = &entry.mod_id;
 
@@ -419,165 +387,152 @@ impl MainPanel {
 
         let compatibility = state.is_mod_compatible(mod_id);
         let is_missing = !entry.archived && !state.is_mod_downloaded(mod_id);
-        let is_updatable = !entry.archived && state.is_mod_updatable(mod_id);
-        let should_scroll = view_state.scroll_to_mod_id.as_ref() == Some(mod_id);
+        let is_updateable = !entry.archived && state.is_mod_updateable(mod_id);
 
-        let response = egui::Frame::NONE.show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if let Some(ref info) = mod_info {
-                    if !info.icon_url.is_empty() {
-                        if let Some(handle) = runtime.icon_service.get(&info.icon_url) {
-                            ui.add(
-                                egui::Image::from_texture(handle)
-                                    .fit_to_exact_size(egui::vec2(32.0, 32.0)),
-                            );
-                        } else {
-                            ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
-                        }
+        ui.horizontal(|ui| {
+            if let Some(ref info) = mod_info {
+                if !info.icon_url.is_empty() {
+                    if let Some(handle) = runtime.icon_service.get(&info.icon_url) {
+                        ui.add(
+                            egui::Image::from_texture(handle)
+                                .fit_to_exact_size(egui::vec2(32.0, 32.0)),
+                        );
                     } else {
-                        ui.add_space(32.0);
+                        ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
                     }
                 } else {
-                    ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
+                    ui.add_space(32.0);
+                }
+            } else {
+                ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
+            }
+
+            ui.add_space(4.0);
+
+            ui.vertical(|ui| {
+                let mut name_text = egui::RichText::new(&entry.mod_name);
+                if entry.archived {
+                    name_text = name_text.weak();
                 }
 
-                ui.add_space(4.0);
+                let project_link = runtime.get_project_link(&project_type, &entry.mod_id);
+                ui.hyperlink_to(name_text, project_link);
 
-                ui.vertical(|ui| {
-                    let mut name_text = egui::RichText::new(&entry.mod_name);
-                    if entry.archived {
-                        name_text = name_text.weak();
-                    }
-
-                    let project_link = runtime.get_project_link(&project_type, &entry.mod_id);
-                    ui.hyperlink_to(name_text, project_link);
-
-                    if let Some(ref info) = mod_info {
-                        let version_text = if info.version.is_empty() {
-                            "Loading version...".to_string()
-                        } else {
-                            format!("v{}", info.version)
-                        };
-                        ui.label(format!("{} by {}", version_text, info.author));
-                    } else if is_loading {
-                        ui.label("⏳ Loading details...");
-                    } else if has_failed
-                        && ui
-                            .button(
-                                egui::RichText::new("⚠ Failed to load")
-                                    .color(egui::Color32::YELLOW),
-                            )
-                            .clicked()
-                    {
-                        effects.extend(state.force_reload_mod(mod_id));
-                    }
-
-                    let has_override = state.has_compatibility_override(mod_id);
-                    let raw_compatibility = state.is_mod_compatible_raw(mod_id);
-
-                    ui.horizontal(|ui| {
-                        if is_updatable {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(100, 200, 255),
-                                "🔄 Update Available",
-                            );
-                            ui.add_space(3.0);
-                        }
-                        if is_missing && matches!(compatibility, Some(true)) {
-                            ui.colored_label(egui::Color32::YELLOW, "📁 Missing");
-                            ui.add_space(3.0);
-                        }
-                        if has_override {
-                            ui.horizontal(|ui| {
-                                ui.colored_label(
-                                    egui::Color32::from_rgb(255, 165, 0),
-                                    "⚠ Incompatible Overruled",
-                                );
-                                if ui.small_button("🔓 Revoke").clicked() {
-                                    effects.extend(state.toggle_compatibility_override(mod_id));
-                                }
-                            });
-                        } else if matches!(raw_compatibility, Some(false)) {
-                            ui.horizontal(|ui| {
-                                ui.colored_label(egui::Color32::RED, "❌ Incompatible");
-                                if ui.small_button("🔒 Overrule").clicked() {
-                                    effects.extend(state.toggle_compatibility_override(mod_id));
-                                }
-                            });
-                        }
-                    });
-                });
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("🗑").clicked() {
-                        effects.extend(state.delete_mod(mod_id));
-                    }
-
-                    let archive_text = if entry.archived {
-                        "📂 Unarchive"
+                if let Some(ref info) = mod_info {
+                    let version_text = if info.version.is_empty() {
+                        "Loading version...".to_string()
                     } else {
-                        "📁"
+                        format!("v{}", info.version)
                     };
-                    if ui.button(archive_text).clicked() {
-                        if entry.archived {
-                            view_state.scroll_to_mod_id = Some(mod_id.to_string());
-                        }
-                        effects.extend(state.toggle_archive_mod(mod_id));
+                    ui.label(format!("{} by {}", version_text, info.author));
+                } else if is_loading {
+                    ui.label("⏳ Loading details...");
+                } else if has_failed
+                    && ui
+                        .button(
+                            egui::RichText::new("⚠ Failed to load").color(egui::Color32::YELLOW),
+                        )
+                        .clicked()
+                {
+                    effects.extend(state.force_reload_mod(mod_id));
+                }
+
+                let has_override = state.has_compatibility_override(mod_id);
+                let raw_compatibility = state.is_mod_compatible_raw(mod_id);
+
+                ui.horizontal(|ui| {
+                    if is_updateable {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(100, 200, 255),
+                            "🔄 Update Available",
+                        );
+                        ui.add_space(3.0);
                     }
-
-                    if !entry.archived {
-                        let status = state
-                            .download_status
-                            .get(mod_id)
-                            .copied()
-                            .unwrap_or(DownloadStatus::Idle);
-
-                        let has_metadata = state.has_download_metadata(mod_id);
-                        let is_downloaded = has_metadata && (!is_missing && mod_info.is_some());
-
-                        match status {
-                            DownloadStatus::Downloading | DownloadStatus::Queued => {
-                                let progress =
-                                    state.download_progress.get(mod_id).copied().unwrap_or(0.0);
-                                ui.add(
-                                    egui::ProgressBar::new(progress)
-                                        .text(format!("{:.0}%", progress * 100.0))
-                                        .desired_width(80.0),
-                                );
+                    if is_missing && matches!(compatibility, Some(true)) {
+                        ui.colored_label(egui::Color32::YELLOW, "📁 Missing");
+                        ui.add_space(3.0);
+                    }
+                    if has_override {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(255, 165, 0),
+                                "⚠ Incompatible Overruled",
+                            );
+                            if ui.small_button("🔓 Revoke").clicked() {
+                                effects.extend(state.toggle_compatibility_override(mod_id));
                             }
-                            any => {
-                                let enabled =
-                                    mod_info.is_some() && !matches!(compatibility, Some(false));
-                                let button_text = if is_updatable {
-                                    "🔄 Update"
-                                } else {
-                                    "Download"
-                                };
-                                if ui
-                                    .add_enabled(enabled, egui::Button::new(button_text))
-                                    .clicked()
-                                {
-                                    effects.extend(state.start_download(mod_id));
-                                }
-                                if (any == DownloadStatus::Complete || is_downloaded)
-                                    && !is_updatable
-                                {
-                                    ui.label("✅");
-                                }
-                                if any == DownloadStatus::Failed {
-                                    ui.colored_label(egui::Color32::RED, "❌");
-                                }
+                        });
+                    } else if matches!(raw_compatibility, Some(false)) {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(egui::Color32::RED, "❌ Incompatible");
+                            if ui.small_button("🔒 Overrule").clicked() {
+                                effects.extend(state.toggle_compatibility_override(mod_id));
                             }
-                        }
+                        });
                     }
                 });
             });
-        });
 
-        if should_scroll {
-            response.response.scroll_to_me(Some(egui::Align::Center));
-            view_state.scroll_to_mod_id = None;
-        }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("🗑").clicked() {
+                    effects.extend(state.delete_mod(mod_id));
+                }
+
+                let archive_text = if entry.archived {
+                    "📂 Unarchive"
+                } else {
+                    "📁"
+                };
+                if ui.button(archive_text).clicked() {
+                    effects.extend(state.toggle_archive_mod(mod_id));
+                }
+
+                if !entry.archived {
+                    let status = state
+                        .download_status
+                        .get(mod_id)
+                        .copied()
+                        .unwrap_or(DownloadStatus::Idle);
+
+                    let has_metadata = state.has_download_metadata(mod_id);
+                    let is_downloaded = has_metadata && (!is_missing && mod_info.is_some());
+
+                    match status {
+                        DownloadStatus::Downloading | DownloadStatus::Queued => {
+                            let progress =
+                                state.download_progress.get(mod_id).copied().unwrap_or(0.0);
+                            ui.add(
+                                egui::ProgressBar::new(progress)
+                                    .text(format!("{:.0}%", progress * 100.0))
+                                    .desired_width(80.0),
+                            );
+                        }
+                        any => {
+                            let enabled =
+                                mod_info.is_some() && !matches!(compatibility, Some(false));
+                            let button_text = if is_updateable {
+                                "🔄 Update"
+                            } else {
+                                "Download"
+                            };
+                            if ui
+                                .add_enabled(enabled, egui::Button::new(button_text))
+                                .clicked()
+                            {
+                                effects.extend(state.start_download(mod_id));
+                            }
+                            if (any == DownloadStatus::Complete || is_downloaded) && !is_updateable
+                            {
+                                ui.label("✅");
+                            }
+                            if any == DownloadStatus::Failed {
+                                ui.colored_label(egui::Color32::RED, "❌");
+                            }
+                        }
+                    }
+                }
+            });
+        });
 
         ui.separator();
     }
