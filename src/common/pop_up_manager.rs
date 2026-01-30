@@ -169,8 +169,8 @@ impl SharedPopupManager {
             }
         }
 
-        if ctx.input(|i| i.pointer.any_click()) {
-            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+        if ctx.input(|i| i.pointer.any_click())
+            && let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
                 let mut keep_until_idx = None;
 
                 for (idx, id) in inner.open_ids.iter().enumerate().rev() {
@@ -192,6 +192,5 @@ impl SharedPopupManager {
                     inner.open_ids.clear();
                 }
             }
-        }
     }
 }

@@ -83,11 +83,10 @@ impl CoreCacheWorker {
 
                     self.rt_handle.spawn(async move {
                         let path = w_ctx.get_fragment_path(ty, &key);
-                        if path.exists() {
-                            if let Err(e) = tokio::fs::remove_file(&path).await {
+                        if path.exists()
+                            && let Err(e) = tokio::fs::remove_file(&path).await {
                                 log::error!("Failed to discard disk cache at {path:?}: {e}");
                             }
-                        }
                     });
                 }
                 CacheCommand::Cleanup => {
@@ -155,15 +154,14 @@ impl WorkerContext {
         let path = self.get_fragment_path(ty, &key);
 
         // 1. Disk Check
-        if let Ok(bytes) = tokio::fs::read(&path).await {
-            if let Ok(meta) = tokio::fs::metadata(&path).await {
+        if let Ok(bytes) = tokio::fs::read(&path).await
+            && let Ok(meta) = tokio::fs::metadata(&path).await {
                 let modified = meta.modified().unwrap_or(SystemTime::now());
                 if SystemTime::now()
                     .duration_since(modified)
                     .unwrap_or_default()
                     < config.ttl
-                {
-                    if let Ok(data) = (ty.encoder().deserialize)(&bytes) {
+                    && let Ok(data) = (ty.encoder().deserialize)(&bytes) {
                         return CacheResponse::Updated {
                             ty,
                             ctx,
@@ -174,9 +172,7 @@ impl WorkerContext {
                                 .as_secs(),
                         };
                     }
-                }
             }
-        }
 
         // 2. Network Fetch
         let limiter = match self.limiters.get(&ty) {

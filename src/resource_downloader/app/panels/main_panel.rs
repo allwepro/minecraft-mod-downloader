@@ -126,8 +126,8 @@ impl MainPanel {
                             self.state.read().open_explorer(dir.clone().into());
                         }
 
-                        if ui.add(egui::Button::new("📤 Export")).clicked() {
-                            if let Some(path) = Dialogs::save_export_list_file(
+                        if ui.add(egui::Button::new("📤 Export")).clicked()
+                            && let Some(path) = Dialogs::save_export_list_file(
                                 &list_name,
                                 content_type == ResourceType::Mod,
                             ) {
@@ -143,7 +143,6 @@ impl MainPanel {
                                     );
                                 }
                             }
-                        }
 
                         let sort_id = self.sort_popup.id();
                         let sort_settings = self.sort_popup.settings.read();
@@ -244,8 +243,8 @@ impl MainPanel {
                                     loader.clone()
                                 );
 
-                                if let Ok(Some(v_list)) = versions {
-                                    if let Some(latest) = v_list.first() {
+                                if let Ok(Some(v_list)) = versions
+                                    && let Some(latest) = v_list.first() {
                                         self.trigger_download(
                                             &p_lnk,
                                             &proj.get_name(),
@@ -254,7 +253,6 @@ impl MainPanel {
                                             &content_type,
                                         );
                                     }
-                                }
                             }
                         }
                     }
@@ -592,11 +590,10 @@ impl MainPanel {
                                     egui::Button::new(btn_label),
                                 );
 
-                                if btn.clicked() {
-                                    if let Some(v) = latest_version {
+                                if btn.clicked()
+                                    && let Some(v) = latest_version {
                                         self.trigger_download(p_lnk, &name, v, dir, rt);
                                     }
-                                }
 
                                 if is_downloaded && !is_updatable {
                                     ui.label("✅");

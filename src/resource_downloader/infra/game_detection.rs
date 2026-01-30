@@ -44,21 +44,21 @@ impl GameDetection {
 
                 let flatpak_path = home_path
                     .join(".var/app/net.minecraft.launcher/data/.minecraft")
-                    .join(subfolder_target);
-                if flatpak_path.exists() || is_running_in_flatpak() {
+                    .join(&subfolder_target);
+                if flatpak_path.exists() || Self::is_running_in_flatpak() {
                     let _ = std::fs::create_dir_all(&flatpak_path);
                     return flatpak_path;
                 }
 
                 let snap_path = home_path
                     .join("snap/minecraft-launcher/common/.minecraft")
-                    .join(subfolder_target);
-                if snap_path.exists() || is_running_in_snap() {
+                    .join(&subfolder_target);
+                if snap_path.exists() || Self::is_running_in_snap() {
                     let _ = std::fs::create_dir_all(&snap_path);
                     return snap_path;
                 }
 
-                let path = home_path.join(".minecraft").join(subfolder_target);
+                let path = home_path.join(".minecraft").join(&subfolder_target);
                 if !path.exists() {
                     let _ = std::fs::create_dir_all(&path);
                 }

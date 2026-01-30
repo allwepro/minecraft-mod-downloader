@@ -116,8 +116,8 @@ impl ProjectVersion {
             .depended_on
             .into_iter()
             .map(|d| {
-                if let Some(prev_ver) = prev_version {
-                    if let Some(prev_dep) = prev_ver.get_depended_on(d.project.clone()) {
+                if let Some(prev_ver) = prev_version
+                    && let Some(prev_dep) = prev_ver.get_depended_on(d.project.clone()) {
                         return ProjectDependency {
                             project: d.project,
                             dependency_type: d.dependency_type,
@@ -125,7 +125,6 @@ impl ProjectVersion {
                             version_id: d.version_id,
                         };
                     }
-                }
                 ProjectDependency {
                     project: d.project,
                     dependency_type: d.dependency_type,

@@ -40,11 +40,10 @@ impl ListFileManager {
 
         while let Some(entry) = dir.next_entry().await? {
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("mmd") {
-                if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+            if path.extension().and_then(|s| s.to_str()) == Some("mmd")
+                && let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
                     list_filenames.push(file_stem.to_string());
                 }
-            }
         }
 
         for filename in list_filenames {
