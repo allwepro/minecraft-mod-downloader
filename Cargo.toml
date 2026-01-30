@@ -1,26 +1,36 @@
 [package]
-name = "minecraft_mod_downloader"
-version = "1.0.0-alpha"
+name = "flux-launcher"
+version = "2.0.0-alpha"
 edition = "2024"
-authors = ["Minecraft Mod Downloader Contributors"]
-description = "A GUI-based Minecraft mod downloader."
+authors = ["Flux Launcher Contributors"]
+description = "A GUI-based Minecraft Launcher and Resource Manager."
 
 [dependencies]
-eframe = "0.33"
-egui = "0.33"
-egui_extras = { version = "0.33", features = ["image"] }
-image = { version = "0.25", features = ["png"] }
-tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.13", features = ["json", "stream"] }
+# async
+tokio = { version = "1.49", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
 futures-util = "0.3"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+parking_lot = "0.12.5"
+# web
+reqwest = { version = "0.13", features = ["json", "stream"] }
+urlencoding = "2.1"
+# fs
+dirs = "6.0"
+rfd = "0.17"
+sha1 = "0.11.0-rc.4"
+# gui
+egui = "0.33"
+image = { version = "0.25", features = ["png"] }
+eframe = "0.33"
+egui_extras = { version = "0.33", features = ["image"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
 toml = "0.9"
-anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"
+bytes = "1.11.0"
+# log
+anyhow = "1.0"
 log = "0.4"
 env_logger = "0.11"
-chrono = { version = "0.4", features = ["serde"] }
-dirs = "6"
-rfd = "0.17"
-async-trait = "0.1"
-urlencoding = "2"

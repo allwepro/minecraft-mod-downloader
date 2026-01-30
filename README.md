@@ -1,7 +1,6 @@
-# 🧩 Minecraft Resource Downloader
+# 🧩 Flux Launcher
 
-A fast, reliable **Minecraft Resource Downloader** written in **Rust**.  
-Designed for managing and downloading **all Modrinth resources** — including **mods, shaders, resource packs, datapacks, and plugins** — for **Minecraft: Java Edition** across versions.
+A fast, reliable **Minecraft Launcher & Resource Management Tool** written in **Rust**.  
 
 [![Rust CI](https://github.com/allwepro/minecraft-mod-downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/allwepro/minecraft-mod-downloader/actions/workflows/ci.yml)
 [![Rust Security Audit](https://github.com/allwepro/minecraft-mod-downloader/actions/workflows/audit.yml/badge.svg)](https://github.com/allwepro/minecraft-mod-downloader/actions/workflows/audit.yml)
@@ -15,7 +14,7 @@ Designed for managing and downloading **all Modrinth resources** — including *
 
 ## 🧭 Overview
 
-**Minecraft Resource Downloader** is a modern desktop application that makes downloading and managing Minecraft content effortless.  
+**Flux Launcher** is a modern desktop application that makes downloading and managing Minecraft content effortless.  
 It provides a sleek, responsive, cross-platform **GUI** for browsing and installing **any resource hosted on Modrinth**, with automatic detection of compatible Minecraft versions and loaders.
 
 > ⚙️ Supports **Modrinth** resources for **Minecraft: Java Edition**, including mods, shaders, resource packs, datapacks, and plugins.
@@ -57,7 +56,7 @@ cargo run
 
 ## ⚠️ Disclaimer
 
-Minecraft Resource Downloader is an **independent project** and is **not affiliated, endorsed, or associated** with **Mojang AB**, **Microsoft Corporation**, **Modrinth**, or **Rinth Inc.**  
+Flux Launcher is an **independent project** and is **not affiliated, endorsed, or associated** with **Mojang AB**, **Microsoft Corporation**, **Modrinth**, or **Rinth Inc.**  
 All Minecraft-related trademarks, names, and assets are the property of their respective owners.  
 Use this tool responsibly and in accordance with the terms of service of each platform.
 
@@ -79,4 +78,4 @@ Open an [issue](https://github.com/allwepro/minecraft-mod-downloader/issues) or 
 
 ---
 
-**Minecraft Resource Downloader** — One downloader. Every resource.
+**Flux Launcher** — One downloader. Every resource.
