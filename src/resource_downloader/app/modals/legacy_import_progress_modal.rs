@@ -153,8 +153,9 @@ impl ModalWindow for LegacyProgressImportModal {
 
     fn on_close(&mut self) {
         if let LegacyModalMode::ImportResults { list_lnk, .. } = &self.mode
-            && !self.confirmed {
-                self.state.read().list_pool.delete(list_lnk);
-            }
+            && !self.confirmed
+        {
+            self.state.read().list_pool.delete(list_lnk);
+        }
     }
 }

@@ -170,27 +170,28 @@ impl SharedPopupManager {
         }
 
         if ctx.input(|i| i.pointer.any_click())
-            && let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
-                let mut keep_until_idx = None;
+            && let Some(pos) = ctx.input(|i| i.pointer.interact_pos())
+        {
+            let mut keep_until_idx = None;
 
-                for (idx, id) in inner.open_ids.iter().enumerate().rev() {
-                    let is_hit = inner
-                        .interaction_areas
-                        .get(id)
-                        .is_some_and(|rects| rects.iter().any(|r| r.contains(pos)))
-                        || inner.body_rects.get(id).is_some_and(|r| r.contains(pos));
+            for (idx, id) in inner.open_ids.iter().enumerate().rev() {
+                let is_hit = inner
+                    .interaction_areas
+                    .get(id)
+                    .is_some_and(|rects| rects.iter().any(|r| r.contains(pos)))
+                    || inner.body_rects.get(id).is_some_and(|r| r.contains(pos));
 
-                    if is_hit {
-                        keep_until_idx = Some(idx);
-                        break;
-                    }
-                }
-
-                if let Some(idx) = keep_until_idx {
-                    inner.open_ids.truncate(idx + 1);
-                } else {
-                    inner.open_ids.clear();
+                if is_hit {
+                    keep_until_idx = Some(idx);
+                    break;
                 }
             }
+
+            if let Some(idx) = keep_until_idx {
+                inner.open_ids.truncate(idx + 1);
+            } else {
+                inner.open_ids.clear();
+            }
+        }
     }
 }

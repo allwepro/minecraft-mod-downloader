@@ -171,7 +171,7 @@ impl ModalWindow for SearchModal {
     fn on_close(&mut self) {
         if let Some(project) = self.project_to_add.take()
             && let Ok(Some(data)) =
-            get_project_metadata!(self.state, project.clone(), self.resource_type)
+                get_project_metadata!(self.state, project.clone(), self.resource_type)
         {
             get_list_mut!(self.state, &self.list).add_project(Project::new_from_rt_project(
                 project,

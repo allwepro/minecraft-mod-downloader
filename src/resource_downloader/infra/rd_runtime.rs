@@ -469,7 +469,7 @@ impl RDRuntime {
                                     }
                                     Ok(s)
                                 }
-                                    .await;
+                                .await;
 
                                 if let Ok(sha1_hash) = hash_result {
                                     files.push((path, sha1_hash));

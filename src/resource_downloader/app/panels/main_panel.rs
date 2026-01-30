@@ -106,8 +106,8 @@ impl MainPanel {
                             ver.name,
                             loader.name
                         ))
-                            .small()
-                            .weak(),
+                        .small()
+                        .weak(),
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -130,19 +130,20 @@ impl MainPanel {
                             && let Some(path) = Dialogs::save_export_list_file(
                                 &list_name,
                                 content_type == ResourceType::Mod,
-                            ) {
-                                let ext = path.extension().and_then(|s| s.to_str());
-                                if ext == Some("toml") || ext == Some("mmd") {
-                                    self.state.read().list_pool.export(&lnk, path);
-                                } else if content_type == ResourceType::Mod {
-                                    self.state.read().list_pool.export_legacy(
-                                        &lnk,
-                                        path,
-                                        ver.clone(),
-                                        loader.clone(),
-                                    );
-                                }
+                            )
+                        {
+                            let ext = path.extension().and_then(|s| s.to_str());
+                            if ext == Some("toml") || ext == Some("mmd") {
+                                self.state.read().list_pool.export(&lnk, path);
+                            } else if content_type == ResourceType::Mod {
+                                self.state.read().list_pool.export_legacy(
+                                    &lnk,
+                                    path,
+                                    ver.clone(),
+                                    loader.clone(),
+                                );
                             }
+                        }
 
                         let sort_id = self.sort_popup.id();
                         let sort_settings = self.sort_popup.settings.read();
@@ -244,15 +245,16 @@ impl MainPanel {
                                 );
 
                                 if let Ok(Some(v_list)) = versions
-                                    && let Some(latest) = v_list.first() {
-                                        self.trigger_download(
-                                            &p_lnk,
-                                            &proj.get_name(),
-                                            latest,
-                                            &dir,
-                                            &content_type,
-                                        );
-                                    }
+                                    && let Some(latest) = v_list.first()
+                                {
+                                    self.trigger_download(
+                                        &p_lnk,
+                                        &proj.get_name(),
+                                        latest,
+                                        &dir,
+                                        &content_type,
+                                    );
+                                }
                             }
                         }
                     }
@@ -591,9 +593,10 @@ impl MainPanel {
                                 );
 
                                 if btn.clicked()
-                                    && let Some(v) = latest_version {
-                                        self.trigger_download(p_lnk, &name, v, dir, rt);
-                                    }
+                                    && let Some(v) = latest_version
+                                {
+                                    self.trigger_download(p_lnk, &name, v, dir, rt);
+                                }
 
                                 if is_downloaded && !is_updatable {
                                     ui.label("✅");

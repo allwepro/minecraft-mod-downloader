@@ -258,9 +258,10 @@ impl SharedNotificationManager {
 
         if reset_timer
             && let Some(idx) = active_idx_in_queue
-                && let Some(item) = inner.queue.get_mut(idx) {
-                    item.elapsed_secs = 0.0;
-                }
+            && let Some(item) = inner.queue.get_mut(idx)
+        {
+            item.elapsed_secs = 0.0;
+        }
         if let Some(idx) = clicked_idx {
             inner.queue[idx].instance.on_click();
         }

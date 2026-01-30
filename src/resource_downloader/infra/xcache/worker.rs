@@ -84,9 +84,10 @@ impl CoreCacheWorker {
                     self.rt_handle.spawn(async move {
                         let path = w_ctx.get_fragment_path(ty, &key);
                         if path.exists()
-                            && let Err(e) = tokio::fs::remove_file(&path).await {
-                                log::error!("Failed to discard disk cache at {path:?}: {e}");
-                            }
+                            && let Err(e) = tokio::fs::remove_file(&path).await
+                        {
+                            log::error!("Failed to discard disk cache at {path:?}: {e}");
+                        }
                     });
                 }
                 CacheCommand::Cleanup => {
@@ -155,24 +156,26 @@ impl WorkerContext {
 
         // 1. Disk Check
         if let Ok(bytes) = tokio::fs::read(&path).await
-            && let Ok(meta) = tokio::fs::metadata(&path).await {
-                let modified = meta.modified().unwrap_or(SystemTime::now());
-                if SystemTime::now()
-                    .duration_since(modified)
-                    .unwrap_or_default()
-                    < config.ttl
-                    && let Ok(data) = (ty.encoder().deserialize)(&bytes) {
-                        return CacheResponse::Updated {
-                            ty,
-                            ctx,
-                            data,
-                            ts: modified
-                                .duration_since(SystemTime::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs(),
-                        };
-                    }
+            && let Ok(meta) = tokio::fs::metadata(&path).await
+        {
+            let modified = meta.modified().unwrap_or(SystemTime::now());
+            if SystemTime::now()
+                .duration_since(modified)
+                .unwrap_or_default()
+                < config.ttl
+                && let Ok(data) = (ty.encoder().deserialize)(&bytes)
+            {
+                return CacheResponse::Updated {
+                    ty,
+                    ctx,
+                    data,
+                    ts: modified
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                };
             }
+        }
 
         // 2. Network Fetch
         let limiter = match self.limiters.get(&ty) {
