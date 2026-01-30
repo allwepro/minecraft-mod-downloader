@@ -28,57 +28,53 @@ Examples:
 
 ---
 
-## 3️⃣ Project Structure & Architecture
+### 3️⃣ Project Structure & Architecture
 
-The repository is organized into **logical layers** to keep responsibilities clearly separated and the codebase easy to maintain.
+The repository is organized into modules that separate shared UI components from feature-specific logic. We follow a pattern that decouples the visual interface from business rules and external integrations.
 
-### 📁 Folder Structure (Overview)
-```
+#### 📁 Folder Structure (Overview)
+```text
 src/
 ├── main.rs               # Application entry point
 │
-├── adapters/             # External service adapters
-│   └── modrinth.rs       # Modrinth API adapter
+├── common/               # Shared UI Framework
+│   │                     # Global components like modals and notifications
+│   └── prefabs/          # Reusable UI templates (Window wrappers, ViewControllers)
 │
-├── app/                  # Application layer
-│   ├── app_state.rs      # Global application state
-│   ├── runtime.rs        # Event loop & task orchestration
-│   └── effect.rs         # Side-effect definitions
-│
-├── domain/               # Core domain logic
-│   ├── mod_service.rs    # Resource handling logic
-│   └── mod_source.rs     # Abstract adapter interface
-│
-├── infra/                # Infrastructure & side effects
-│   ├── api_service.rs    # HTTP / API handling
-│   ├── config_manager.rs # Configuration & persistence
-│   └── project_cache.rs  # Local caching
-│
-└── ui/                   # GUI layer
-    ├── dialogs.rs        # Common dialogs
-    ├── view_state.rs     # UI state definitions
-    ├── panels/           # Main UI panels
-    │   └── main_panel.rs 
-    └── windows/          # Application windows
-        └── search_window.rs
+└── resource_downloader/  # Main Feature Module
+    ├── app/              # UI Layer (The "View")
+    │   ├── panels/       # Persistent UI sections (Sidebar, Main Panel)
+    │   ├── modals/       # Interactive overlays (Search, Settings, Import)
+    │   └── components/   # Small, reusable feature-specific widgets
+    │
+    ├── business/         # Application Logic (The "Brain")
+    │   ├── rd_state.rs   # State management and event definitions
+    │   ├── services/     # Async task pools and API orchestrators
+    │   └── cache/        # Logic for data persistence and retrieval
+    │
+    ├── domain/           # Core Entities (The "Model")
+    │   └── project.rs    # Definitions for Projects, Games, and Lists
+    │
+    └── infra/            # Infrastructure & IO (The "Hands")
+        ├── adapters/     # External API clients (e.g., Modrinth)
+        ├── rd_runtime.rs # Async runtime and task execution
+        └── lists_manager.rs # Filesystem and config persistence
 ```
-
-> This is a simplified overview.
-
----
 
 ### 🔄 Execution Flow
-```
-UI → app (state & effects) → domain (business logic)
-   → adapters / infra (API, FS, cache)
-   → domain → app → UI updates
-```
+Our architecture follows a unidirectional flow to keep the state predictable:
 
-This architecture ensures:
-- 🖼 UI code focuses purely on presentation
-- 🧠 Domain logic remains pure and easy to test
-- 🔌 Infrastructure handles all external side effects
-- 🌐 Adapters isolate third‑party services like Modrinth
+1.  **UI (app):** User triggers an action (e.g., clicks "Download").
+2.  **Business:** The event is processed; state is updated or an "Effect" is scheduled.
+3.  **Infra/Adapters:** External calls are made (API requests, File IO).
+4.  **Domain:** Data is validated and structured according to business rules.
+5.  **UI Updates:** The state change ripples back to the UI for re-rendering.
+
+This separation ensures that:
+- 🎨 **UI code** handles only layout and styling.
+- ⚙️ **Business logic** remains independent of the specific UI framework.
+- 🔌 **Infrastructure** isolates side effects like web requests and disk access.
+- 🛠 **Common** provides a consistent look and feel across different app modules.
 
 ---
 

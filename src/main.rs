@@ -1,44 +1,27 @@
-//#![windows_subsystem = "windows"]
-mod adapters;
-mod app;
-mod domain;
-mod infra;
-mod ui;
+mod common;
+mod resource_downloader;
 
+use crate::common::app::App;
+use crate::common::app_icon::get_app_icon;
 use eframe::NativeOptions;
-use egui::IconData;
-use image::DynamicImage;
 use tokio::runtime::Runtime;
-use ui::App;
 
 fn main() -> eframe::Result<()> {
     env_logger::init();
 
     let runtime = Runtime::new().expect("Failed to create Tokio runtime");
 
-    let fallback = DynamicImage::new_rgba8(64, 64);
-    let icon_path = "assets/icon.png";
-    let image = image::open(icon_path).unwrap_or_else(|_| fallback.clone());
-    let image_rgba = image.to_rgba8();
-    let (width, height) = image_rgba.dimensions();
-
-    let icon_data = IconData {
-        rgba: image_rgba.into_raw(),
-        width,
-        height,
-    };
-
     let options = NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 700.0])
             .with_min_inner_size([1000.0, 400.0])
-            .with_title("Minecraft Launcher/Resource Downloader")
-            .with_icon(icon_data),
+            .with_title("Flux Launcher & Resource Downloader")
+            .with_icon(get_app_icon()),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Minecraft Launcher/Resource Downloader",
+        "Flux Launcher & Resource Downloader",
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
