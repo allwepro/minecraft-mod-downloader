@@ -153,7 +153,7 @@ impl ListFileManager {
         let path_target = match self.get_list_path(&list).await {
             Some(p) => p,
             None => {
-                let name = format!("list_{}", target_list.get_id());
+                let name = target_list.get_id();
                 self.internal_set_filename_cache(&list, name.clone()).await;
                 self.primitive_get_list_path(&name)
             }
@@ -181,7 +181,7 @@ impl ListFileManager {
         let path_target = match self.get_list_path(list).await {
             Some(p) => p,
             None => {
-                let name = format!("list_{list}");
+                let name = list.to_string();
                 self.internal_set_filename_cache(list, name.clone()).await;
                 self.primitive_get_list_path(&name)
             }

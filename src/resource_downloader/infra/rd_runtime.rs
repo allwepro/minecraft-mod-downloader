@@ -374,6 +374,29 @@ impl RDRuntime {
                             if let Some(target) =
                                 rt_versions.into_iter().find(|v| v.version_id == version_id)
                             {
+                                for prj in
+                                    target.depended_on.iter().map(|d| d.project.clone())
+                                        .collect::<Vec<ProjectLnk>>()
+                                {
+                                    if list.read().has_project(&prj) {
+                                        continue;
+                                    }
+                                    if let Some(rtpm) = api
+                                        .rt_project_pool
+                                        .get_metadata_blocking(prj.clone(), rt)
+                                        .await
+                                        .unwrap_or(None)
+                                    {
+                                        list.write().add_project(Project::new(
+                                            prj.to_context_id().unwrap(),
+                                            rt,
+                                            false,
+                                            rtpm.name,
+                                            rtpm.description,
+                                            rtpm.author,
+                                        ));
+                                    }
+                                }
                                 let (lnk, toml_out) = {
                                     let mut guard = list.write();
                                     let domain_v = ProjectVersion::new(
@@ -398,6 +421,7 @@ impl RDRuntime {
                                     guard.add_version(&project, domain_v);
                                     (guard.get_lnk(), toml::to_string_pretty(&*guard).unwrap())
                                 };
+
                                 if let Err(e) = lm.save_raw(&lnk, toml_out).await {
                                     let _ = tx
                                         .send(InternalEvent::Standard(

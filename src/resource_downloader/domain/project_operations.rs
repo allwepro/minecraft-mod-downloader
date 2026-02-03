@@ -8,6 +8,7 @@ pub enum MutationOutcome {
     ProjectAdded,
     ProjectRemoved,
     ProjectDemoted,
+    ProjectPromoted,
 
     // Dependency operations
     VersionAdded,

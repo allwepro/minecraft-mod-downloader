@@ -206,9 +206,17 @@ impl ProjectList {
         &self.projects
     }
 
-    pub fn get_projects(&self) -> Vec<ProjectLnk> {
+    fn get_projects(&self) -> Vec<ProjectLnk> {
         self.projects
             .iter()
+            .map(|p| p.get_lnk().clone())
+            .collect::<Vec<_>>()
+    }
+
+    pub fn get_manual_projects(&self) -> Vec<ProjectLnk> {
+        self.projects
+            .iter()
+            .filter(|p| p.is_manual())
             .map(|p| p.get_lnk().clone())
             .collect::<Vec<_>>()
     }
@@ -221,10 +229,17 @@ impl ProjectList {
         self.projects.len()
     }
 
-    pub fn projects_by_type(&self, resource_type: ResourceType) -> Vec<&Project> {
+    fn projects_by_type(&self, resource_type: ResourceType) -> Vec<&Project> {
         self.projects
             .iter()
             .filter(|p| p.resource_type == resource_type)
+            .collect()
+    }
+
+    pub fn manual_projects_by_type(&self, resource_type: ResourceType) -> Vec<&Project> {
+        self.projects
+            .iter()
+            .filter(|p| p.is_manual() && p.resource_type == resource_type)
             .collect()
     }
 
@@ -255,10 +270,32 @@ impl ProjectList {
         self.projects.iter_mut().find(|p| p.is_lnk(project))
     }
 
+    pub fn is_project_archived(&self, project: &ProjectLnk) -> bool {
+        self.get_project(project).unwrap().is_archived()
+            && self
+                .get_project(project)
+                .unwrap()
+                .get_dependents()
+                .iter()
+                .find(|d| self.get_project(d).is_some_and(|p| !p.is_archived()))
+                .is_none()
+    }
+
     // public operations
     pub fn add_project(&mut self, project_target: Project) -> MutationResult {
         if self.has_project(&project_target.get_lnk()) {
-            MutationResult::new(MutationOutcome::AlreadyExists)
+            if project_target.is_manual()
+                && self
+                    .get_project(&project_target.get_lnk())
+                    .is_some_and(|a| !a.is_manual())
+            {
+                self.get_project_mut(&project_target.get_lnk())
+                    .unwrap()
+                    .set_manual(true);
+                MutationResult::new(MutationOutcome::ProjectPromoted)
+            } else {
+                MutationResult::new(MutationOutcome::AlreadyExists)
+            }
         } else {
             let project_lnk = project_target.get_lnk();
             let mut mutation =
@@ -299,6 +336,7 @@ impl ProjectList {
         }
 
         mutation.add_removed(vec![project.clone()]);
+        mutation.chain(self.cleanup_orphaned_dependencies());
         mutation
     }
 
@@ -350,6 +388,7 @@ impl ProjectList {
             return MutationResult::unchanged();
         }
 
+        mutation.chain(self.cleanup_orphaned_dependencies());
         mutation
     }
 
@@ -476,7 +515,6 @@ impl ProjectList {
         }
 
         mutation.add_changed(depended_on_projects);
-        mutation.chain(self.cleanup_orphaned_dependencies());
         mutation
     }
 
