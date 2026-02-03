@@ -3,6 +3,7 @@ mod panels;
 mod view_state;
 mod windows;
 
+use crate::launcher::ui::LauncherPanel;
 use panels::{MainPanel, SidebarPanel, TopPanel};
 pub use view_state::ViewState;
 use windows::{
@@ -17,6 +18,7 @@ pub struct App {
     state: AppState,
     view_state: ViewState,
     runtime: AppRuntime,
+    launcher_panel: LauncherPanel,
     _tokio_runtime: tokio::runtime::Runtime,
 }
 
@@ -31,6 +33,7 @@ impl App {
             state,
             view_state: ViewState::default(),
             runtime: app_runtime,
+            launcher_panel: LauncherPanel::new(),
             _tokio_runtime: runtime,
         }
     }
@@ -91,6 +94,22 @@ impl App {
     fn render_main_ui(&mut self, ctx: &egui::Context) {
         let top_effects = TopPanel::show(ctx, &mut self.view_state, &mut self.runtime);
         self.run_effects(top_effects);
+
+        if self.view_state.launcher_open {
+            let download_dir = self.state.get_effective_download_dir();
+            let selected_loader = self.state.get_effective_loader();
+            let rt_handle = self._tokio_runtime.handle().clone();
+
+            self.launcher_panel.show(
+                ctx,
+                &self.runtime.config_manager,
+                &rt_handle,
+                &self.state.current_list_id,
+                &download_dir,
+                &selected_loader,
+            );
+            return;
+        }
 
         if !self.view_state.launcher_open {
             let sidebar_effects = SidebarPanel::show(

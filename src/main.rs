@@ -1,8 +1,8 @@
-//#![windows_subsystem = "windows"]
 mod adapters;
-mod app;
+mod app;  // Origin/main app architecture (for future integration)
 mod domain;
 mod infra;
+mod launcher;
 mod ui;
 
 use eframe::NativeOptions;
