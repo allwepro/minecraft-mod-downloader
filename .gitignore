@@ -102,3 +102,9 @@ Session.vim
 .settings/
 .cache/
 temp/
+
+# =======================
+# Project Specific
+# =======================
+java_runtimes/
+.claude/

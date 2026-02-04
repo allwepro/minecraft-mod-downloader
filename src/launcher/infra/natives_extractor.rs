@@ -103,7 +103,7 @@ impl NativesExtractor {
 
     /// Get list of native library JARs from manifest
     pub fn get_native_jars(
-        manifest: &crate::launcher::domain::VersionManifest,
+        manifest: &crate::launcher::domain::ResolvedManifest,
         game_dir: &Path,
     ) -> Vec<PathBuf> {
         let mut native_jars = Vec::new();
@@ -120,11 +120,33 @@ impl NativesExtractor {
                 continue;
             }
 
-            // Check if this is a native library by looking at the name
-            // Native libraries have a classifier like "natives-macos", "natives-linux", "natives-windows"
+            // Prefer natives mapping + downloads.classifiers (standard Mojang manifests)
+            if let Some(natives) = &library.natives {
+                if let Some(classifier_template) = natives.get(Self::get_os_key()) {
+                    let classifier = Self::substitute_arch(classifier_template);
+                    if let Some(downloads) = &library.downloads {
+                        if let Some(classifiers) = &downloads.classifiers {
+                            if let Some(artifact) = classifiers.get(&classifier) {
+                                let native_jar = libraries_dir.join(&artifact.path);
+                                println!("Found native library: {}", library.name);
+                                println!("  Checking path: {}", native_jar.display());
+                                if native_jar.exists() {
+                                    println!("  ✓ Exists!");
+                                    native_jars.push(native_jar);
+                                } else {
+                                    println!("  ✗ Not found!");
+                                    log::warn!("Native JAR not found: {}", native_jar.display());
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
 
+            // Fallback: classifier embedded in name (non-standard)
             if library.name.contains(classifier_suffix) {
-                println!("Found native library: {}", library.name);
+                println!("Found native library (fallback): {}", library.name);
                 // Parse library name with classifier
                 // Format: "group:artifact:version:classifier"
                 let parts: Vec<&str> = library.name.split(':').collect();
@@ -184,5 +206,19 @@ impl NativesExtractor {
         } else {
             "linux"
         }
+    }
+
+    fn substitute_arch(template: &str) -> String {
+        if !template.contains("${arch}") {
+            return template.to_string();
+        }
+
+        let arch = if cfg!(target_pointer_width = "32") {
+            "32"
+        } else {
+            "64"
+        };
+
+        template.replace("${arch}", arch)
     }
 }
