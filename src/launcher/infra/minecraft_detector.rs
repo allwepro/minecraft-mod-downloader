@@ -62,6 +62,9 @@ impl MinecraftDetector {
             for entry in entries.flatten() {
                 if entry.path().is_dir() {
                     if let Some(version_name) = entry.file_name().to_str() {
+                        if Self::is_loader_profile(version_name) {
+                            continue;
+                        }
                         // Check if this directory contains both json and jar files
                         let json_file = entry.path().join(format!("{}.json", version_name));
                         let jar_file = entry.path().join(format!("{}.jar", version_name));
@@ -78,6 +81,14 @@ impl MinecraftDetector {
         versions.sort();
         versions.reverse(); // Most recent versions first
         versions
+    }
+
+    fn is_loader_profile(version_name: &str) -> bool {
+        let lower = version_name.to_lowercase();
+        lower.starts_with("fabric-loader-")
+            || lower.starts_with("forge-")
+            || lower.starts_with("neoforge-")
+            || lower.starts_with("quilt-loader-")
     }
 
     /// Ensure mods directory exists

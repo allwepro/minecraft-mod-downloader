@@ -1,7 +1,7 @@
-use super::{LaunchConfig, LaunchResult, VersionManifest};
+use super::{LaunchConfig, LaunchResult, ResolvedManifest, VersionManifest};
 use crate::launcher::infra::NativesExtractor;
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 pub struct AdvancedLauncher;
@@ -24,8 +24,8 @@ impl AdvancedLauncher {
             });
         }
 
-        let manifest = VersionManifest::from_file(&version_json_path)
-            .context("Failed to parse version manifest")?;
+        let manifest = VersionManifest::resolve_from_file(&version_json_path)
+            .context("Failed to parse/resolve version manifest")?;
 
         // Extract native libraries
         let natives_dir = game_dir
@@ -60,7 +60,7 @@ impl AdvancedLauncher {
         }
 
         // Build classpath
-        let classpath = Self::build_classpath(&manifest, game_dir, version)?;
+        let classpath = Self::build_classpath(&manifest, game_dir)?;
 
         // Build game arguments
         let game_args = Self::build_game_arguments(&manifest, config, &classpath)?;
@@ -118,9 +118,8 @@ impl AdvancedLauncher {
 
     /// Build classpath from libraries
     fn build_classpath(
-        manifest: &VersionManifest,
+        manifest: &ResolvedManifest,
         game_dir: &Path,
-        version: &str,
     ) -> Result<String> {
         let mut classpath_entries = Vec::new();
         let libraries_dir = game_dir.join("libraries");
@@ -159,8 +158,8 @@ impl AdvancedLauncher {
         // Add the minecraft client jar
         let client_jar = game_dir
             .join("versions")
-            .join(version)
-            .join(format!("{}.jar", version));
+            .join(&manifest.client_jar_id)
+            .join(format!("{}.jar", manifest.client_jar_id));
 
         if client_jar.exists() {
             classpath_entries.push(client_jar.to_string_lossy().to_string());
@@ -183,7 +182,7 @@ impl AdvancedLauncher {
 
     /// Build game arguments with variable substitution
     fn build_game_arguments(
-        manifest: &VersionManifest,
+        manifest: &ResolvedManifest,
         config: &LaunchConfig,
         classpath: &str,
     ) -> Result<Vec<String>> {
@@ -194,18 +193,33 @@ impl AdvancedLauncher {
             for arg in &arguments.game {
                 match arg {
                     super::version_manifest::ArgumentValue::String(s) => {
-                        args.push(Self::substitute_variables(s, config, classpath));
+                        args.push(Self::substitute_variables(
+                            s,
+                            config,
+                            classpath,
+                            &manifest.asset_index.id,
+                        ));
                     }
                     super::version_manifest::ArgumentValue::Conditional { rules, value } => {
                         // Check if rules match
                         if Self::check_rules(rules) {
                             match value {
                                 super::version_manifest::ArgumentValueInner::String(s) => {
-                                    args.push(Self::substitute_variables(s, config, classpath));
+                                    args.push(Self::substitute_variables(
+                                        s,
+                                        config,
+                                        classpath,
+                                        &manifest.asset_index.id,
+                                    ));
                                 }
                                 super::version_manifest::ArgumentValueInner::Array(arr) => {
                                     for s in arr {
-                                        args.push(Self::substitute_variables(s, config, classpath));
+                                        args.push(Self::substitute_variables(
+                                            s,
+                                            config,
+                                            classpath,
+                                            &manifest.asset_index.id,
+                                        ));
                                     }
                                 }
                             }
@@ -217,7 +231,12 @@ impl AdvancedLauncher {
         // Handle legacy arguments format (pre-1.13)
         else if let Some(ref legacy_args) = manifest.minecraft_arguments {
             for arg in legacy_args.split_whitespace() {
-                args.push(Self::substitute_variables(arg, config, classpath));
+                args.push(Self::substitute_variables(
+                    arg,
+                    config,
+                    classpath,
+                    &manifest.asset_index.id,
+                ));
             }
         }
         // Fallback to basic arguments
@@ -237,7 +256,7 @@ impl AdvancedLauncher {
                     .to_string_lossy()
                     .to_string(),
                 "--assetIndex".to_string(),
-                manifest.assets.clone(),
+                manifest.asset_index.id.clone(),
             ]);
         }
 
@@ -246,7 +265,7 @@ impl AdvancedLauncher {
 
     /// Build JVM arguments
     fn build_jvm_arguments(
-        manifest: &VersionManifest,
+        manifest: &ResolvedManifest,
         config: &LaunchConfig,
         classpath: &str,
     ) -> Result<Vec<String>> {
@@ -261,17 +280,32 @@ impl AdvancedLauncher {
             for arg in &arguments.jvm {
                 match arg {
                     super::version_manifest::ArgumentValue::String(s) => {
-                        args.push(Self::substitute_variables(s, config, classpath));
+                        args.push(Self::substitute_variables(
+                            s,
+                            config,
+                            classpath,
+                            &manifest.asset_index.id,
+                        ));
                     }
                     super::version_manifest::ArgumentValue::Conditional { rules, value } => {
                         if Self::check_rules(rules) {
                             match value {
                                 super::version_manifest::ArgumentValueInner::String(s) => {
-                                    args.push(Self::substitute_variables(s, config, classpath));
+                                    args.push(Self::substitute_variables(
+                                        s,
+                                        config,
+                                        classpath,
+                                        &manifest.asset_index.id,
+                                    ));
                                 }
                                 super::version_manifest::ArgumentValueInner::Array(arr) => {
                                     for s in arr {
-                                        args.push(Self::substitute_variables(s, config, classpath));
+                                        args.push(Self::substitute_variables(
+                                            s,
+                                            config,
+                                            classpath,
+                                            &manifest.asset_index.id,
+                                        ));
                                     }
                                 }
                             }
@@ -293,14 +327,21 @@ impl AdvancedLauncher {
         // Substitute variables in JVM args
         args = args
             .into_iter()
-            .map(|arg| Self::substitute_variables(&arg, config, classpath))
+            .map(|arg| {
+                Self::substitute_variables(&arg, config, classpath, &manifest.asset_index.id)
+            })
             .collect();
 
         Ok(args)
     }
 
     /// Substitute variables in argument strings
-    fn substitute_variables(template: &str, config: &LaunchConfig, classpath: &str) -> String {
+    fn substitute_variables(
+        template: &str,
+        config: &LaunchConfig,
+        classpath: &str,
+        asset_index_id: &str,
+    ) -> String {
         let game_dir = config.profile.game_directory.to_string_lossy();
         let natives_dir = config
             .profile
@@ -318,7 +359,7 @@ impl AdvancedLauncher {
             .replace("${version_name}", &config.profile.minecraft_version)
             .replace("${game_directory}", &game_dir)
             .replace("${assets_root}", &format!("{}/assets", game_dir))
-            .replace("${assets_index_name}", &config.profile.minecraft_version)
+            .replace("${assets_index_name}", asset_index_id)
             .replace("${auth_uuid}", "00000000-0000-0000-0000-000000000000")
             .replace("${auth_access_token}", "0")
             .replace("${user_type}", "legacy")
