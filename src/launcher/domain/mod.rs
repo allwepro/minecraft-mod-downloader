@@ -6,4 +6,4 @@ pub mod version_manifest;
 pub use advanced_launcher::AdvancedLauncher;
 pub use launcher::*;
 pub use launcher_service::LauncherService;
-pub use version_manifest::VersionManifest;
+pub use version_manifest::{AssetIndex, Library, ResolvedManifest, VersionManifest};

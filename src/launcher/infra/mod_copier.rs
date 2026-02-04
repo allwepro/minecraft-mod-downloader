@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
 
 pub struct ModCopier;
 
@@ -30,6 +30,15 @@ impl ModCopier {
                     .context("Invalid mod filename")?
                     .to_string_lossy()
                     .to_string();
+
+                let metadata = tokio::fs::metadata(&mod_file)
+                    .await
+                    .context("Failed to get file metadata")?;
+
+                if metadata.len() == 0 {
+                    log::warn!("Skipping empty mod file: {}", file_name);
+                    continue;
+                }
 
                 let dest_path = minecraft_mods_dir.join(&file_name);
 
@@ -114,9 +123,7 @@ impl ModCopier {
     /// Backup existing mods directory
     pub async fn backup_mods_directory(minecraft_mods_dir: &Path) -> Result<PathBuf> {
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let parent = minecraft_mods_dir
-            .parent()
-            .context("No parent directory")?;
+        let parent = minecraft_mods_dir.parent().context("No parent directory")?;
 
         let backup_dir = parent.join(format!("mods_backup_{}", timestamp));
 
