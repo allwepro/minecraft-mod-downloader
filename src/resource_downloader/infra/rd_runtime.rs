@@ -551,7 +551,9 @@ impl RDRuntime {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
                                 path,
-                                error: format!("Failed to unarchive {filename}: Already unarchived"),
+                                error: format!(
+                                    "Failed to unarchive {filename}: Already unarchived"
+                                ),
                                 filename,
                             }))
                             .await;

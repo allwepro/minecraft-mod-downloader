@@ -570,10 +570,10 @@ impl MainPanel {
                             .clicked()
                         {
                             let p_lnk_clone = p_lnk.clone();
-                            self.state.read().list_pool.mutate(
-                                &lnk,
-                                move |list| list.remove_project(&p_lnk_clone),
-                            );
+                            self.state
+                                .read()
+                                .list_pool
+                                .mutate(lnk, move |list| list.remove_project(&p_lnk_clone));
                         }
 
                         let archive_label = if is_archived {
@@ -591,13 +591,10 @@ impl MainPanel {
                             .clicked()
                         {
                             let p_lnk_clone = p_lnk.clone();
-                            self.state.read().list_pool.mutate(
-                                &lnk,
-                                move |list| {
-                                    let new_state = !list.is_project_archived(&p_lnk_clone);
-                                    list.archive_project(&p_lnk_clone, new_state)
-                                },
-                            );
+                            self.state.read().list_pool.mutate(lnk, move |list| {
+                                let new_state = !list.is_project_archived(&p_lnk_clone);
+                                list.archive_project(&p_lnk_clone, new_state)
+                            });
 
                             if is_archived {
                                 self.should_scroll_into_view = Some(p_lnk.clone());
@@ -747,29 +744,20 @@ impl MainPanel {
                                         );
                                         if ui.small_button("🔓 Revoke").clicked() {
                                             let p_lnk_clone = p_lnk.clone();
-                                            self.state.read().list_pool.mutate(
-                                                &lnk,
-                                                move |list| {
-                                                    list.set_compatibility_overruled(
-                                                        &p_lnk_clone,
-                                                        false,
-                                                    )
-                                                },
-                                            );
+                                            self.state.read().list_pool.mutate(lnk, move |list| {
+                                                list.set_compatibility_overruled(
+                                                    &p_lnk_clone,
+                                                    false,
+                                                )
+                                            });
                                         }
                                     } else if matches!(compatibility, Some(false)) {
                                         ui.colored_label(Color32::RED, "❌ Incompatible");
                                         if ui.small_button("🔒 Overrule").clicked() {
                                             let p_lnk_clone = p_lnk.clone();
-                                            self.state.read().list_pool.mutate(
-                                                &lnk,
-                                                move |list| {
-                                                    list.set_compatibility_overruled(
-                                                        &p_lnk_clone,
-                                                        true,
-                                                    )
-                                                },
-                                            );
+                                            self.state.read().list_pool.mutate(lnk, move |list| {
+                                                list.set_compatibility_overruled(&p_lnk_clone, true)
+                                            });
                                         }
                                     }
                                 });

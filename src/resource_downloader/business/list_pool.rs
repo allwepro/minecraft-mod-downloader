@@ -143,10 +143,8 @@ impl ListPool {
                     if result.is_success() {
                         for p in result.deleted_projects() {
                             if let Some(tc) = list.get_resource_type_config(&p.resource_type) {
-                                potential_deletions.push((
-                                    PathBuf::from(&tc.download_dir),
-                                    p.get_safe_filename(),
-                                ));
+                                potential_deletions
+                                    .push((PathBuf::from(&tc.download_dir), p.get_safe_filename()));
                             }
                         }
 
@@ -167,11 +165,7 @@ impl ListPool {
                             }
                         }
                     }
-                    (
-                        result,
-                        potential_deletions,
-                        potential_archival_changes,
-                    )
+                    (result, potential_deletions, potential_archival_changes)
                 };
 
                 let mut deleted_safe = Vec::new();
@@ -181,7 +175,7 @@ impl ListPool {
                         if tokio::fs::metadata(&path).await.is_ok() {
                             deleted_safe.push((dir.clone(), filename.clone()));
                         }
-                        let archive_filename = format!("{}.archive", filename);
+                        let archive_filename = format!("{filename}.archive");
                         let archive_path = dir.join(&archive_filename);
                         if tokio::fs::metadata(&archive_path).await.is_ok() {
                             deleted_safe.push((dir.clone(), archive_filename));
@@ -193,7 +187,7 @@ impl ListPool {
                         let file_to_move_from_name = if is_archived_now {
                             filename.clone()
                         } else {
-                            format!("{}.archive", filename)
+                            format!("{filename}.archive")
                         };
 
                         let path_to_check = dir.join(&file_to_move_from_name);
@@ -209,9 +203,7 @@ impl ListPool {
 
                     for (path, filename, is_archived) in effective_archival_changes {
                         if is_archived {
-                            let _ = sx
-                                .send(Effect::ArchiveProjectFile { path, filename })
-                                .await;
+                            let _ = sx.send(Effect::ArchiveProjectFile { path, filename }).await;
                         } else {
                             let _ = sx
                                 .send(Effect::UnarchiveProjectFile { path, filename })
