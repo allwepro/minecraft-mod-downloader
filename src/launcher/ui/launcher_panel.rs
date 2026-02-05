@@ -2,7 +2,7 @@ use crate::infra::ConfigManager;
 use crate::launcher::ui::{JavaDownloadWindow, MinecraftDownloadWindow};
 use crate::launcher::{
     AdvancedLauncher, FabricInstaller, JavaDetector, JavaInstallation, LaunchConfig, LaunchProfile,
-    LaunchResult, MinecraftDetector, MinecraftInstallation, ModCopier,
+    LaunchResult, MinecraftDetector, MinecraftInstallation, ModCopier, ModCopyProgress,
 };
 use eframe::egui;
 use std::sync::{Arc, Mutex};
@@ -10,6 +10,15 @@ use tokio::sync::mpsc;
 
 enum PanelMessage {
     Status(String),
+    ModCopyProgress {
+        current: usize,
+        total: usize,
+        mod_name: String,
+    },
+    ModCopyFinished {
+        copied: usize,
+        total: usize,
+    },
     LaunchFinished(Result<LaunchResult, String>),
     FabricReady {
         mc_version: String,
@@ -34,6 +43,7 @@ pub struct LauncherPanel {
     launcher_min_memory: u32,
     launcher_max_memory: u32,
     launch_status: Option<String>,
+    mod_copy_progress: Option<(f32, String)>,
     launch_in_progress: bool,
     selected_mc_version: String,
     java_download_window: JavaDownloadWindow,
@@ -71,6 +81,7 @@ impl LauncherPanel {
             launcher_min_memory: 1024,
             launcher_max_memory: 4096,
             launch_status: None,
+            mod_copy_progress: None,
             launch_in_progress: false,
             selected_mc_version,
             java_download_window: JavaDownloadWindow::new(),
@@ -143,8 +154,27 @@ impl LauncherPanel {
                 PanelMessage::Status(status) => {
                     self.launch_status = Some(status);
                 }
+                PanelMessage::ModCopyProgress {
+                    current,
+                    total,
+                    mod_name,
+                } => {
+                    if total == 0 {
+                        self.mod_copy_progress = Some((0.0, "No mods to copy".to_string()));
+                    } else {
+                        let progress = (current as f32 / total as f32).clamp(0.0, 1.0);
+                        let label = format!("Copying mods {}/{}: {}", current, total, mod_name);
+                        self.mod_copy_progress = Some((progress, label.clone()));
+                        self.launch_status = Some(label);
+                    }
+                }
+                PanelMessage::ModCopyFinished { copied, total } => {
+                    self.mod_copy_progress = None;
+                    self.launch_status = Some(format!("Mods copied: {}/{}", copied, total));
+                }
                 PanelMessage::LaunchFinished(result) => {
                     self.launch_in_progress = false;
+                    self.mod_copy_progress = None;
                     match result {
                         Ok(LaunchResult::Success { pid }) => {
                             self.launch_status = Some(format!(
@@ -441,26 +471,62 @@ impl LauncherPanel {
             true
         };
 
-        let can_launch = !self.java_installations.is_empty()
-            && self.selected_java_index.is_some()
-            && self.minecraft_installation.is_some()
-            && has_valid_mc_version
-            && !self.launcher_username.is_empty()
-            && self.launcher_min_memory <= self.launcher_max_memory
-            && fabric_ready
-            && !self.launch_in_progress;
+        let mut disabled_reasons: Vec<String> = Vec::new();
+        if self.java_installations.is_empty() {
+            disabled_reasons.push("No Java installation found".to_string());
+        }
+        if self.selected_java_index.is_none() {
+            disabled_reasons.push("Select a Java installation".to_string());
+        }
+        if self.minecraft_installation.is_none() {
+            disabled_reasons.push("Minecraft not found".to_string());
+        }
+        if !has_valid_mc_version {
+            disabled_reasons.push("Selected Minecraft version is not installed".to_string());
+        }
+        if self.launcher_username.is_empty() {
+            disabled_reasons.push("Username is required".to_string());
+        }
+        if self.launcher_min_memory > self.launcher_max_memory {
+            disabled_reasons.push("Min memory cannot exceed max memory".to_string());
+        }
+        if selected_loader == "fabric" {
+            if self.fabric_support_checking {
+                disabled_reasons.push("Checking Fabric support".to_string());
+            } else if self.fabric_supported == Some(false) {
+                disabled_reasons.push("Fabric not available for this version".to_string());
+            } else if self.fabric_installing {
+                disabled_reasons.push("Installing Fabric".to_string());
+            } else if self.fabric_error.is_some() {
+                disabled_reasons.push("Fabric install failed".to_string());
+            } else if self.fabric_version_id.is_none() {
+                disabled_reasons.push("Fabric not ready yet".to_string());
+            }
+        }
+        if self.launch_in_progress {
+            disabled_reasons.push("Launch already in progress".to_string());
+        }
+
+        let can_launch = disabled_reasons.is_empty() && fabric_ready;
 
         ui.horizontal(|ui| {
             let launch_button =
                 egui::Button::new(egui::RichText::new("🚀 Launch Minecraft").size(18.0));
 
-            if ui
-                .add_sized([200.0, 40.0], launch_button)
-                .on_disabled_hover_text("Configure Java and Minecraft to launch")
-                .on_hover_text("Launch Minecraft with selected settings")
-                .clicked()
-                && can_launch
-            {
+            let hover_text = if can_launch {
+                "Launch Minecraft with selected settings".to_string()
+            } else {
+                disabled_reasons
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Configure Java and Minecraft to launch".to_string())
+            };
+
+            let response = ui
+                .add_enabled(can_launch, launch_button)
+                .on_hover_text(hover_text);
+
+            if response.clicked() {
                 self.launch_minecraft(
                     config_manager,
                     rt_handle,
@@ -471,7 +537,21 @@ impl LauncherPanel {
             }
         });
 
+        if !can_launch && !disabled_reasons.is_empty() {
+            ui.add_space(4.0);
+            ui.colored_label(
+                egui::Color32::YELLOW,
+                format!("Can't launch: {}", disabled_reasons.join(" | ")),
+            );
+        }
+
         // Status message
+        if let Some((progress, label)) = &self.mod_copy_progress {
+            ui.add_space(10.0);
+            ui.separator();
+            ui.add(egui::ProgressBar::new(*progress).text(label));
+        }
+
         if let Some(ref status) = self.launch_status {
             ui.add_space(10.0);
             ui.separator();
@@ -684,8 +764,55 @@ impl LauncherPanel {
                     // Clean old mods first
                     let _ = ModCopier::clear_mods_directory(&mods_dir).await;
 
-                    let _ =
-                        ModCopier::copy_mods_to_minecraft(&source_dir, &mods_dir, &mod_names).await;
+                    if mod_names.is_empty() {
+                        let _ = tx
+                            .send(PanelMessage::ModCopyFinished {
+                                copied: 0,
+                                total: 0,
+                            })
+                            .await;
+                    } else {
+                        let (progress_tx, mut progress_rx) = mpsc::channel::<ModCopyProgress>(50);
+                        let progress_ui_tx = tx.clone();
+                        tokio::spawn(async move {
+                            while let Some(progress) = progress_rx.recv().await {
+                                let _ = progress_ui_tx
+                                    .send(PanelMessage::ModCopyProgress {
+                                        current: progress.current,
+                                        total: progress.total,
+                                        mod_name: progress.mod_name,
+                                    })
+                                    .await;
+                            }
+                        });
+
+                        match ModCopier::copy_mods_to_minecraft_with_progress(
+                            &source_dir,
+                            &mods_dir,
+                            &mod_names,
+                            Some(progress_tx),
+                        )
+                        .await
+                        {
+                            Ok(copied) => {
+                                let _ = tx
+                                    .send(PanelMessage::ModCopyFinished {
+                                        copied: copied.len(),
+                                        total: mod_names.len(),
+                                    })
+                                    .await;
+                            }
+                            Err(e) => {
+                                let _ = tx
+                                    .send(PanelMessage::LaunchFinished(Err(format!(
+                                        "Mod copy failed: {}",
+                                        e
+                                    ))))
+                                    .await;
+                                return;
+                            }
+                        }
+                    }
                 }
             }
 
