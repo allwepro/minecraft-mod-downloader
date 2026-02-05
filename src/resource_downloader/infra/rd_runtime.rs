@@ -510,13 +510,13 @@ impl RDRuntime {
             Effect::ArchiveProjectFile { path, filename } => {
                 self.rt_handle.spawn(async move {
                     let src = path.join(&filename);
-                    let dest = path.join(format!("{}.archive", filename));
+                    let dest = path.join(format!("{filename}.archive"));
 
                     if !src.exists() && dest.exists() {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
                                 path,
-                                error: format!("Failed to archive {}: Already archived", filename),
+                                error: format!("Failed to archive {filename}: Already archived"),
                                 filename,
                             }))
                             .await;
@@ -527,7 +527,7 @@ impl RDRuntime {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
                                 path,
-                                error: format!("Failed to archive {}: {}", filename, e),
+                                error: format!("Failed to archive {filename}: {e}"),
                                 filename,
                             }))
                             .await;
@@ -544,17 +544,14 @@ impl RDRuntime {
 
             Effect::UnarchiveProjectFile { path, filename } => {
                 self.rt_handle.spawn(async move {
-                    let src = path.join(format!("{}.archive", filename));
+                    let src = path.join(format!("{filename}.archive"));
                     let dest = path.join(&filename);
 
                     if !src.exists() && dest.exists() {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
                                 path,
-                                error: format!(
-                                    "Failed to unarchive {}: Already unarchived",
-                                    filename
-                                ),
+                                error: format!("Failed to unarchive {filename}: Already unarchived"),
                                 filename,
                             }))
                             .await;
@@ -565,7 +562,7 @@ impl RDRuntime {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileUnarchive {
                                 path,
-                                error: format!("Failed to unarchive {}: {}", filename, e),
+                                error: format!("Failed to unarchive {filename}: {e}"),
                                 filename,
                             }))
                             .await;
@@ -587,7 +584,7 @@ impl RDRuntime {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedArtifactDelete {
                                 path: full_path,
-                                error: format!("Failed to delete {}: {}", filename, e),
+                                error: format!("Failed to delete {filename}: {e}"),
                                 filename,
                             }))
                             .await;

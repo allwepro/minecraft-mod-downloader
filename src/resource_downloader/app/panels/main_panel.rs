@@ -171,9 +171,16 @@ impl MainPanel {
                 .map(|f| f.iter().map(|(_, h)| h.clone()).collect())
                 .unwrap_or_default();
 
-            ui.horizontal(|ui| {
-                ui.columns(3, |columns| {
-                    columns[0].horizontal(|ui| {
+            let row_height = 32.0;
+            let full_rect = ui.available_rect_before_wrap();
+            let full_rect =
+                egui::Rect::from_min_size(full_rect.min, egui::vec2(full_rect.width(), row_height));
+
+            ui.allocate_rect(full_rect, egui::Sense::hover());
+
+            let left_rect = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         if ui
                             .button(
                                 egui::RichText::new(format!(
@@ -192,123 +199,119 @@ impl MainPanel {
                                 loader.clone(),
                             )));
                         }
-                    });
+                    })
+                    .response
+                    .rect
+                })
+                .inner;
 
-                    columns[1].horizontal_centered(|ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.search_query)
-                                .hint_text(format!("🔍 Search {}s...", content_type.display_name()))
-                                .desired_width(200.0),
-                        );
-                        if ui
-                            .add_enabled(!self.search_query.is_empty(), egui::Button::new("❌"))
-                            .clicked()
-                        {
-                            self.search_query.clear();
-                        }
-
-                        {
-                            let sort_id = self.sort_popup.id();
-                            let sort_settings = self.sort_popup.settings.read();
-                            let sort_btn = ui.button(match sort_settings.order_mode {
-                                OrderMode::Ascending => "⬇ Sort",
-                                OrderMode::Descending => "⬆ Sort",
-                            });
-                            drop(sort_settings);
-
-                            self.state
-                                .read()
-                                .popup_manager
-                                .register_interaction_area(sort_id, sort_btn.rect);
-                            if sort_btn.clicked() {
-                                self.state.read().popup_manager.toggle(sort_id);
-                            }
-                            self.state
-                                .read()
-                                .popup_manager
-                                .request_show(Box::new(self.sort_popup.clone()), sort_btn.rect);
-                        }
-
-                        if ui
-                            .button("🔄")
-                            .on_hover_text("Refresh files from disk")
-                            .clicked()
-                        {
-                            self.state.write().found_files = None;
+            let right_rect = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let missing: Vec<ProjectLnk> = {
                             let list = list_arc.read();
-                            for rt in list.get_resource_types() {
-                                if let Some(tc) = list.get_resource_type_config(&rt) {
-                                    self.state.read().find_files(
-                                        tc.download_dir.clone().into(),
-                                        rt.file_extension(),
-                                    );
-                                }
-                            }
-                        }
-                    });
-
-                    columns[2].with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            let filtered = self.get_filtered_projects(
-                                &list_arc.read(),
+                            self.get_filtered_projects(
+                                &list,
                                 &content_type,
                                 &found_hashes,
                                 &ver,
                                 &loader,
-                            );
-
-                            let missing: Vec<ProjectLnk> = filtered
-                                .iter()
-                                .filter(|p| {
-                                    let list = list_arc.read();
-                                    let proj = list.get_project(p).unwrap();
+                            )
+                            .into_iter()
+                            .filter(|p| {
+                                if let Some(proj) = list.get_project(p) {
                                     let is_downloaded = proj
                                         .get_version()
                                         .is_some_and(|v| found_hashes.contains(&v.artifact_hash));
-                                    !list.is_project_archived(&p) && !is_downloaded
-                                })
-                                .cloned()
-                                .collect();
+                                    !list.is_project_archived(p) && !is_downloaded
+                                } else {
+                                    false
+                                }
+                            })
+                            .collect()
+                        };
 
-                            if ui
-                                .add_enabled(
-                                    !missing.is_empty(),
-                                    egui::Button::new(
-                                        egui::RichText::new("⬇ Download All")
-                                            .color(Color32::LIGHT_BLUE),
-                                    ),
-                                )
-                                .clicked()
-                            {
-                                let list = list_arc.read();
-                                for p_lnk in missing {
-                                    if list.has_project(&p_lnk) {
-                                        let versions = get_project_versions!(
-                                            self.state,
-                                            p_lnk.clone(),
-                                            content_type,
-                                            ver.clone(),
-                                            loader.clone()
+                        if ui
+                            .add_enabled(
+                                !missing.is_empty(),
+                                egui::Button::new(
+                                    egui::RichText::new("⬇ Download All")
+                                        .color(Color32::LIGHT_BLUE),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            let list = list_arc.read();
+                            for p_lnk in missing {
+                                if list.has_project(&p_lnk) {
+                                    let versions = get_project_versions!(
+                                        self.state,
+                                        p_lnk.clone(),
+                                        content_type,
+                                        ver.clone(),
+                                        loader.clone()
+                                    );
+
+                                    if let Ok(Some(v_list)) = versions
+                                        && let Some(latest) = v_list.first()
+                                    {
+                                        self.trigger_download(
+                                            &lnk,
+                                            &p_lnk,
+                                            latest,
+                                            &dir,
+                                            &content_type,
                                         );
-
-                                        if let Ok(Some(v_list)) = versions
-                                            && let Some(latest) = v_list.first()
-                                        {
-                                            self.trigger_download(
-                                                &lnk,
-                                                &p_lnk,
-                                                latest,
-                                                &dir,
-                                                &content_type,
-                                            );
-                                        }
                                     }
                                 }
                             }
-                        },
-                    );
+                        }
+                    })
+                    .response
+                    .rect
                 })
+                .inner;
+
+            let mut measure_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(ui.available_rect_before_wrap())
+                    .layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .ui_stack_info(egui::UiStackInfo::default()),
+            );
+            measure_ui.set_clip_rect(egui::Rect::ZERO);
+
+            let measure_res = measure_ui.scope(|ui| {
+                self.render_header_controls(ui, &list_arc, &content_type, true);
+            });
+            let controls_width = measure_res.response.rect.width();
+
+            let left_boundary = left_rect.max.x + 8.0;
+            let right_boundary = right_rect.min.x - 8.0;
+            let available_width_between = (right_boundary - left_boundary).max(0.0);
+
+            let ideal_center_x = full_rect.center().x;
+            let ideal_left = ideal_center_x - (controls_width / 2.0);
+
+            let mut final_left = ideal_left.max(left_boundary);
+
+            if final_left + controls_width > right_boundary {
+                final_left = right_boundary - controls_width;
+                if final_left < left_boundary {
+                    final_left = left_boundary;
+                }
+            }
+
+            let final_width = controls_width.min(available_width_between);
+
+            let center_rect = egui::Rect::from_min_size(
+                egui::pos2(final_left, full_rect.min.y),
+                egui::vec2(final_width, full_rect.height()),
+            );
+
+            ui.scope_builder(egui::UiBuilder::new().max_rect(center_rect), |ui| {
+                ui.centered_and_justified(|ui| {
+                    self.render_header_controls(ui, &list_arc, &content_type, false);
+                });
             });
 
             ui.add_space(4.0);
@@ -477,7 +480,7 @@ impl MainPanel {
                 proj.get_name(),
                 proj.get_author(),
                 proj.get_version_id().map(|s| s.to_string()),
-                p.is_project_archived(&p_lnk),
+                p.is_project_archived(p_lnk),
                 proj.is_compatibility_overruled(),
                 proj.get_version().map(|v| v.artifact_hash.clone()),
                 proj.has_dependents(),
@@ -489,7 +492,7 @@ impl MainPanel {
         let file_on_disk = found_files.as_ref().and_then(|files| {
             files.iter().find(|(path, _)| {
                 path.file_name().is_some_and(|n| {
-                    n == filename.as_str() || n == format!("{}.archive", filename).as_str()
+                    n == filename.as_str() || n == format!("{filename}.archive").as_str()
                 })
             })
         });
@@ -540,6 +543,7 @@ impl MainPanel {
             .inner_margin(8.0);
 
         let response = frame.show(ui, |ui| {
+            ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
                 let icon_size = if is_dependency { 24.0 } else { 32.0 };
                 if let Some(tex) = get_project_icon_texture!(self.state, p_lnk) {
@@ -552,121 +556,6 @@ impl MainPanel {
                 }
 
                 ui.add_space(4.0);
-
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        let mut name_rich = egui::RichText::new(&name).strong();
-                        if is_archived {
-                            name_rich = name_rich.weak();
-                        }
-                        ui.hyperlink_to(name_rich, get_project_link!(self.state, p_lnk, rt));
-                    });
-
-                    if has_failed {
-                        if ui
-                            .button(egui::RichText::new("⚠ Failed to load").color(Color32::YELLOW))
-                            .clicked()
-                        {
-                            clear_project_metadata!(self.state, p_lnk.clone(), *rt);
-                        }
-                    } else {
-                        ui.label(
-                            egui::RichText::new(format!("v{version_name} by {author}"))
-                                .small()
-                                .weak(),
-                        );
-                    }
-
-                    if !is_dependency {
-                        ui.horizontal(|ui| {
-                            if let Some(depended_ons) = depended_on.clone() {
-                                let required_deps: Vec<_> = depended_ons
-                                    .iter()
-                                    .filter(|dep| {
-                                        dep.dependency_type == ProjectDependencyType::Required
-                                    })
-                                    .collect();
-
-                                if !required_deps.is_empty() {
-                                    let is_expanded = self
-                                        .expanded_depended_on
-                                        .as_ref()
-                                        .is_some_and(|id| id == p_lnk);
-
-                                    let badge_text =
-                                        format!("+{} Dependencies", required_deps.len());
-                                    let mut badge_color = Color32::from_rgb(100, 150, 200);
-                                    if is_expanded {
-                                        badge_color = Color32::from_rgb(150, 200, 255);
-                                    }
-
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                egui::RichText::new(badge_text).color(badge_color),
-                                            )
-                                            .small(),
-                                        )
-                                        .clicked()
-                                    {
-                                        if is_expanded {
-                                            self.expanded_depended_on = None;
-                                        } else {
-                                            self.expanded_depended_on = Some(p_lnk.clone());
-                                        }
-                                    }
-                                    ui.add_space(3.0);
-                                }
-                            }
-
-                            if is_updatable {
-                                ui.colored_label(
-                                    Color32::from_rgb(100, 200, 255),
-                                    "🔄 Update Available",
-                                );
-                            }
-                            if has_loaded_files
-                                && !is_archived
-                                && !is_downloaded
-                                && !is_file_present
-                                && matches!(compatibility, Some(true))
-                            {
-                                ui.colored_label(Color32::GOLD, "📁 Missing");
-                            }
-
-                            if is_overruled {
-                                ui.colored_label(
-                                    Color32::from_rgb(255, 165, 0),
-                                    "⚠ Incompatible Overruled",
-                                );
-                                if ui.small_button("🔓 Revoke").clicked() {
-                                    let p_lnk_clone = p_lnk.clone();
-                                    let found_files_clone = found_files.clone();
-                                    self.state.read().list_pool.mutate(
-                                        &lnk,
-                                        found_files_clone,
-                                        move |list| {
-                                            list.set_compatibility_overruled(&p_lnk_clone, false)
-                                        },
-                                    );
-                                }
-                            } else if matches!(compatibility, Some(false)) {
-                                ui.colored_label(Color32::RED, "❌ Incompatible");
-                                if ui.small_button("🔒 Overrule").clicked() {
-                                    let p_lnk_clone = p_lnk.clone();
-                                    let found_files_clone = found_files.clone();
-                                    self.state.read().list_pool.mutate(
-                                        &lnk,
-                                        found_files_clone,
-                                        move |list| {
-                                            list.set_compatibility_overruled(&p_lnk_clone, true)
-                                        },
-                                    );
-                                }
-                            }
-                        });
-                    }
-                });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if !is_dependency {
@@ -683,7 +572,7 @@ impl MainPanel {
                             let p_lnk_clone = p_lnk.clone();
                             let found_files_clone = found_files.clone();
                             self.state.read().list_pool.mutate(
-                                &lnk,
+                                lnk,
                                 found_files_clone,
                                 move |list| list.remove_project(&p_lnk_clone),
                             );
@@ -706,7 +595,7 @@ impl MainPanel {
                             let p_lnk_clone = p_lnk.clone();
                             let found_files_clone = found_files.clone();
                             self.state.read().list_pool.mutate(
-                                &lnk,
+                                lnk,
                                 found_files_clone,
                                 move |list| {
                                     let new_state = !list.is_project_archived(&p_lnk_clone);
@@ -736,9 +625,8 @@ impl MainPanel {
                                     "Download"
                                 };
                                 let can_dl = matches!(compatibility, Some(true)) || is_overruled;
-                                let ui_enabled = (can_dl || is_updatable)
-                                    && (!is_downloaded || is_updatable)
-                                    && has_loaded_files;
+                                let ui_enabled =
+                                    is_updatable || can_dl && !is_downloaded && has_loaded_files;
 
                                 let latest_version = if let Ok(Some(v_list)) = &versions {
                                     v_list.first()
@@ -765,6 +653,137 @@ impl MainPanel {
                             }
                         }
                     }
+
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.vertical(|ui| {
+                            ui.horizontal(|ui| {
+                                let mut name_rich = egui::RichText::new(&name).strong();
+                                if is_archived {
+                                    name_rich = name_rich.weak();
+                                }
+                                ui.hyperlink_to(
+                                    name_rich,
+                                    get_project_link!(self.state, p_lnk, rt),
+                                );
+                            });
+
+                            if has_failed {
+                                if ui
+                                    .button(
+                                        egui::RichText::new("⚠ Failed to load")
+                                            .color(Color32::YELLOW),
+                                    )
+                                    .clicked()
+                                {
+                                    clear_project_metadata!(self.state, p_lnk.clone(), *rt);
+                                }
+                            } else {
+                                ui.label(
+                                    egui::RichText::new(format!("v{version_name} by {author}"))
+                                        .small()
+                                        .weak(),
+                                );
+                            }
+
+                            if !is_dependency {
+                                ui.horizontal(|ui| {
+                                    if let Some(depended_ons) = depended_on.clone() {
+                                        let required_deps: Vec<_> = depended_ons
+                                            .iter()
+                                            .filter(|dep| {
+                                                dep.dependency_type
+                                                    == ProjectDependencyType::Required
+                                            })
+                                            .collect();
+
+                                        if !required_deps.is_empty() {
+                                            let is_expanded = self
+                                                .expanded_depended_on
+                                                .as_ref()
+                                                .is_some_and(|id| id == p_lnk);
+
+                                            let badge_text =
+                                                format!("+{} Dependencies", required_deps.len());
+                                            let mut badge_color = Color32::from_rgb(100, 150, 200);
+                                            if is_expanded {
+                                                badge_color = Color32::from_rgb(150, 200, 255);
+                                            }
+
+                                            if ui
+                                                .add(
+                                                    egui::Button::new(
+                                                        egui::RichText::new(badge_text)
+                                                            .color(badge_color),
+                                                    )
+                                                    .small(),
+                                                )
+                                                .clicked()
+                                            {
+                                                if is_expanded {
+                                                    self.expanded_depended_on = None;
+                                                } else {
+                                                    self.expanded_depended_on = Some(p_lnk.clone());
+                                                }
+                                            }
+                                            ui.add_space(3.0);
+                                        }
+                                    }
+
+                                    if is_updatable {
+                                        ui.colored_label(
+                                            Color32::from_rgb(100, 200, 255),
+                                            "🔄 Update Available",
+                                        );
+                                    }
+                                    if has_loaded_files
+                                        && !is_archived
+                                        && !is_downloaded
+                                        && !is_file_present
+                                        && matches!(compatibility, Some(true))
+                                    {
+                                        ui.colored_label(Color32::GOLD, "📁 Missing");
+                                    }
+
+                                    if is_overruled {
+                                        ui.colored_label(
+                                            Color32::from_rgb(255, 165, 0),
+                                            "⚠ Incompatible Overruled",
+                                        );
+                                        if ui.small_button("🔓 Revoke").clicked() {
+                                            let p_lnk_clone = p_lnk.clone();
+                                            let found_files_clone = found_files.clone();
+                                            self.state.read().list_pool.mutate(
+                                                lnk,
+                                                found_files_clone,
+                                                move |list| {
+                                                    list.set_compatibility_overruled(
+                                                        &p_lnk_clone,
+                                                        false,
+                                                    )
+                                                },
+                                            );
+                                        }
+                                    } else if matches!(compatibility, Some(false)) {
+                                        ui.colored_label(Color32::RED, "❌ Incompatible");
+                                        if ui.small_button("🔒 Overrule").clicked() {
+                                            let p_lnk_clone = p_lnk.clone();
+                                            let found_files_clone = found_files.clone();
+                                            self.state.read().list_pool.mutate(
+                                                lnk,
+                                                found_files_clone,
+                                                move |list| {
+                                                    list.set_compatibility_overruled(
+                                                        &p_lnk_clone,
+                                                        true,
+                                                    )
+                                                },
+                                            );
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    });
                 });
             });
         });
@@ -808,6 +827,70 @@ impl MainPanel {
         }
 
         ui.add_space(4.0);
+    }
+
+    fn render_header_controls(
+        &mut self,
+        ui: &mut Ui,
+        list_arc: &Arc<RwLock<ProjectList>>,
+        content_type: &ResourceType,
+        is_measurement: bool,
+    ) {
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.search_query)
+                    .hint_text(format!("🔍 Search {}s...", content_type.display_name()))
+                    .desired_width(200.0),
+            );
+            if ui
+                .add_enabled(!self.search_query.is_empty(), egui::Button::new("❌"))
+                .clicked()
+                && !is_measurement
+            {
+                self.search_query.clear();
+            }
+
+            if ui
+                .button("🔄")
+                .on_hover_text("Refresh files from disk")
+                .clicked()
+                && !is_measurement
+            {
+                self.state.write().found_files = None;
+                let list = list_arc.read();
+                for rt in list.get_resource_types() {
+                    if let Some(tc) = list.get_resource_type_config(&rt) {
+                        self.state
+                            .read()
+                            .find_files(tc.download_dir.clone().into(), rt.file_extension());
+                    }
+                }
+            }
+
+            {
+                let sort_id = self.sort_popup.id();
+                let sort_settings = self.sort_popup.settings.read();
+                let sort_btn = ui.button(match sort_settings.order_mode {
+                    OrderMode::Ascending => "⬇ Sort",
+                    OrderMode::Descending => "⬆ Sort",
+                });
+                drop(sort_settings);
+
+                if !is_measurement {
+                    self.state
+                        .read()
+                        .popup_manager
+                        .register_interaction_area(sort_id, sort_btn.rect);
+                    if sort_btn.clicked() {
+                        self.state.read().popup_manager.toggle(sort_id);
+                    }
+                    self.state
+                        .read()
+                        .popup_manager
+                        .request_show(Box::new(self.sort_popup.clone()), sort_btn.rect);
+                }
+            }
+        });
     }
 
     fn get_filtered_projects(

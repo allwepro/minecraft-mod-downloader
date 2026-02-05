@@ -147,7 +147,7 @@ impl ListPool {
                                     .push((PathBuf::from(&tc.download_dir), filename.clone()));
                                 deleted_safe.push((
                                     PathBuf::from(&tc.download_dir),
-                                    format!("{}.archive", filename),
+                                    format!("{filename}.archive"),
                                 ));
                             }
                         }
