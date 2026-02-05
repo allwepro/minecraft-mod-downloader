@@ -1,7 +1,15 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+use tokio::sync::mpsc;
 
 pub struct ModCopier;
+
+#[derive(Debug, Clone)]
+pub struct ModCopyProgress {
+    pub current: usize,
+    pub total: usize,
+    pub mod_name: String,
+}
 
 impl ModCopier {
     pub fn new() -> Self {
@@ -15,14 +23,26 @@ impl ModCopier {
         minecraft_mods_dir: &Path,
         mod_names: &[String],
     ) -> Result<Vec<String>> {
+        Self::copy_mods_to_minecraft_with_progress(source_dir, minecraft_mods_dir, mod_names, None)
+            .await
+    }
+
+    /// Copy mods and emit progress updates over a channel
+    pub async fn copy_mods_to_minecraft_with_progress(
+        source_dir: &Path,
+        minecraft_mods_dir: &Path,
+        mod_names: &[String],
+        progress_tx: Option<mpsc::Sender<ModCopyProgress>>,
+    ) -> Result<Vec<String>> {
         // Ensure destination directory exists
         tokio::fs::create_dir_all(minecraft_mods_dir)
             .await
             .context("Failed to create mods directory")?;
 
         let mut copied_mods = Vec::new();
+        let total = mod_names.len();
 
-        for mod_name in mod_names {
+        for (index, mod_name) in mod_names.iter().enumerate() {
             // Find the mod file in source directory
             if let Some(mod_file) = Self::find_mod_file(source_dir, mod_name).await? {
                 let file_name = mod_file
@@ -37,6 +57,15 @@ impl ModCopier {
 
                 if metadata.len() == 0 {
                     log::warn!("Skipping empty mod file: {}", file_name);
+                    if let Some(tx) = progress_tx.as_ref() {
+                        let _ = tx
+                            .send(ModCopyProgress {
+                                current: index + 1,
+                                total,
+                                mod_name: mod_name.clone(),
+                            })
+                            .await;
+                    }
                     continue;
                 }
 
@@ -54,6 +83,16 @@ impl ModCopier {
                 }
             } else {
                 log::warn!("Mod file not found for: {}", mod_name);
+            }
+
+            if let Some(tx) = progress_tx.as_ref() {
+                let _ = tx
+                    .send(ModCopyProgress {
+                        current: index + 1,
+                        total,
+                        mod_name: mod_name.clone(),
+                    })
+                    .await;
             }
         }
 
