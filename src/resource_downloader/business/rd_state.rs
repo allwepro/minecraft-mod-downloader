@@ -227,12 +227,11 @@ impl RDState {
                 version,
                 dependency_data,
             } => {
-                let found_files = self.found_files.clone();
                 let version_id = version.version_id.clone();
                 let p_lnk_clone = project.clone();
                 let l_lnk_clone = list_lnk.clone();
 
-                self.list_pool.mutate(&list_lnk, found_files, move |list| {
+                self.list_pool.mutate(&list_lnk, move |list| {
                     for (p_lnk, rt, meta) in dependency_data {
                         if !list.has_project(&p_lnk) {
                             list.add_project(Project::new(
@@ -336,6 +335,7 @@ impl RDState {
 
     pub fn delete_artifact(&self, path: PathBuf, filename: String) {
         self.dispatch(Effect::DeleteArtifact { path, filename });
+        self.request_full_refresh();
     }
 
     pub fn import_modrinth(&self, collection_id: String) {

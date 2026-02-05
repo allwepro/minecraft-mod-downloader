@@ -570,10 +570,8 @@ impl MainPanel {
                             .clicked()
                         {
                             let p_lnk_clone = p_lnk.clone();
-                            let found_files_clone = found_files.clone();
                             self.state.read().list_pool.mutate(
-                                lnk,
-                                found_files_clone,
+                                &lnk,
                                 move |list| list.remove_project(&p_lnk_clone),
                             );
                         }
@@ -593,10 +591,8 @@ impl MainPanel {
                             .clicked()
                         {
                             let p_lnk_clone = p_lnk.clone();
-                            let found_files_clone = found_files.clone();
                             self.state.read().list_pool.mutate(
-                                lnk,
-                                found_files_clone,
+                                &lnk,
                                 move |list| {
                                     let new_state = !list.is_project_archived(&p_lnk_clone);
                                     list.archive_project(&p_lnk_clone, new_state)
@@ -751,10 +747,8 @@ impl MainPanel {
                                         );
                                         if ui.small_button("🔓 Revoke").clicked() {
                                             let p_lnk_clone = p_lnk.clone();
-                                            let found_files_clone = found_files.clone();
                                             self.state.read().list_pool.mutate(
-                                                lnk,
-                                                found_files_clone,
+                                                &lnk,
                                                 move |list| {
                                                     list.set_compatibility_overruled(
                                                         &p_lnk_clone,
@@ -767,10 +761,8 @@ impl MainPanel {
                                         ui.colored_label(Color32::RED, "❌ Incompatible");
                                         if ui.small_button("🔒 Overrule").clicked() {
                                             let p_lnk_clone = p_lnk.clone();
-                                            let found_files_clone = found_files.clone();
                                             self.state.read().list_pool.mutate(
-                                                lnk,
-                                                found_files_clone,
+                                                &lnk,
                                                 move |list| {
                                                     list.set_compatibility_overruled(
                                                         &p_lnk_clone,

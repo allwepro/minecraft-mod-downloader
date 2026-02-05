@@ -116,7 +116,7 @@ impl ListPool {
         });
     }
 
-    pub fn mutate<F>(&self, lnk: &ListLnk, found_files: Option<Vec<(PathBuf, String)>>, mutator: F)
+    pub fn mutate<F>(&self, lnk: &ListLnk, mutator: F)
     where
         F: FnOnce(&mut ProjectList) -> MutationResult + Send + 'static,
     {
@@ -126,7 +126,7 @@ impl ListPool {
         self.rt_handle.spawn(async move {
             let list_arc = { pool.read().get(&l).cloned() };
             if let Some(arc) = list_arc {
-                let (result, deleted_safe, effective_archival_changes) = {
+                let (result, potential_deletions, potential_archival_changes) = {
                     let mut list = arc.write();
 
                     let mut pre_archived_status = HashMap::new();
@@ -137,22 +137,19 @@ impl ListPool {
 
                     let result = mutator(&mut list);
 
+                    let mut potential_deletions = Vec::new();
+                    let mut potential_archival_changes = Vec::new();
+
                     if result.is_success() {
-                        let mut deleted_safe = Vec::new();
                         for p in result.deleted_projects() {
-                            let rt = p.resource_type;
-                            if let Some(tc) = list.get_resource_type_config(&rt) {
-                                let filename = p.get_safe_filename();
-                                deleted_safe
-                                    .push((PathBuf::from(&tc.download_dir), filename.clone()));
-                                deleted_safe.push((
+                            if let Some(tc) = list.get_resource_type_config(&p.resource_type) {
+                                potential_deletions.push((
                                     PathBuf::from(&tc.download_dir),
-                                    format!("{filename}.archive"),
+                                    p.get_safe_filename(),
                                 ));
                             }
                         }
 
-                        let mut effective_archival_changes = Vec::new();
                         for p in list.get_target_projects() {
                             let p_lnk = p.get_lnk();
                             let is_archived_now = list.is_project_archived(&p_lnk);
@@ -161,31 +158,60 @@ impl ListPool {
 
                             if is_archived_now != was_archived_before {
                                 if let Some(tc) = list.get_resource_type_config(&p.resource_type) {
-                                    let path = PathBuf::from(&tc.download_dir);
-                                    let filename = p.get_safe_filename();
-
-                                    effective_archival_changes.push((
-                                        path,
-                                        filename,
+                                    potential_archival_changes.push((
+                                        PathBuf::from(&tc.download_dir),
+                                        p.get_safe_filename(),
                                         is_archived_now,
                                     ));
                                 }
                             }
                         }
-                        (result, deleted_safe, effective_archival_changes)
-                    } else {
-                        (result, Vec::new(), Vec::new())
                     }
+                    (
+                        result,
+                        potential_deletions,
+                        potential_archival_changes,
+                    )
                 };
 
+                let mut deleted_safe = Vec::new();
                 if result.is_success() {
+                    for (dir, filename) in potential_deletions {
+                        let path = dir.join(&filename);
+                        if tokio::fs::metadata(&path).await.is_ok() {
+                            deleted_safe.push((dir.clone(), filename.clone()));
+                        }
+                        let archive_filename = format!("{}.archive", filename);
+                        let archive_path = dir.join(&archive_filename);
+                        if tokio::fs::metadata(&archive_path).await.is_ok() {
+                            deleted_safe.push((dir.clone(), archive_filename));
+                        }
+                    }
+
+                    let mut effective_archival_changes = Vec::new();
+                    for (dir, filename, is_archived_now) in potential_archival_changes {
+                        let file_to_move_from_name = if is_archived_now {
+                            filename.clone()
+                        } else {
+                            format!("{}.archive", filename)
+                        };
+
+                        let path_to_check = dir.join(&file_to_move_from_name);
+
+                        if tokio::fs::metadata(&path_to_check).await.is_ok() {
+                            effective_archival_changes.push((dir, filename, is_archived_now));
+                        }
+                    }
+
                     for (path, filename) in deleted_safe {
                         let _ = sx.send(Effect::DeleteArtifact { path, filename }).await;
                     }
 
                     for (path, filename, is_archived) in effective_archival_changes {
                         if is_archived {
-                            let _ = sx.send(Effect::ArchiveProjectFile { path, filename }).await;
+                            let _ = sx
+                                .send(Effect::ArchiveProjectFile { path, filename })
+                                .await;
                         } else {
                             let _ = sx
                                 .send(Effect::UnarchiveProjectFile { path, filename })
@@ -194,26 +220,38 @@ impl ListPool {
                     }
 
                     let _ = sx.send(Effect::SaveList { list: arc.clone() }).await;
+
+                    let refresh_requests = {
+                        let list = arc.read();
+                        let mut reqs = Vec::new();
+                        for rt in list.get_resource_types() {
+                            if let Some(tc) = list.get_resource_type_config(&rt) {
+                                reqs.push((
+                                    tc.download_dir.clone().into(),
+                                    vec![
+                                        rt.file_extension(),
+                                        format!("{}.archive", rt.file_extension()),
+                                    ],
+                                ));
+                            }
+                        }
+                        reqs
+                    };
+
+                    for (directory, file_extension) in refresh_requests {
+                        let _ = sx
+                            .send(Effect::FindFiles {
+                                directory,
+                                file_extension,
+                            })
+                            .await;
+                    }
                 }
             }
         });
     }
 
     // --- INTERNAL HELPERS ---
-
-    fn file_exists(found_files: &Option<Vec<(PathBuf, String)>>, filename: &str) -> bool {
-        if let Some(files) = found_files {
-            let filename_lower = filename.to_lowercase();
-            files.iter().any(|(p, _)| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|s| s.to_lowercase() == filename_lower)
-                    .unwrap_or(false)
-            })
-        } else {
-            false
-        }
-    }
 
     fn send_list_effect(
         &self,
