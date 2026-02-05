@@ -154,7 +154,10 @@ impl ProjectList {
         !self.type_config.is_empty()
     }
 
-    pub fn get_resource_type(&self, resource_type: &ResourceType) -> Option<&ProjectTypeConfig> {
+    pub fn get_resource_type_config(
+        &self,
+        resource_type: &ResourceType,
+    ) -> Option<&ProjectTypeConfig> {
         self.type_config.get(resource_type)
     }
 
@@ -271,14 +274,31 @@ impl ProjectList {
     }
 
     pub fn is_project_archived(&self, project: &ProjectLnk) -> bool {
-        self.get_project(project).unwrap().is_archived()
-            && self
-                .get_project(project)
-                .unwrap()
-                .get_dependents()
-                .iter()
-                .find(|d| self.get_project(d).is_some_and(|p| !p.is_archived()))
-                .is_none()
+        !self.is_project_effectively_active(project, &mut Vec::new())
+    }
+
+    fn is_project_effectively_active(
+        &self,
+        project: &ProjectLnk,
+        visited: &mut Vec<ProjectLnk>,
+    ) -> bool {
+        if visited.contains(project) {
+            return false;
+        }
+        visited.push(project.clone());
+
+        let p = match self.get_project(project) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if p.is_manual() && !p.is_archived() {
+            return true;
+        }
+
+        p.get_dependents()
+            .iter()
+            .any(|d| self.is_project_effectively_active(d, visited))
     }
 
     // public operations
@@ -526,6 +546,24 @@ impl ProjectList {
 
         mutation.add_changed(vec![project.clone()]);
         mutation
+    }
+
+    pub fn set_compatibility_overruled(
+        &mut self,
+        project: &ProjectLnk,
+        overruled: bool,
+    ) -> MutationResult {
+        if !self.has_project(project) {
+            return MutationResult::not_found();
+        }
+
+        let target_project = self.get_project_mut(project).unwrap();
+        if target_project.is_compatibility_overruled() == overruled {
+            return MutationResult::unchanged();
+        }
+
+        target_project.set_compatibility_overruled(overruled);
+        MutationResult::new(MutationOutcome::ProjectPromoted).with_target(project.clone())
     }
 
     fn collect_all_dependencies_with_status(

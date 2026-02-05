@@ -28,7 +28,7 @@ impl SidebarPanel {
         ui.add_space(4.0);
         ui.add(
             egui::TextEdit::singleline(&mut self.list_search_query)
-                .hint_text("🔍 Search lists...")
+                .hint_text("🔍 Search Lists...")
                 .desired_width(ui.available_width()),
         );
 
@@ -36,8 +36,12 @@ impl SidebarPanel {
         ui.horizontal(|ui| {
             let button_width = ui.available_width() - 35.0;
             if ui
-                .add_sized([button_width, 25.0], egui::Button::new(
-                    egui::RichText::new("➕ New List").color(Color32::LIGHT_GREEN)))
+                .add_sized(
+                    [button_width, 25.0],
+                    egui::Button::new(
+                        egui::RichText::new("➕ New List").color(Color32::LIGHT_GREEN),
+                    ),
+                )
                 .clicked()
             {
                 self.state
@@ -85,7 +89,7 @@ impl SidebarPanel {
                     .unwrap_or(ResourceType::Mod);
                 let type_icon = resource_type.emoji();
                 let loader_display = list
-                    .get_resource_type(&resource_type)
+                    .get_resource_type_config(&resource_type)
                     .map(|c| c.get_loader().name.clone())
                     .unwrap_or("Unknown".parse().unwrap());
                 let version_display = list.get_game_version().name;
@@ -127,7 +131,7 @@ impl SidebarPanel {
                         let dir = {
                             get_list!(self.state, &list)
                                 .read()
-                                .get_resource_type(&list_type)
+                                .get_resource_type_config(&list_type)
                                 .expect("List without type")
                                 .download_dir
                                 .clone()

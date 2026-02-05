@@ -1,6 +1,6 @@
 use crate::resource_downloader::business::Effect;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ResourceType,
+    GameLoader, GameVersion, ListLnk, MutationResult, ProjectList, ProjectLnk, ResourceType,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -116,7 +116,104 @@ impl ListPool {
         });
     }
 
+    pub fn mutate<F>(&self, lnk: &ListLnk, found_files: Option<Vec<(PathBuf, String)>>, mutator: F)
+    where
+        F: FnOnce(&mut ProjectList) -> MutationResult + Send + 'static,
+    {
+        let pool = Arc::clone(&self.lists);
+        let sx = self.effect_sx.clone();
+        let l = lnk.clone();
+        self.rt_handle.spawn(async move {
+            let list_arc = { pool.read().get(&l).cloned() };
+            if let Some(arc) = list_arc {
+                let (result, deleted_safe, effective_archival_changes) = {
+                    let mut list = arc.write();
+
+                    let mut pre_archived_status = HashMap::new();
+                    for p in list.get_target_projects() {
+                        let p_lnk = p.get_lnk();
+                        pre_archived_status.insert(p_lnk.clone(), list.is_project_archived(&p_lnk));
+                    }
+
+                    let result = mutator(&mut list);
+
+                    if result.is_success() {
+                        let mut deleted_safe = Vec::new();
+                        for p in result.deleted_projects() {
+                            let rt = p.resource_type;
+                            if let Some(tc) = list.get_resource_type_config(&rt) {
+                                let filename = p.get_safe_filename();
+                                deleted_safe
+                                    .push((PathBuf::from(&tc.download_dir), filename.clone()));
+                                deleted_safe.push((
+                                    PathBuf::from(&tc.download_dir),
+                                    format!("{}.archive", filename),
+                                ));
+                            }
+                        }
+
+                        let mut effective_archival_changes = Vec::new();
+                        for p in list.get_target_projects() {
+                            let p_lnk = p.get_lnk();
+                            let is_archived_now = list.is_project_archived(&p_lnk);
+                            let was_archived_before =
+                                pre_archived_status.get(&p_lnk).copied().unwrap_or(false);
+
+                            if is_archived_now != was_archived_before {
+                                if let Some(tc) = list.get_resource_type_config(&p.resource_type) {
+                                    let path = PathBuf::from(&tc.download_dir);
+                                    let filename = p.get_safe_filename();
+
+                                    effective_archival_changes.push((
+                                        path,
+                                        filename,
+                                        is_archived_now,
+                                    ));
+                                }
+                            }
+                        }
+                        (result, deleted_safe, effective_archival_changes)
+                    } else {
+                        (result, Vec::new(), Vec::new())
+                    }
+                };
+
+                if result.is_success() {
+                    for (path, filename) in deleted_safe {
+                        let _ = sx.send(Effect::DeleteArtifact { path, filename }).await;
+                    }
+
+                    for (path, filename, is_archived) in effective_archival_changes {
+                        if is_archived {
+                            let _ = sx.send(Effect::ArchiveProjectFile { path, filename }).await;
+                        } else {
+                            let _ = sx
+                                .send(Effect::UnarchiveProjectFile { path, filename })
+                                .await;
+                        }
+                    }
+
+                    let _ = sx.send(Effect::SaveList { list: arc.clone() }).await;
+                }
+            }
+        });
+    }
+
     // --- INTERNAL HELPERS ---
+
+    fn file_exists(found_files: &Option<Vec<(PathBuf, String)>>, filename: &str) -> bool {
+        if let Some(files) = found_files {
+            let filename_lower = filename.to_lowercase();
+            files.iter().any(|(p, _)| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_lowercase() == filename_lower)
+                    .unwrap_or(false)
+            })
+        } else {
+            false
+        }
+    }
 
     fn send_list_effect(
         &self,

@@ -379,6 +379,16 @@ impl Project {
         }
         changed
     }
+
+    pub fn get_safe_filename(&self) -> String {
+        let safe_name: String = self
+            .cache
+            .name
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-')
+            .collect();
+        format!("{}.{}", safe_name, self.resource_type.file_extension())
+    }
 }
 
 #[allow(dead_code)]

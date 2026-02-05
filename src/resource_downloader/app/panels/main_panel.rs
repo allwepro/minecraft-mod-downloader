@@ -8,7 +8,7 @@ use crate::resource_downloader::app::popups::sort_popup::{
 use crate::resource_downloader::business::DownloadStatus;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, MutationResult, ProjectDependencyType, ProjectList, ProjectLnk,
+    GameLoader, GameVersion, ListLnk, ProjectDependencyType, ProjectList, ProjectLnk,
     RTProjectVersion, ResourceType,
 };
 use crate::{
@@ -76,7 +76,7 @@ impl MainPanel {
             let (list_name, ver, loader, dir, projects_empty) = {
                 let list = list_arc.read();
                 let rt_config = list
-                    .get_resource_type(&content_type)
+                    .get_resource_type_config(&content_type)
                     .expect("List without type");
                 (
                     list.get_name(),
@@ -206,6 +206,7 @@ impl MainPanel {
                         {
                             self.search_query.clear();
                         }
+
                         {
                             let sort_id = self.sort_popup.id();
                             let sort_settings = self.sort_popup.settings.read();
@@ -226,6 +227,23 @@ impl MainPanel {
                                 .read()
                                 .popup_manager
                                 .request_show(Box::new(self.sort_popup.clone()), sort_btn.rect);
+                        }
+
+                        if ui
+                            .button("🔄")
+                            .on_hover_text("Refresh files from disk")
+                            .clicked()
+                        {
+                            self.state.write().found_files = None;
+                            let list = list_arc.read();
+                            for rt in list.get_resource_types() {
+                                if let Some(tc) = list.get_resource_type_config(&rt) {
+                                    self.state.read().find_files(
+                                        tc.download_dir.clone().into(),
+                                        rt.file_extension(),
+                                    );
+                                }
+                            }
                         }
                     });
 
@@ -265,7 +283,7 @@ impl MainPanel {
                             {
                                 let list = list_arc.read();
                                 for p_lnk in missing {
-                                    if let Some(proj) = list.get_project(&p_lnk) {
+                                    if list.has_project(&p_lnk) {
                                         let versions = get_project_versions!(
                                             self.state,
                                             p_lnk.clone(),
@@ -278,8 +296,8 @@ impl MainPanel {
                                             && let Some(latest) = v_list.first()
                                         {
                                             self.trigger_download(
+                                                &lnk,
                                                 &p_lnk,
-                                                &proj.get_name(),
                                                 latest,
                                                 &dir,
                                                 &content_type,
@@ -316,6 +334,7 @@ impl MainPanel {
                     for p_lnk in active {
                         self.render_project_entry(
                             ui,
+                            &lnk,
                             &list_arc,
                             &p_lnk,
                             &content_type,
@@ -344,6 +363,7 @@ impl MainPanel {
                             for p_lnk in archived {
                                 self.render_project_entry(
                                     ui,
+                                    &lnk,
                                     &list_arc,
                                     &p_lnk,
                                     &content_type,
@@ -401,6 +421,7 @@ impl MainPanel {
     fn render_project_entry(
         &mut self,
         ui: &mut Ui,
+        lnk: &ListLnk,
         list_arc: &Arc<RwLock<ProjectList>>,
         p_lnk: &ProjectLnk,
         rt: &ResourceType,
@@ -422,15 +443,18 @@ impl MainPanel {
         {
             let latest = vers.first().unwrap();
             let mut list = list_arc.write();
-            let project = list.get_project_mut(p_lnk).unwrap();
-            project.update_cache(meta.clone());
-            if project.get_version().is_none() || project.get_version().unwrap().version_id != latest.version_id {
-                drop(list);
-                self.state.read().list_pool.select_version(
-                    &list_arc.read().get_lnk(),
-                    p_lnk.clone(),
-                    latest.version_id.clone(),
-                );
+            if let Some(project) = list.get_project_mut(p_lnk) {
+                project.update_cache(meta.clone());
+                if project.get_version().is_none()
+                    || project.get_version().unwrap().version_id != latest.version_id
+                {
+                    drop(list);
+                    self.state.read().list_pool.select_version(
+                        &list_arc.read().get_lnk(),
+                        p_lnk.clone(),
+                        latest.version_id.clone(),
+                    );
+                }
             }
         }
 
@@ -443,9 +467,12 @@ impl MainPanel {
             cur_hash,
             has_dependents,
             depended_on,
+            filename,
         ) = {
             let p = list_arc.read();
-            let proj = p.get_project(p_lnk).unwrap();
+            let Some(proj) = p.get_project(p_lnk) else {
+                return;
+            };
             (
                 proj.get_name(),
                 proj.get_author(),
@@ -455,10 +482,10 @@ impl MainPanel {
                 proj.get_version().map(|v| v.artifact_hash.clone()),
                 proj.has_dependents(),
                 proj.get_version().map(|v| v.get_depended_ons().to_vec()),
+                proj.get_safe_filename(),
             )
         };
 
-        let filename = Self::get_project_filename(&name, rt);
         let file_on_disk = found_files.as_ref().and_then(|files| {
             files.iter().find(|(path, _)| {
                 path.file_name().is_some_and(|n| {
@@ -613,20 +640,28 @@ impl MainPanel {
                                     "⚠ Incompatible Overruled",
                                 );
                                 if ui.small_button("🔓 Revoke").clicked() {
-                                    list_arc
-                                        .write()
-                                        .get_project_mut(p_lnk)
-                                        .unwrap()
-                                        .set_compatibility_overruled(false);
+                                    let p_lnk_clone = p_lnk.clone();
+                                    let found_files_clone = found_files.clone();
+                                    self.state.read().list_pool.mutate(
+                                        &lnk,
+                                        found_files_clone,
+                                        move |list| {
+                                            list.set_compatibility_overruled(&p_lnk_clone, false)
+                                        },
+                                    );
                                 }
                             } else if matches!(compatibility, Some(false)) {
                                 ui.colored_label(Color32::RED, "❌ Incompatible");
                                 if ui.small_button("🔒 Overrule").clicked() {
-                                    list_arc
-                                        .write()
-                                        .get_project_mut(p_lnk)
-                                        .unwrap()
-                                        .set_compatibility_overruled(true);
+                                    let p_lnk_clone = p_lnk.clone();
+                                    let found_files_clone = found_files.clone();
+                                    self.state.read().list_pool.mutate(
+                                        &lnk,
+                                        found_files_clone,
+                                        move |list| {
+                                            list.set_compatibility_overruled(&p_lnk_clone, true)
+                                        },
+                                    );
                                 }
                             }
                         });
@@ -645,27 +680,13 @@ impl MainPanel {
                             .on_hover_text("Remove from list")
                             .clicked()
                         {
-                            let res: MutationResult = list_arc.write().remove_project(p_lnk);
-                            for p in res.deleted_projects() {
-                                let filename = Self::get_project_filename(&p.get_name(), rt);
-                                if found_files
-                                    .as_ref()
-                                    .map(|files| {
-                                        files
-                                            .iter()
-                                            .find(|(path, _)| {
-                                                path.file_name()
-                                                    .is_some_and(|n| n == filename.as_str())
-                                            })
-                                            .is_some()
-                                    })
-                                    .is_some_and(|v| v)
-                                {
-                                    self.state
-                                        .read()
-                                        .delete_artifact(PathBuf::from(dir), filename);
-                                }
-                            }
+                            let p_lnk_clone = p_lnk.clone();
+                            let found_files_clone = found_files.clone();
+                            self.state.read().list_pool.mutate(
+                                &lnk,
+                                found_files_clone,
+                                move |list| list.remove_project(&p_lnk_clone),
+                            );
                         }
 
                         let archive_label = if is_archived {
@@ -682,43 +703,19 @@ impl MainPanel {
                             )
                             .clicked()
                         {
-                            let mut list = list_arc.write();
-                            let new_state = !list.is_project_archived(&p_lnk);
-                            let mutation_result = list.archive_project(&p_lnk, new_state);
+                            let p_lnk_clone = p_lnk.clone();
+                            let found_files_clone = found_files.clone();
+                            self.state.read().list_pool.mutate(
+                                &lnk,
+                                found_files_clone,
+                                move |list| {
+                                    let new_state = !list.is_project_archived(&p_lnk_clone);
+                                    list.archive_project(&p_lnk_clone, new_state)
+                                },
+                            );
 
-                            let path = PathBuf::from(dir);
-                            if new_state {
-                                if is_file_present {
-                                    self.state
-                                        .read()
-                                        .archive_file(path.clone(), filename.clone());
-                                }
-                            } else {
+                            if is_archived {
                                 self.should_scroll_into_view = Some(p_lnk.clone());
-                                if is_file_present {
-                                    self.state
-                                        .read()
-                                        .unarchive_file(path.clone(), filename.clone());
-                                }
-                            }
-
-                            for dep_lnk in mutation_result.changed_projects() {
-                                if let Some(dep_proj) = list.get_project(&dep_lnk) {
-                                    let dep_filename =
-                                        Self::get_project_filename(&dep_proj.get_name(), rt);
-                                    let is_now_effectively_archived =
-                                        list.is_project_archived(&dep_lnk);
-
-                                    if is_now_effectively_archived {
-                                        self.state
-                                            .read()
-                                            .archive_file(path.clone(), dep_filename.clone());
-                                    } else {
-                                        self.state
-                                            .read()
-                                            .unarchive_file(path.clone(), dep_filename.clone());
-                                    }
-                                }
                             }
                         }
                     }
@@ -739,8 +736,9 @@ impl MainPanel {
                                     "Download"
                                 };
                                 let can_dl = matches!(compatibility, Some(true)) || is_overruled;
-                                let ui_enabled =
-                                    (can_dl || is_updatable) && (!is_downloaded || is_updatable) && has_loaded_files;
+                                let ui_enabled = (can_dl || is_updatable)
+                                    && (!is_downloaded || is_updatable)
+                                    && has_loaded_files;
 
                                 let latest_version = if let Ok(Some(v_list)) = &versions {
                                     v_list.first()
@@ -758,7 +756,7 @@ impl MainPanel {
                                 if btn.clicked()
                                     && let Some(v) = latest_version
                                 {
-                                    self.trigger_download(p_lnk, &name, v, dir, rt);
+                                    self.trigger_download(lnk, p_lnk, v, dir, rt);
                                 }
 
                                 if is_downloaded && !is_updatable {
@@ -786,6 +784,7 @@ impl MainPanel {
                                     Self::render_project_entry(
                                         self,
                                         ui,
+                                        lnk,
                                         list_arc,
                                         &dep.project,
                                         rt,
@@ -892,7 +891,7 @@ impl MainPanel {
         let known_filenames: HashSet<String> = list
             .projects_by_type(*rt)
             .iter()
-            .map(|p| Self::get_project_filename(&p.get_name(), rt))
+            .map(|p| p.get_safe_filename())
             .collect();
 
         found
@@ -939,13 +938,15 @@ impl MainPanel {
 
     fn trigger_download(
         &self,
+        lnk: &ListLnk,
         p_lnk: &ProjectLnk,
-        p_name: &str,
         version: &RTProjectVersion,
         dir: &String,
         rt: &ResourceType,
     ) {
-        let safe_name: String = Self::get_project_filename(p_name, rt);
+        let list_arc = get_list!(self.state, lnk);
+        let list = list_arc.read();
+        let safe_name = list.get_project(p_lnk).unwrap().get_safe_filename();
 
         let dest = PathBuf::from(dir).join(safe_name);
 
@@ -957,13 +958,5 @@ impl MainPanel {
             version.artifact_id.clone(),
             dest,
         );
-    }
-
-    fn get_project_filename(p_name: &str, rt: &ResourceType) -> String {
-        let safe_name: String = p_name
-            .chars()
-            .filter(|c| c.is_alphanumeric() || *c == '-')
-            .collect();
-        format!("{}.{}", safe_name, rt.file_extension())
     }
 }
