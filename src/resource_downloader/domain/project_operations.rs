@@ -10,6 +10,10 @@ pub enum MutationOutcome {
     ProjectDemoted,
     ProjectPromoted,
 
+    // Archival operations
+    ProjectArchived,
+    ProjectUnarchived,
+
     // Dependency operations
     VersionAdded,
     VersionRemoved,
@@ -128,5 +132,9 @@ impl MutationResult {
 
     pub fn deleted_projects(&self) -> &Vec<Project> {
         self.removed_projects.as_ref()
+    }
+
+    pub fn changed_projects(&self) -> &Vec<ProjectLnk> {
+        self.changed_projects.as_ref()
     }
 }

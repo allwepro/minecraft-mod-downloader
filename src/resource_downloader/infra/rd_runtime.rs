@@ -571,18 +571,27 @@ impl RDRuntime {
 
             Effect::UnarchiveProjectFile { path, filename } => {
                 self.rt_handle.spawn(async move {
-                    if !filename.ends_with(".archive") {
+                    let (src_filename, dest_filename) = if filename.ends_with(".archive") {
+                        let base = filename.strip_suffix(".archive").unwrap_or(&filename);
+                        (filename.clone(), base.to_string())
+                    } else {
+                        (format!("{}.archive", filename), filename.clone())
+                    };
+
+                    let src = path.join(&src_filename);
+                    let dest = path.join(&dest_filename);
+
+                    if !src.exists() {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileUnarchive {
                                 path,
                                 filename,
-                                error: "Artifact already not archived".into(),
+                                error: "Archived file not found".into(),
                             }))
                             .await;
                         return;
                     }
-                    let src = path.join(format!("{}.archive", filename));
-                    let dest = path.join(&filename);
+
                     if let Err(e) = tokio::fs::rename(&src, &dest).await {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileUnarchive {

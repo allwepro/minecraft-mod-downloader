@@ -229,7 +229,7 @@ impl ProjectList {
         self.projects.len()
     }
 
-    fn projects_by_type(&self, resource_type: ResourceType) -> Vec<&Project> {
+    pub fn projects_by_type(&self, resource_type: ResourceType) -> Vec<&Project> {
         self.projects
             .iter()
             .filter(|p| p.resource_type == resource_type)
@@ -486,6 +486,71 @@ impl ProjectList {
 
         versions.dedup();
         versions
+    }
+
+    pub fn archive_project(
+        &mut self,
+        project: &ProjectLnk,
+        new_archived_state: bool,
+    ) -> MutationResult {
+        if !self.has_project(project) {
+            return MutationResult::not_found();
+        }
+
+        let mut dependencies_before = Vec::new();
+        self.collect_all_dependencies_with_status(project, &mut dependencies_before);
+
+        let target_project = self.get_project_mut(project).unwrap();
+        target_project.set_archived(new_archived_state);
+
+        let outcome = if new_archived_state {
+            MutationOutcome::ProjectArchived
+        } else {
+            MutationOutcome::ProjectUnarchived
+        };
+
+        let mut mutation = MutationResult::new(outcome).with_target(project.clone());
+
+        let mut dependencies_after = Vec::new();
+        self.collect_all_dependencies_with_status(project, &mut dependencies_after);
+
+        for (dep_lnk, is_archived_after) in dependencies_after {
+            if let Some((_, was_archived_before)) =
+                dependencies_before.iter().find(|(d, _)| d == &dep_lnk)
+            {
+                if was_archived_before != &is_archived_after {
+                    mutation.add_changed(vec![dep_lnk]);
+                }
+            }
+        }
+
+        mutation.add_changed(vec![project.clone()]);
+        mutation
+    }
+
+    fn collect_all_dependencies_with_status(
+        &self,
+        project: &ProjectLnk,
+        dependencies: &mut Vec<(ProjectLnk, bool)>,
+    ) {
+        if let Some(version) = self.get_project(project).and_then(|p| p.get_version()) {
+            let depended_on: Vec<ProjectLnk> = version
+                .depended_on
+                .iter()
+                .map(|d| d.project.clone())
+                .collect();
+
+            for dep_lnk in depended_on {
+                if dependencies.iter().any(|(d, _)| d == &dep_lnk) {
+                    continue;
+                }
+
+                let is_effectively_archived = self.is_project_archived(&dep_lnk);
+                dependencies.push((dep_lnk.clone(), is_effectively_archived));
+
+                self.collect_all_dependencies_with_status(&dep_lnk, dependencies);
+            }
+        }
     }
 
     // internal helpers

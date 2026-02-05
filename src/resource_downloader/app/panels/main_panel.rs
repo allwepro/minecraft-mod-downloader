@@ -424,7 +424,7 @@ impl MainPanel {
             let mut list = list_arc.write();
             let project = list.get_project_mut(p_lnk).unwrap();
             project.update_cache(meta.clone());
-            if project.get_version().is_none() {
+            if project.get_version().is_none() || project.get_version().unwrap().version_id != latest.version_id {
                 drop(list);
                 self.state.read().list_pool.select_version(
                     &list_arc.read().get_lnk(),
@@ -601,6 +601,7 @@ impl MainPanel {
                             if has_loaded_files
                                 && !is_archived
                                 && !is_downloaded
+                                && !is_file_present
                                 && matches!(compatibility, Some(true))
                             {
                                 ui.colored_label(Color32::GOLD, "📁 Missing");
@@ -683,18 +684,40 @@ impl MainPanel {
                         {
                             let mut list = list_arc.write();
                             let new_state = !list.is_project_archived(&p_lnk);
-                            let p = list.get_project_mut(p_lnk).unwrap();
-                            p.set_archived(new_state);
+                            let mutation_result = list.archive_project(&p_lnk, new_state);
 
                             let path = PathBuf::from(dir);
                             if new_state {
-                                if is_downloaded {
-                                    self.state.read().archive_file(path, filename.clone());
+                                if is_file_present {
+                                    self.state
+                                        .read()
+                                        .archive_file(path.clone(), filename.clone());
                                 }
                             } else {
                                 self.should_scroll_into_view = Some(p_lnk.clone());
-                                if is_downloaded {
-                                    self.state.read().unarchive_file(path, filename.clone());
+                                if is_file_present {
+                                    self.state
+                                        .read()
+                                        .unarchive_file(path.clone(), filename.clone());
+                                }
+                            }
+
+                            for dep_lnk in mutation_result.changed_projects() {
+                                if let Some(dep_proj) = list.get_project(&dep_lnk) {
+                                    let dep_filename =
+                                        Self::get_project_filename(&dep_proj.get_name(), rt);
+                                    let is_now_effectively_archived =
+                                        list.is_project_archived(&dep_lnk);
+
+                                    if is_now_effectively_archived {
+                                        self.state
+                                            .read()
+                                            .archive_file(path.clone(), dep_filename.clone());
+                                    } else {
+                                        self.state
+                                            .read()
+                                            .unarchive_file(path.clone(), dep_filename.clone());
+                                    }
                                 }
                             }
                         }
@@ -717,7 +740,7 @@ impl MainPanel {
                                 };
                                 let can_dl = matches!(compatibility, Some(true)) || is_overruled;
                                 let ui_enabled =
-                                    can_dl && (!is_downloaded || is_updatable) && has_loaded_files;
+                                    (can_dl || is_updatable) && (!is_downloaded || is_updatable) && has_loaded_files;
 
                                 let latest_version = if let Ok(Some(v_list)) = &versions {
                                     v_list.first()
@@ -726,7 +749,7 @@ impl MainPanel {
                                 };
 
                                 let btn = ui.add_enabled(
-                                    ui_enabled && latest_version.is_some(),
+                                    ui_enabled && (latest_version.is_some() || is_updatable),
                                     egui::Button::new(
                                         egui::RichText::new(btn_label).color(Color32::LIGHT_BLUE),
                                     ),
@@ -867,7 +890,7 @@ impl MainPanel {
         query: &str,
     ) -> Vec<(PathBuf, String)> {
         let known_filenames: HashSet<String> = list
-            .manual_projects_by_type(*rt)
+            .projects_by_type(*rt)
             .iter()
             .map(|p| Self::get_project_filename(&p.get_name(), rt))
             .collect();
