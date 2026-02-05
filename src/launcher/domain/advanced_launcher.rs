@@ -1,10 +1,15 @@
 use super::{LaunchConfig, LaunchResult, ResolvedManifest, VersionManifest};
 use crate::launcher::infra::NativesExtractor;
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub struct AdvancedLauncher;
+
+struct ClasspathInfo {
+    classpath: String,
+    jna_jar: Option<PathBuf>,
+}
 
 impl AdvancedLauncher {
     /// Launch Minecraft with full version manifest support
@@ -60,7 +65,8 @@ impl AdvancedLauncher {
         }
 
         // Build classpath
-        let classpath = Self::build_classpath(&manifest, game_dir)?;
+        let classpath_info = Self::build_classpath(&manifest, game_dir)?;
+        let classpath = classpath_info.classpath.clone();
 
         // Build game arguments
         let game_args = Self::build_game_arguments(&manifest, config, &classpath)?;
@@ -79,7 +85,12 @@ impl AdvancedLauncher {
         }
         Self::ensure_macos_framework_shims(&jna_short_dir);
 
-        if Self::ensure_jna_boot_library(&manifest, game_dir, &jna_short_dir)? {
+        if Self::ensure_jna_boot_library(
+            &manifest,
+            game_dir,
+            &jna_short_dir,
+            classpath_info.jna_jar.as_deref(),
+        )? {
             let jna_boot = format!("-Djna.boot.library.path={}", jna_short_dir.to_string_lossy());
             Self::replace_or_push_arg(&mut jvm_args, "-Djna.boot.library.path=", jna_boot);
         }
@@ -169,9 +180,10 @@ impl AdvancedLauncher {
     fn build_classpath(
         manifest: &ResolvedManifest,
         game_dir: &Path,
-    ) -> Result<String> {
+    ) -> Result<ClasspathInfo> {
         let mut classpath_entries = Vec::new();
         let libraries_dir = game_dir.join("libraries");
+        let mut jna_jar = None;
 
         // Add all libraries
         for library in &manifest.libraries {
@@ -198,6 +210,12 @@ impl AdvancedLauncher {
                 .join(format!("{}-{}.jar", artifact, lib_version));
 
             if library_path.exists() {
+                if jna_jar.is_none()
+                    && parts[0] == "net.java.dev.jna"
+                    && parts[1] == "jna"
+                {
+                    jna_jar = Some(library_path.clone());
+                }
                 classpath_entries.push(library_path.to_string_lossy().to_string());
             } else {
                 log::warn!("Library not found: {}", library_path.display());
@@ -226,7 +244,10 @@ impl AdvancedLauncher {
             ":"
         };
 
-        Ok(classpath_entries.join(separator))
+        Ok(ClasspathInfo {
+            classpath: classpath_entries.join(separator),
+            jna_jar,
+        })
     }
 
     /// Build game arguments with variable substitution
@@ -314,6 +335,8 @@ impl AdvancedLauncher {
             .map(|arg| Self::normalize_argument(&arg))
             .filter(|arg| !arg.is_empty())
             .collect();
+
+        args = Self::strip_quickplay_args(args);
 
         Ok(args)
     }
@@ -439,6 +462,25 @@ impl AdvancedLauncher {
             }
         }
         trimmed.to_string()
+    }
+
+    fn strip_quickplay_args(args: Vec<String>) -> Vec<String> {
+        let mut result = Vec::with_capacity(args.len());
+        let mut i = 0;
+        while i < args.len() {
+            let arg = &args[i];
+            if arg.starts_with("--quickPlay") {
+                if i + 1 < args.len() && !args[i + 1].starts_with("--") {
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+                continue;
+            }
+            result.push(arg.clone());
+            i += 1;
+        }
+        result
     }
 
     fn replace_or_push_arg(args: &mut Vec<String>, prefix: &str, value: String) {
@@ -620,12 +662,20 @@ impl AdvancedLauncher {
         manifest: &ResolvedManifest,
         game_dir: &Path,
         target_dir: &Path,
+        preferred_jna_jar: Option<&Path>,
     ) -> Result<bool> {
-        let jna_jar = Self::find_jna_jar(manifest, game_dir)?;
+        let jna_jar = if let Some(path) = preferred_jna_jar {
+            Some(path.to_path_buf())
+        } else {
+            Self::find_jna_jar(manifest, game_dir)?
+        };
         let jna_jar = match jna_jar {
             Some(path) => path,
             None => return Ok(false),
         };
+        if std::env::var_os("MMD_JNA_DEBUG").is_some() {
+            println!("Using JNA jar: {}", jna_jar.display());
+        }
 
         std::fs::create_dir_all(target_dir)
             .with_context(|| format!("Failed to create {}", target_dir.display()))?;

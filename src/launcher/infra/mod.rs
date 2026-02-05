@@ -11,5 +11,5 @@ pub use java_downloader::JavaDownloadService;
 pub use fabric_installer::FabricInstaller;
 pub use minecraft_downloader::{MinecraftDownloadService, MinecraftVersionInfo};
 pub use minecraft_detector::MinecraftDetector;
-pub use mod_copier::{ModCopier, ModCopyProgress};
+pub use mod_copier::{ModCopier, ModCopyProgress, ModValidationSpec};
 pub use natives_extractor::NativesExtractor;

@@ -3,9 +3,11 @@ use crate::launcher::ui::{JavaDownloadWindow, MinecraftDownloadWindow};
 use crate::launcher::{
     AdvancedLauncher, FabricInstaller, JavaDetector, JavaInstallation, LaunchConfig, LaunchProfile,
     LaunchResult, MinecraftDetector, MinecraftInstallation, ModCopier, ModCopyProgress,
+    ModValidationSpec,
 };
 use eframe::egui;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::sync::mpsc;
 
 enum PanelMessage {
@@ -44,6 +46,7 @@ pub struct LauncherPanel {
     launcher_max_memory: u32,
     launch_status: Option<String>,
     mod_copy_progress: Option<(f32, String)>,
+    mod_copy_done_at: Option<Instant>,
     launch_in_progress: bool,
     selected_mc_version: String,
     java_download_window: JavaDownloadWindow,
@@ -64,6 +67,7 @@ pub struct LauncherPanel {
 impl LauncherPanel {
     pub fn new() -> Self {
         let java_installations = JavaDetector::detect_java_installations();
+        let selected_java_index = java_installations.iter().position(|j| j.is_valid);
         let minecraft_installation = MinecraftDetector::detect_minecraft();
 
         let selected_mc_version = minecraft_installation
@@ -75,13 +79,14 @@ impl LauncherPanel {
 
         Self {
             java_installations,
-            selected_java_index: None,
+            selected_java_index,
             minecraft_installation,
             launcher_username: whoami::username(),
             launcher_min_memory: 1024,
             launcher_max_memory: 4096,
             launch_status: None,
             mod_copy_progress: None,
+            mod_copy_done_at: None,
             launch_in_progress: false,
             selected_mc_version,
             java_download_window: JavaDownloadWindow::new(),
@@ -159,6 +164,7 @@ impl LauncherPanel {
                     total,
                     mod_name,
                 } => {
+                    self.mod_copy_done_at = None;
                     if total == 0 {
                         self.mod_copy_progress = Some((0.0, "No mods to copy".to_string()));
                     } else {
@@ -169,12 +175,15 @@ impl LauncherPanel {
                     }
                 }
                 PanelMessage::ModCopyFinished { copied, total } => {
-                    self.mod_copy_progress = None;
+                    self.mod_copy_progress = Some((
+                        1.0,
+                        format!("Mods copied: {}/{}", copied, total),
+                    ));
+                    self.mod_copy_done_at = Some(Instant::now());
                     self.launch_status = Some(format!("Mods copied: {}/{}", copied, total));
                 }
                 PanelMessage::LaunchFinished(result) => {
                     self.launch_in_progress = false;
-                    self.mod_copy_progress = None;
                     match result {
                         Ok(LaunchResult::Success { pid }) => {
                             self.launch_status = Some(format!(
@@ -537,7 +546,7 @@ impl LauncherPanel {
             }
         });
 
-        if !can_launch && !disabled_reasons.is_empty() {
+        if !can_launch && !disabled_reasons.is_empty() && !self.launch_in_progress {
             ui.add_space(4.0);
             ui.colored_label(
                 egui::Color32::YELLOW,
@@ -550,6 +559,13 @@ impl LauncherPanel {
             ui.add_space(10.0);
             ui.separator();
             ui.add(egui::ProgressBar::new(*progress).text(label));
+        }
+
+        if let Some(done_at) = self.mod_copy_done_at {
+            if done_at.elapsed().as_millis() > 2000 {
+                self.mod_copy_progress = None;
+                self.mod_copy_done_at = None;
+            }
         }
 
         if let Some(ref status) = self.launch_status {
@@ -749,6 +765,9 @@ impl LauncherPanel {
         let download_dir = download_dir.to_string();
         let mods_dir = mc_install.mods_dir.clone();
         let config_manager = Arc::clone(config_manager);
+        let loader_name = selected_loader.to_string();
+        let mc_version = self.selected_mc_version.clone();
+        let fabric_version_id = self.fabric_version_id.clone();
 
         rt_handle.spawn(async move {
             if let Some(list_id) = list_id {
@@ -756,13 +775,37 @@ impl LauncherPanel {
                 if let Some(list) = mod_lists.iter().find(|l| l.id == list_id) {
                     let mod_names: Vec<String> =
                         list.mods.iter().map(|m| m.mod_name.clone()).collect();
+                    let mod_specs: Vec<ModValidationSpec> = list
+                        .mods
+                        .iter()
+                        .map(|m| ModValidationSpec {
+                            name: m.mod_name.clone(),
+                            allow_incompatible: m.compatibility_override,
+                        })
+                        .collect();
                     let source_dir = std::path::PathBuf::from(download_dir);
 
                     let status_msg = format!("Copying {} mods...", mod_names.len());
                     let _ = tx.send(PanelMessage::Status(status_msg)).await;
 
-                    // Clean old mods first
-                    let _ = ModCopier::clear_mods_directory(&mods_dir).await;
+                    let same_dir = match (
+                        std::fs::canonicalize(&source_dir),
+                        std::fs::canonicalize(&mods_dir),
+                    ) {
+                        (Ok(a), Ok(b)) => a == b,
+                        _ => source_dir == mods_dir,
+                    };
+
+                    if !same_dir {
+                        // Clean old mods first
+                        let _ = ModCopier::clear_mods_directory(&mods_dir).await;
+                    } else {
+                        let _ = tx
+                            .send(PanelMessage::Status(
+                                "Skipping mod cleanup (source = mods dir)".to_string(),
+                            ))
+                            .await;
+                    }
 
                     if mod_names.is_empty() {
                         let _ = tx
@@ -774,7 +817,7 @@ impl LauncherPanel {
                     } else {
                         let (progress_tx, mut progress_rx) = mpsc::channel::<ModCopyProgress>(50);
                         let progress_ui_tx = tx.clone();
-                        tokio::spawn(async move {
+                        let progress_task = tokio::spawn(async move {
                             while let Some(progress) = progress_rx.recv().await {
                                 let _ = progress_ui_tx
                                     .send(PanelMessage::ModCopyProgress {
@@ -786,15 +829,27 @@ impl LauncherPanel {
                             }
                         });
 
-                        match ModCopier::copy_mods_to_minecraft_with_progress(
+                        let copy_result = ModCopier::copy_mods_to_minecraft_with_progress(
                             &source_dir,
                             &mods_dir,
                             &mod_names,
-                            Some(progress_tx),
+                            Some(progress_tx.clone()),
                         )
-                        .await
-                        {
+                        .await;
+
+                        drop(progress_tx);
+                        let _ = progress_task.await;
+
+                        match copy_result {
                             Ok(copied) => {
+                                if copied.is_empty() && !mod_names.is_empty() {
+                                    let _ = tx
+                                        .send(PanelMessage::Status(format!(
+                                            "Warning: no mod files matched in {}",
+                                            source_dir.display()
+                                        )))
+                                        .await;
+                                }
                                 let _ = tx
                                     .send(PanelMessage::ModCopyFinished {
                                         copied: copied.len(),
@@ -812,6 +867,36 @@ impl LauncherPanel {
                                 return;
                             }
                         }
+                    }
+
+                    let loader_version = if loader_name == "fabric" {
+                        fabric_version_id.as_ref().and_then(|id| {
+                            id.strip_prefix("fabric-loader-")
+                                .and_then(|rest| rest.split('-').next())
+                                .map(|s| s.to_string())
+                        })
+                    } else {
+                        None
+                    };
+
+                    let validation_errors = ModCopier::validate_mods_for_launch(
+                        &mods_dir,
+                        &mod_specs,
+                        &loader_name,
+                        &mc_version,
+                        loader_version.as_deref(),
+                    )
+                    .unwrap_or_else(|e| vec![e.to_string()]);
+
+                    if !validation_errors.is_empty() {
+                        let summary = validation_errors.join("\n");
+                        let _ = tx
+                            .send(PanelMessage::LaunchFinished(Err(format!(
+                                "Mod validation failed:\n{}",
+                                summary
+                            ))))
+                            .await;
+                        return;
                     }
                 }
             }
