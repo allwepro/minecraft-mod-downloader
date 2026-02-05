@@ -5,7 +5,7 @@ use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{ListLnk, ResourceType};
 use crate::{get_list, get_list_type};
 use eframe::egui;
-use egui::Ui;
+use egui::{Color32, Ui};
 
 pub struct SidebarPanel {
     state: SharedRDState,
@@ -36,7 +36,8 @@ impl SidebarPanel {
         ui.horizontal(|ui| {
             let button_width = ui.available_width() - 35.0;
             if ui
-                .add_sized([button_width, 25.0], egui::Button::new("➕ New List"))
+                .add_sized([button_width, 25.0], egui::Button::new(
+                    egui::RichText::new("➕ New List").color(Color32::LIGHT_GREEN)))
                 .clicked()
             {
                 self.state
@@ -65,8 +66,7 @@ impl SidebarPanel {
                 .request_show(Box::new(self.import_popup.clone()), import_btn.rect);
         });
 
-        ui.add_space(4.0);
-        ui.separator();
+        ui.add_space(5.0);
 
         let open_list = { self.state.read().open_list.clone() };
 

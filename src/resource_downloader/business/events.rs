@@ -100,7 +100,7 @@ pub enum Event {
     // File events
     FilesFound {
         directory: PathBuf,
-        file_extension: String,
+        file_extension: Vec<String>,
         /// A vector of (file path, file hash sha1) tuples.
         files: Vec<(PathBuf, String)>,
     },
@@ -242,7 +242,7 @@ pub enum InternalEvent {
     },
     FilesFound {
         directory: PathBuf,
-        file_extension: String,
+        file_extension: Vec<String>,
         files: Vec<(PathBuf, String)>,
     },
 }

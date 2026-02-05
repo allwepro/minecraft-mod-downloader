@@ -261,7 +261,7 @@ impl RDState {
     pub fn find_files(&self, directory: PathBuf, file_extension: String) {
         self.dispatch(Effect::FindFiles {
             directory,
-            file_extension,
+            file_extension: vec![file_extension.clone(), format!("{}.archive", file_extension)],
         });
     }
 
@@ -290,7 +290,7 @@ impl RDState {
                     Some(true) => {
                         state.dispatch(Effect::FindFiles {
                             directory: path.clone(),
-                            file_extension: ext.clone(),
+                            file_extension: vec![ext.clone(), format!("{}.archive", ext)],
                         });
                         DownloadStatus::Complete
                     }

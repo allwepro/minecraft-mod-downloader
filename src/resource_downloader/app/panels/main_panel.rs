@@ -8,15 +8,15 @@ use crate::resource_downloader::app::popups::sort_popup::{
 use crate::resource_downloader::business::DownloadStatus;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ProjectDependencyType, ProjectList, ProjectLnk, RTProjectVersion,
-    ResourceType,
+    GameLoader, GameVersion, MutationResult, ProjectDependencyType, ProjectList, ProjectLnk,
+    RTProjectVersion, ResourceType,
 };
 use crate::{
     clear_project_metadata, get_list, get_list_type, get_project_icon_texture, get_project_link,
     get_project_metadata, get_project_versions,
 };
 use eframe::egui;
-use egui::{Context, Ui};
+use egui::{Color32, Context, Ui};
 use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -113,7 +113,12 @@ impl MainPanel {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add(egui::Button::new("🗑 Delete")).clicked() {
+                        if ui
+                            .add(egui::Button::new(
+                                egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
+                            ))
+                            .clicked()
+                        {
                             self.state.write().open_list = None;
                             self.state.read().list_pool.delete(&lnk);
                         }
@@ -147,26 +152,6 @@ impl MainPanel {
                             }
                         }
 
-                        let sort_id = self.sort_popup.id();
-                        let sort_settings = self.sort_popup.settings.read();
-                        let sort_btn = ui.button(match sort_settings.order_mode {
-                            OrderMode::Ascending => "⬇ Sort",
-                            OrderMode::Descending => "⬆ Sort",
-                        });
-                        drop(sort_settings);
-
-                        self.state
-                            .read()
-                            .popup_manager
-                            .register_interaction_area(sort_id, sort_btn.rect);
-                        if sort_btn.clicked() {
-                            self.state.read().popup_manager.toggle(sort_id);
-                        }
-                        self.state
-                            .read()
-                            .popup_manager
-                            .request_show(Box::new(self.sort_popup.clone()), sort_btn.rect);
-
                         if ui.button("⚙ List Settings").clicked() {
                             self.state
                                 .read()
@@ -179,7 +164,7 @@ impl MainPanel {
                 }
             });
 
-            ui.add_space(4.0);
+            ui.separator();
 
             let found_hashes: HashSet<String> = found_files
                 .as_ref()
@@ -187,83 +172,128 @@ impl MainPanel {
                 .unwrap_or_default();
 
             ui.horizontal(|ui| {
-                if ui
-                    .button(format!("➕ Add {}", content_type.display_name()))
-                    .clicked()
-                {
-                    self.state.read().submit_modal(Box::new(SearchModal::new(
-                        self.state.clone(),
-                        lnk.clone(),
-                        content_type,
-                        ver.clone(),
-                        loader.clone(),
-                    )));
-                }
-                ui.add_space(10.0);
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.search_query)
-                        .hint_text("🔍 Search resources...")
-                        .desired_width(200.0),
-                );
-                if !self.search_query.is_empty() && ui.button("❌").clicked() {
-                    self.search_query.clear();
-                }
+                ui.columns(3, |columns| {
+                    columns[0].horizontal(|ui| {
+                        if ui
+                            .button(
+                                egui::RichText::new(format!(
+                                    "➕ Add {}",
+                                    content_type.display_name()
+                                ))
+                                .color(Color32::LIGHT_GREEN),
+                            )
+                            .clicked()
+                        {
+                            self.state.read().submit_modal(Box::new(SearchModal::new(
+                                self.state.clone(),
+                                lnk.clone(),
+                                content_type,
+                                ver.clone(),
+                                loader.clone(),
+                            )));
+                        }
+                    });
 
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let filtered = self.get_filtered_projects(
-                        &list_arc.read(),
-                        &content_type,
-                        &found_hashes,
-                        &ver,
-                        &loader,
-                    );
+                    columns[1].horizontal_centered(|ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.search_query)
+                                .hint_text(format!("🔍 Search {}s...", content_type.display_name()))
+                                .desired_width(200.0),
+                        );
+                        if ui
+                            .add_enabled(!self.search_query.is_empty(), egui::Button::new("❌"))
+                            .clicked()
+                        {
+                            self.search_query.clear();
+                        }
+                        {
+                            let sort_id = self.sort_popup.id();
+                            let sort_settings = self.sort_popup.settings.read();
+                            let sort_btn = ui.button(match sort_settings.order_mode {
+                                OrderMode::Ascending => "⬇ Sort",
+                                OrderMode::Descending => "⬆ Sort",
+                            });
+                            drop(sort_settings);
 
-                    let missing: Vec<ProjectLnk> = filtered
-                        .iter()
-                        .filter(|p| {
-                            let list = list_arc.read();
-                            let proj = list.get_project(p).unwrap();
-                            let is_downloaded = proj
-                                .get_version()
-                                .is_some_and(|v| found_hashes.contains(&v.artifact_hash));
-                            !list.is_project_archived(&p) && !is_downloaded
-                        })
-                        .cloned()
-                        .collect();
+                            self.state
+                                .read()
+                                .popup_manager
+                                .register_interaction_area(sort_id, sort_btn.rect);
+                            if sort_btn.clicked() {
+                                self.state.read().popup_manager.toggle(sort_id);
+                            }
+                            self.state
+                                .read()
+                                .popup_manager
+                                .request_show(Box::new(self.sort_popup.clone()), sort_btn.rect);
+                        }
+                    });
 
-                    if ui
-                        .add_enabled(!missing.is_empty(), egui::Button::new("⬇ Download All"))
-                        .clicked()
-                    {
-                        let list = list_arc.read();
-                        for p_lnk in missing {
-                            if let Some(proj) = list.get_project(&p_lnk) {
-                                let versions = get_project_versions!(
-                                    self.state,
-                                    p_lnk.clone(),
-                                    content_type,
-                                    ver.clone(),
-                                    loader.clone()
-                                );
+                    columns[2].with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            let filtered = self.get_filtered_projects(
+                                &list_arc.read(),
+                                &content_type,
+                                &found_hashes,
+                                &ver,
+                                &loader,
+                            );
 
-                                if let Ok(Some(v_list)) = versions
-                                    && let Some(latest) = v_list.first()
-                                {
-                                    self.trigger_download(
-                                        &p_lnk,
-                                        &proj.get_name(),
-                                        latest,
-                                        &dir,
-                                        &content_type,
-                                    );
+                            let missing: Vec<ProjectLnk> = filtered
+                                .iter()
+                                .filter(|p| {
+                                    let list = list_arc.read();
+                                    let proj = list.get_project(p).unwrap();
+                                    let is_downloaded = proj
+                                        .get_version()
+                                        .is_some_and(|v| found_hashes.contains(&v.artifact_hash));
+                                    !list.is_project_archived(&p) && !is_downloaded
+                                })
+                                .cloned()
+                                .collect();
+
+                            if ui
+                                .add_enabled(
+                                    !missing.is_empty(),
+                                    egui::Button::new(
+                                        egui::RichText::new("⬇ Download All")
+                                            .color(Color32::LIGHT_BLUE),
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                let list = list_arc.read();
+                                for p_lnk in missing {
+                                    if let Some(proj) = list.get_project(&p_lnk) {
+                                        let versions = get_project_versions!(
+                                            self.state,
+                                            p_lnk.clone(),
+                                            content_type,
+                                            ver.clone(),
+                                            loader.clone()
+                                        );
+
+                                        if let Ok(Some(v_list)) = versions
+                                            && let Some(latest) = v_list.first()
+                                        {
+                                            self.trigger_download(
+                                                &p_lnk,
+                                                &proj.get_name(),
+                                                latest,
+                                                &dir,
+                                                &content_type,
+                                            );
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                });
+                        },
+                    );
+                })
             });
 
-            ui.separator();
+            ui.add_space(4.0);
 
             if projects_empty {
                 ui.vertical_centered(|ui| {
@@ -420,7 +450,7 @@ impl MainPanel {
                 proj.get_name(),
                 proj.get_author(),
                 proj.get_version_id().map(|s| s.to_string()),
-                list_arc.read().is_project_archived(&p_lnk),
+                p.is_project_archived(&p_lnk),
                 proj.is_compatibility_overruled(),
                 proj.get_version().map(|v| v.artifact_hash.clone()),
                 proj.has_dependents(),
@@ -430,9 +460,11 @@ impl MainPanel {
 
         let filename = Self::get_project_filename(&name, rt);
         let file_on_disk = found_files.as_ref().and_then(|files| {
-            files
-                .iter()
-                .find(|(path, _)| path.file_name().is_some_and(|n| n == filename.as_str()))
+            files.iter().find(|(path, _)| {
+                path.file_name().is_some_and(|n| {
+                    n == filename.as_str() || n == format!("{}.archive", filename).as_str()
+                })
+            })
         });
         let is_file_present = file_on_disk.is_some();
         let disk_hash = file_on_disk.map(|(_, h)| h.clone());
@@ -505,10 +537,7 @@ impl MainPanel {
 
                     if has_failed {
                         if ui
-                            .button(
-                                egui::RichText::new("⚠ Failed to load")
-                                    .color(egui::Color32::YELLOW),
-                            )
+                            .button(egui::RichText::new("⚠ Failed to load").color(Color32::YELLOW))
                             .clicked()
                         {
                             clear_project_metadata!(self.state, p_lnk.clone(), *rt);
@@ -539,9 +568,9 @@ impl MainPanel {
 
                                     let badge_text =
                                         format!("+{} Dependencies", required_deps.len());
-                                    let mut badge_color = egui::Color32::from_rgb(100, 150, 200);
+                                    let mut badge_color = Color32::from_rgb(100, 150, 200);
                                     if is_expanded {
-                                        badge_color = egui::Color32::from_rgb(150, 200, 255);
+                                        badge_color = Color32::from_rgb(150, 200, 255);
                                     }
 
                                     if ui
@@ -565,7 +594,7 @@ impl MainPanel {
 
                             if is_updatable {
                                 ui.colored_label(
-                                    egui::Color32::from_rgb(100, 200, 255),
+                                    Color32::from_rgb(100, 200, 255),
                                     "🔄 Update Available",
                                 );
                             }
@@ -574,12 +603,12 @@ impl MainPanel {
                                 && !is_downloaded
                                 && matches!(compatibility, Some(true))
                             {
-                                ui.colored_label(egui::Color32::GOLD, "📁 Missing");
+                                ui.colored_label(Color32::GOLD, "📁 Missing");
                             }
 
                             if is_overruled {
                                 ui.colored_label(
-                                    egui::Color32::from_rgb(255, 165, 0),
+                                    Color32::from_rgb(255, 165, 0),
                                     "⚠ Incompatible Overruled",
                                 );
                                 if ui.small_button("🔓 Revoke").clicked() {
@@ -590,7 +619,7 @@ impl MainPanel {
                                         .set_compatibility_overruled(false);
                                 }
                             } else if matches!(compatibility, Some(false)) {
-                                ui.colored_label(egui::Color32::RED, "❌ Incompatible");
+                                ui.colored_label(Color32::RED, "❌ Incompatible");
                                 if ui.small_button("🔒 Overrule").clicked() {
                                     list_arc
                                         .write()
@@ -606,11 +635,36 @@ impl MainPanel {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if !is_dependency {
                         if ui
-                            .add_enabled(!has_dependents, egui::Button::new("🗑"))
+                            .add_enabled(
+                                !has_dependents,
+                                egui::Button::new(
+                                    egui::RichText::new("🗑").color(Color32::LIGHT_RED),
+                                ),
+                            )
                             .on_hover_text("Remove from list")
                             .clicked()
                         {
-                            list_arc.write().remove_project(p_lnk);
+                            let res: MutationResult = list_arc.write().remove_project(p_lnk);
+                            for p in res.deleted_projects() {
+                                let filename = Self::get_project_filename(&p.get_name(), rt);
+                                if found_files
+                                    .as_ref()
+                                    .map(|files| {
+                                        files
+                                            .iter()
+                                            .find(|(path, _)| {
+                                                path.file_name()
+                                                    .is_some_and(|n| n == filename.as_str())
+                                            })
+                                            .is_some()
+                                    })
+                                    .is_some_and(|v| v)
+                                {
+                                    self.state
+                                        .read()
+                                        .delete_artifact(PathBuf::from(dir), filename);
+                                }
+                            }
                         }
 
                         let archive_label = if is_archived {
@@ -619,7 +673,12 @@ impl MainPanel {
                             "📁 Archive"
                         };
                         if ui
-                            .add_enabled(!has_dependents, egui::Button::new(archive_label))
+                            .add_enabled(
+                                !has_dependents,
+                                egui::Button::new(
+                                    egui::RichText::new(archive_label).color(Color32::LIGHT_YELLOW),
+                                ),
+                            )
                             .clicked()
                         {
                             let mut list = list_arc.write();
@@ -629,10 +688,14 @@ impl MainPanel {
 
                             let path = PathBuf::from(dir);
                             if new_state {
-                                self.state.read().archive_file(path, filename.clone());
+                                if is_downloaded {
+                                    self.state.read().archive_file(path, filename.clone());
+                                }
                             } else {
                                 self.should_scroll_into_view = Some(p_lnk.clone());
-                                self.state.read().unarchive_file(path, filename.clone());
+                                if is_downloaded {
+                                    self.state.read().unarchive_file(path, filename.clone());
+                                }
                             }
                         }
                     }
@@ -664,7 +727,9 @@ impl MainPanel {
 
                                 let btn = ui.add_enabled(
                                     ui_enabled && latest_version.is_some(),
-                                    egui::Button::new(btn_label),
+                                    egui::Button::new(
+                                        egui::RichText::new(btn_label).color(Color32::LIGHT_BLUE),
+                                    ),
                                 );
 
                                 if btn.clicked()
@@ -745,8 +810,9 @@ impl MainPanel {
 
             match settings.filter_mode {
                 FilterMode::All => matches_query,
-                FilterMode::MissingOnly => matches_query && !is_downloaded && !list
-                    .is_project_archived(&p.get_lnk()),
+                FilterMode::MissingOnly => {
+                    matches_query && !is_downloaded && !list.is_project_archived(&p.get_lnk())
+                }
                 FilterMode::CompatibleOnly => {
                     let vers_res = get_project_versions!(
                         self.state,

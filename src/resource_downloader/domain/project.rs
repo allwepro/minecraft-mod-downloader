@@ -250,7 +250,7 @@ impl Project {
 
     // ------------- SETTINGS -------------
     pub fn is_archived(&self) -> bool {
-        self.settings.archived && !self.has_dependents()
+        self.settings.archived
     }
 
     pub fn set_archived(&mut self, archived: bool) {

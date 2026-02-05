@@ -320,8 +320,6 @@ impl ProjectList {
         }
 
         let target_project = self.get_project_mut(project).unwrap();
-        let mut mutation =
-            MutationResult::new(MutationOutcome::ProjectRemoved).with_target(project.clone());
 
         if target_project.has_dependents() {
             target_project.set_manual(false);
@@ -329,13 +327,14 @@ impl ProjectList {
                 .with_target(target_project.get_lnk());
         }
 
+        let mut mutation =
+            MutationResult::new(MutationOutcome::ProjectRemoved).with_target(project.clone());
+
         mutation.chain(self.clear_dependencies_internal(project));
 
         if let Some(pos) = self.get_project_internal_id(project) {
-            self.projects.remove(pos);
+            mutation.add_removed(vec![self.projects.remove(pos)]);
         }
-
-        mutation.add_removed(vec![project.clone()]);
         mutation.chain(self.cleanup_orphaned_dependencies());
         mutation
     }
@@ -536,8 +535,7 @@ impl ProjectList {
             for project in to_remove {
                 mutation.chain(self.clear_dependencies_internal(&project));
                 if let Some(pos) = self.get_project_internal_id(&project) {
-                    self.projects.remove(pos);
-                    mutation.add_removed(vec![project.clone()]);
+                    mutation.add_removed(vec![self.projects.remove(pos)]);
                 }
             }
         }

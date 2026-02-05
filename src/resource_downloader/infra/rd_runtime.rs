@@ -374,9 +374,11 @@ impl RDRuntime {
                             if let Some(target) =
                                 rt_versions.into_iter().find(|v| v.version_id == version_id)
                             {
-                                for prj in
-                                    target.depended_on.iter().map(|d| d.project.clone())
-                                        .collect::<Vec<ProjectLnk>>()
+                                for prj in target
+                                    .depended_on
+                                    .iter()
+                                    .map(|d| d.project.clone())
+                                    .collect::<Vec<ProjectLnk>>()
                                 {
                                     if list.read().has_project(&prj) {
                                         continue;
@@ -471,7 +473,9 @@ impl RDRuntime {
                         while let Ok(Some(entry)) = dir.next_entry().await {
                             let path = entry.path();
 
-                            if path.extension().and_then(|s| s.to_str()) == Some(&file_extension) {
+                            if let Some(ext) = path.extension().and_then(|s| s.to_str())
+                                && file_extension.contains(&ext.to_string())
+                            {
                                 let hash_result: anyhow::Result<String> = async {
                                     let mut file = tokio::fs::File::open(&path).await?;
                                     let mut hasher = Sha1::new();
@@ -534,10 +538,19 @@ impl RDRuntime {
 
             Effect::ArchiveProjectFile { path, filename } => {
                 self.rt_handle.spawn(async move {
+                    if filename.ends_with(".archive") {
+                        let _ = tx
+                            .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
+                                path,
+                                filename,
+                                error: "Artifact already archived".into(),
+                            }))
+                            .await;
+                        return;
+                    }
                     let src = path.join(&filename);
-                    let dest_dir = path.join("archive");
-                    let _ = tokio::fs::create_dir_all(&dest_dir).await;
-                    if let Err(e) = tokio::fs::rename(&src, dest_dir.join(&filename)).await {
+                    let dest_dir = path.join(format!("{}.archive", filename));
+                    if let Err(e) = tokio::fs::rename(&src, dest_dir).await {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
                                 path,
@@ -558,7 +571,17 @@ impl RDRuntime {
 
             Effect::UnarchiveProjectFile { path, filename } => {
                 self.rt_handle.spawn(async move {
-                    let src = path.join("archive").join(&filename);
+                    if !filename.ends_with(".archive") {
+                        let _ = tx
+                            .send(InternalEvent::Standard(Event::FailedProjectFileUnarchive {
+                                path,
+                                filename,
+                                error: "Artifact already not archived".into(),
+                            }))
+                            .await;
+                        return;
+                    }
+                    let src = path.join(format!("{}.archive", filename));
                     let dest = path.join(&filename);
                     if let Err(e) = tokio::fs::rename(&src, &dest).await {
                         let _ = tx
