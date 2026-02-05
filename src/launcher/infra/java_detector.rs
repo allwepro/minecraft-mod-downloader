@@ -5,10 +5,6 @@ use std::process::Command;
 pub struct JavaDetector;
 
 impl JavaDetector {
-    pub fn new() -> Self {
-        Self
-    }
-
     /// Detect all Java installations on the system
     pub fn detect_java_installations() -> Vec<JavaInstallation> {
         let mut installations = Vec::new();
@@ -192,40 +188,4 @@ impl JavaDetector {
         None
     }
 
-    /// Find the best Java installation for Minecraft (Java 17+ preferred for modern versions)
-    pub fn find_best_java(installations: &[JavaInstallation]) -> Option<&JavaInstallation> {
-        installations
-            .iter()
-            .filter(|i| i.is_valid)
-            .max_by_key(|i| Self::java_version_priority(&i.version))
-    }
-
-    /// Assign priority to Java versions (higher is better)
-    fn java_version_priority(version: &str) -> i32 {
-        // Extract major version number
-        if let Some(major) = Self::extract_major_version(version) {
-            major
-        } else {
-            0
-        }
-    }
-
-    /// Extract major version number from version string
-    fn extract_major_version(version: &str) -> Option<i32> {
-        // Handle both "17.0.1" and "1.8.0_301" formats
-        let parts: Vec<&str> = version.split('.').collect();
-
-        if let Some(first) = parts.first() {
-            if let Ok(major) = first.parse::<i32>() {
-                if major > 1 {
-                    return Some(major);
-                } else if parts.len() > 1 {
-                    // Old format like "1.8.0"
-                    return parts[1].parse::<i32>().ok();
-                }
-            }
-        }
-
-        None
-    }
 }

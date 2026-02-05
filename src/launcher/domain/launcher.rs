@@ -58,7 +58,6 @@ pub struct JavaInstallation {
 #[derive(Clone, Debug)]
 pub struct MinecraftInstallation {
     pub root_dir: PathBuf,
-    pub versions_dir: PathBuf,
     pub mods_dir: PathBuf,
     pub available_versions: Vec<String>,
 }

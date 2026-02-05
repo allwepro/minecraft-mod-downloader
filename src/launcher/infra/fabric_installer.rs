@@ -1,12 +1,12 @@
 use crate::launcher::domain::{Library, VersionManifest};
 use anyhow::{Context, Result};
+use futures_util::StreamExt;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-use futures_util::StreamExt;
-use reqwest::StatusCode;
 
 pub struct FabricInstaller;
 pub type ProgressCallback = Arc<dyn Fn(f32, String) + Send + Sync>;
@@ -29,7 +29,6 @@ struct LoaderVersion {
 
 #[derive(Debug, Deserialize)]
 struct FabricProfile {
-    id: String,
     #[serde(default)]
     libraries: Vec<Library>,
 }
@@ -122,7 +121,7 @@ impl FabricInstaller {
             &loader_version,
             on_progress.clone(),
         )
-            .await?;
+        .await?;
         if !Self::is_profile_complete(&versions_dir, &version_id) {
             return Err(anyhow::anyhow!(
                 "Fabric profile is incomplete after install: {}",
@@ -136,10 +135,7 @@ impl FabricInstaller {
         Ok(version_id)
     }
 
-    fn find_installed_profile(
-        versions_dir: &Path,
-        mc_version: &str,
-    ) -> Result<Option<String>> {
+    fn find_installed_profile(versions_dir: &Path, mc_version: &str) -> Result<Option<String>> {
         if !versions_dir.exists() {
             return Ok(None);
         }
@@ -265,8 +261,7 @@ impl FabricInstaller {
         }
 
         if !versions_dir.exists() {
-            std::fs::create_dir_all(versions_dir)
-                .context("Failed to create versions directory")?;
+            std::fs::create_dir_all(versions_dir).context("Failed to create versions directory")?;
         }
 
         Self::extract_zip(&bytes, versions_dir).context("Failed to extract Fabric profile zip")?;
@@ -314,8 +309,9 @@ impl FabricInstaller {
             .join(version_id)
             .join(format!("{}.json", version_id));
 
-        let content = std::fs::read_to_string(&profile_path)
-            .with_context(|| format!("Failed to read Fabric profile: {}", profile_path.display()))?;
+        let content = std::fs::read_to_string(&profile_path).with_context(|| {
+            format!("Failed to read Fabric profile: {}", profile_path.display())
+        })?;
 
         let profile: FabricProfile =
             serde_json::from_str(&content).context("Failed to parse Fabric profile JSON")?;
@@ -338,11 +334,7 @@ impl FabricInstaller {
         };
 
         for (index, download) in downloads.iter().enumerate() {
-            let status = format!(
-                "Downloading library {}/{}",
-                index + 1,
-                total_downloads
-            );
+            let status = format!("Downloading library {}/{}", index + 1, total_downloads);
             Self::report(&on_progress, Self::overall_progress(&tracker), status);
 
             Self::download_to_path(
@@ -396,10 +388,18 @@ impl FabricInstaller {
             let chunk = chunk.context("Failed to read library chunk")?;
             file.write_all(&chunk).await?;
             tracker.downloaded_bytes += chunk.len() as u64;
-            Self::report(&on_progress, Self::overall_progress(tracker), "Downloading libraries");
+            Self::report(
+                &on_progress,
+                Self::overall_progress(tracker),
+                "Downloading libraries",
+            );
         }
 
-        Self::report(&on_progress, Self::overall_progress(tracker), "Library downloaded");
+        Self::report(
+            &on_progress,
+            Self::overall_progress(tracker),
+            "Library downloaded",
+        );
         Ok(())
     }
 
@@ -408,10 +408,7 @@ impl FabricInstaller {
             .join(version_id)
             .join(format!("{}.json", version_id));
 
-        let json_ok = json_path
-            .metadata()
-            .map(|m| m.len() > 0)
-            .unwrap_or(false);
+        let json_ok = json_path.metadata().map(|m| m.len() > 0).unwrap_or(false);
 
         json_ok
     }

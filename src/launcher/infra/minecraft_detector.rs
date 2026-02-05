@@ -4,10 +4,6 @@ use std::path::PathBuf;
 pub struct MinecraftDetector;
 
 impl MinecraftDetector {
-    pub fn new() -> Self {
-        Self
-    }
-
     /// Detect Minecraft installation directory
     pub fn detect_minecraft() -> Option<MinecraftInstallation> {
         let minecraft_dir = Self::find_minecraft_dir()?;
@@ -23,7 +19,6 @@ impl MinecraftDetector {
 
         Some(MinecraftInstallation {
             root_dir: minecraft_dir,
-            versions_dir,
             mods_dir,
             available_versions,
         })
@@ -89,13 +84,6 @@ impl MinecraftDetector {
             || lower.starts_with("forge-")
             || lower.starts_with("neoforge-")
             || lower.starts_with("quilt-loader-")
-    }
-
-    /// Ensure mods directory exists
-    pub fn ensure_mods_dir(minecraft_dir: &PathBuf) -> std::io::Result<PathBuf> {
-        let mods_dir = minecraft_dir.join("mods");
-        std::fs::create_dir_all(&mods_dir)?;
-        Ok(mods_dir)
     }
 
     /// Get the default Minecraft directory (creates if doesn't exist)

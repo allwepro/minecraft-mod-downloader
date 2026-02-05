@@ -4,4 +4,3 @@ pub mod ui;
 
 pub use domain::*;
 pub use infra::*;
-pub use ui::*;

@@ -12,21 +12,6 @@ pub struct ModCopyProgress {
 }
 
 impl ModCopier {
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// Copy mods from source directory to Minecraft mods folder
-    /// Returns list of successfully copied mod filenames
-    pub async fn copy_mods_to_minecraft(
-        source_dir: &Path,
-        minecraft_mods_dir: &Path,
-        mod_names: &[String],
-    ) -> Result<Vec<String>> {
-        Self::copy_mods_to_minecraft_with_progress(source_dir, minecraft_mods_dir, mod_names, None)
-            .await
-    }
-
     /// Copy mods and emit progress updates over a channel
     pub async fn copy_mods_to_minecraft_with_progress(
         source_dir: &Path,
@@ -157,44 +142,5 @@ impl ModCopier {
         }
 
         Ok(removed_count)
-    }
-
-    /// Backup existing mods directory
-    pub async fn backup_mods_directory(minecraft_mods_dir: &Path) -> Result<PathBuf> {
-        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let parent = minecraft_mods_dir.parent().context("No parent directory")?;
-
-        let backup_dir = parent.join(format!("mods_backup_{}", timestamp));
-
-        if minecraft_mods_dir.exists() {
-            Self::copy_directory(minecraft_mods_dir.to_path_buf(), backup_dir.clone()).await?;
-            log::info!("Backed up mods to: {}", backup_dir.display());
-        }
-
-        Ok(backup_dir)
-    }
-
-    /// Recursively copy a directory
-    fn copy_directory(
-        src: PathBuf,
-        dst: PathBuf,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>> {
-        Box::pin(async move {
-            tokio::fs::create_dir_all(&dst).await?;
-
-            let mut entries = tokio::fs::read_dir(&src).await?;
-            while let Some(entry) = entries.next_entry().await? {
-                let path = entry.path();
-                let dest_path = dst.join(entry.file_name());
-
-                if path.is_dir() {
-                    Self::copy_directory(path, dest_path).await?;
-                } else {
-                    tokio::fs::copy(&path, &dest_path).await?;
-                }
-            }
-
-            Ok(())
-        })
     }
 }

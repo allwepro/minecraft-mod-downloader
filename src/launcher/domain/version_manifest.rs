@@ -136,15 +136,12 @@ pub struct VersionDownloadItem {
 /// Fully-resolved manifest after applying inheritance
 #[derive(Debug, Clone)]
 pub struct ResolvedManifest {
-    pub id: String,
     pub main_class: String,
     pub client_jar_id: String,
     pub arguments: Option<Arguments>,
     pub minecraft_arguments: Option<String>,
     pub libraries: Vec<Library>,
     pub asset_index: AssetIndex,
-    pub assets: String,
-    pub version_type: String,
 }
 
 impl VersionManifest {
@@ -153,11 +150,6 @@ impl VersionManifest {
         let content = std::fs::read_to_string(path)?;
         let manifest: VersionManifest = serde_json::from_str(&content)?;
         Ok(manifest)
-    }
-
-    /// Check if library should be included based on rules
-    pub fn should_include_library(&self, library: &Library) -> bool {
-        Self::should_include_library_for_current_os(library)
     }
 
     /// Check if library should be included for the current OS (static helper)
@@ -171,7 +163,13 @@ impl VersionManifest {
 
         for rule in &library.rules {
             let matches = if let Some(ref os) = rule.os {
-                os.name.as_ref().map(|n| n == os_name).unwrap_or(true)
+                let name_ok = os.name.as_ref().map(|n| n == os_name).unwrap_or(true);
+                let arch_ok = os
+                    .arch
+                    .as_ref()
+                    .map(|arch| Self::matches_arch(arch.as_str()))
+                    .unwrap_or(true);
+                name_ok && arch_ok
             } else {
                 true
             };
@@ -195,14 +193,12 @@ impl VersionManifest {
         }
     }
 
-    /// Get platform-specific classifier (for natives)
-    pub fn get_natives_classifier() -> &'static str {
-        if cfg!(target_os = "windows") {
-            "natives-windows"
-        } else if cfg!(target_os = "macos") {
-            "natives-macos"
-        } else {
-            "natives-linux"
+    fn matches_arch(arch: &str) -> bool {
+        match arch {
+            "x86" => cfg!(target_pointer_width = "32"),
+            "x86_64" => cfg!(target_arch = "x86_64"),
+            "arm64" | "aarch64" => cfg!(target_arch = "aarch64"),
+            _ => true,
         }
     }
 
@@ -256,9 +252,11 @@ impl VersionManifest {
         }
     }
 
-    fn into_resolved_with_client_jar(self, client_jar_id: String) -> anyhow::Result<ResolvedManifest> {
+    fn into_resolved_with_client_jar(
+        self,
+        client_jar_id: String,
+    ) -> anyhow::Result<ResolvedManifest> {
         Ok(ResolvedManifest {
-            id: self.id,
             main_class: self
                 .main_class
                 .ok_or_else(|| anyhow::anyhow!("Manifest missing mainClass"))?,
@@ -269,12 +267,6 @@ impl VersionManifest {
             asset_index: self
                 .asset_index
                 .ok_or_else(|| anyhow::anyhow!("Manifest missing assetIndex"))?,
-            assets: self
-                .assets
-                .ok_or_else(|| anyhow::anyhow!("Manifest missing assets"))?,
-            version_type: self
-                .version_type
-                .ok_or_else(|| anyhow::anyhow!("Manifest missing type"))?,
         })
     }
 }
