@@ -154,14 +154,14 @@ impl ListPool {
                             let was_archived_before =
                                 pre_archived_status.get(&p_lnk).copied().unwrap_or(false);
 
-                            if is_archived_now != was_archived_before {
-                                if let Some(tc) = list.get_resource_type_config(&p.resource_type) {
-                                    potential_archival_changes.push((
-                                        PathBuf::from(&tc.download_dir),
-                                        p.get_safe_filename(),
-                                        is_archived_now,
-                                    ));
-                                }
+                            if is_archived_now != was_archived_before
+                                && let Some(tc) = list.get_resource_type_config(&p.resource_type)
+                            {
+                                potential_archival_changes.push((
+                                    PathBuf::from(&tc.download_dir),
+                                    p.get_safe_filename(),
+                                    is_archived_now,
+                                ));
                             }
                         }
                     }

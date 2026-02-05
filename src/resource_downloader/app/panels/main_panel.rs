@@ -768,35 +768,34 @@ impl MainPanel {
             });
         });
         if !is_dependency {
-            if let Some(ref expanded_id) = self.expanded_depended_on.clone() {
-                if expanded_id == p_lnk {
-                    if let Some(depended_ons) = depended_on {
-                        let required_deps: Vec<_> = depended_ons
-                            .iter()
-                            .filter(|dep| dep.dependency_type == ProjectDependencyType::Required)
-                            .collect();
+            if let Some(ref expanded_id) = self.expanded_depended_on.clone()
+                && expanded_id == p_lnk
+                && let Some(depended_ons) = depended_on
+            {
+                let required_deps: Vec<_> = depended_ons
+                    .iter()
+                    .filter(|dep| dep.dependency_type == ProjectDependencyType::Required)
+                    .collect();
 
-                        if !required_deps.is_empty() {
-                            ui.indent("dep_indent", |ui| {
-                                ui.add_space(4.0);
-                                for dep in &required_deps {
-                                    Self::render_project_entry(
-                                        self,
-                                        ui,
-                                        lnk,
-                                        list_arc,
-                                        &dep.project,
-                                        rt,
-                                        g_ver,
-                                        g_ld,
-                                        found_files,
-                                        dir,
-                                        true,
-                                    );
-                                }
-                            });
+                if !required_deps.is_empty() {
+                    ui.indent("dep_indent", |ui| {
+                        ui.add_space(4.0);
+                        for dep in &required_deps {
+                            Self::render_project_entry(
+                                self,
+                                ui,
+                                lnk,
+                                list_arc,
+                                &dep.project,
+                                rt,
+                                g_ver,
+                                g_ld,
+                                found_files,
+                                dir,
+                                true,
+                            );
                         }
-                    }
+                    });
                 }
             }
 

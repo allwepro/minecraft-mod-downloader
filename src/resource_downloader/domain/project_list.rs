@@ -537,10 +537,9 @@ impl ProjectList {
         for (dep_lnk, is_archived_after) in dependencies_after {
             if let Some((_, was_archived_before)) =
                 dependencies_before.iter().find(|(d, _)| d == &dep_lnk)
+                && was_archived_before != &is_archived_after
             {
-                if was_archived_before != &is_archived_after {
-                    mutation.add_changed(vec![dep_lnk]);
-                }
+                mutation.add_changed(vec![dep_lnk]);
             }
         }
 

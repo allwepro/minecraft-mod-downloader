@@ -343,13 +343,13 @@ impl RDState {
     }
 
     fn request_full_refresh(&self) {
-        if let Some(list_lnk) = &self.open_list {
-            if let Some(list_arc) = self.list_pool.get(list_lnk) {
-                let list = list_arc.read();
-                for rt in list.get_resource_types() {
-                    if let Some(tc) = list.get_resource_type_config(&rt) {
-                        self.find_files(tc.download_dir.clone().into(), rt.file_extension());
-                    }
+        if let Some(list_lnk) = &self.open_list
+            && let Some(list_arc) = self.list_pool.get(list_lnk)
+        {
+            let list = list_arc.read();
+            for rt in list.get_resource_types() {
+                if let Some(tc) = list.get_resource_type_config(&rt) {
+                    self.find_files(tc.download_dir.clone().into(), rt.file_extension());
                 }
             }
         }
