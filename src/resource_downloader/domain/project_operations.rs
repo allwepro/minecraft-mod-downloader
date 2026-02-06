@@ -1,4 +1,4 @@
-use crate::resource_downloader::domain::{ProjectDependencyType, ProjectLnk};
+use crate::resource_downloader::domain::{Project, ProjectDependencyType, ProjectLnk};
 
 #[derive(Clone, Debug)]
 pub enum MutationOutcome {
@@ -8,6 +8,11 @@ pub enum MutationOutcome {
     ProjectAdded,
     ProjectRemoved,
     ProjectDemoted,
+    ProjectPromoted,
+
+    // Archival operations
+    ProjectArchived,
+    ProjectUnarchived,
 
     // Dependency operations
     VersionAdded,
@@ -29,7 +34,7 @@ pub enum MutationOutcome {
     AlreadyExists,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MutationResult {
     outcome: MutationOutcome,
     /// The main project being operated on
@@ -39,7 +44,7 @@ pub struct MutationResult {
     /// Projects that were the subject of the operation, e.g., dependencies removed from a project
     changed_projects: Vec<ProjectLnk>,
     /// Projects that were cleared due to the operation
-    removed_projects: Vec<ProjectLnk>,
+    removed_projects: Vec<Project>,
 }
 
 impl MutationResult {
@@ -91,7 +96,7 @@ impl MutationResult {
         self
     }
 
-    pub fn add_removed(&mut self, mut orphans: Vec<ProjectLnk>) -> &Self {
+    pub fn add_removed(&mut self, mut orphans: Vec<Project>) -> &Self {
         self.removed_projects.append(&mut orphans);
         self
     }
@@ -121,7 +126,15 @@ impl MutationResult {
         }
         ids.extend(self.added_projects.clone());
         ids.extend(self.changed_projects.clone());
-        ids.extend(self.removed_projects.clone());
+        ids.extend(self.removed_projects.iter().map(|p| p.get_lnk()));
         ids
+    }
+
+    pub fn deleted_projects(&self) -> &Vec<Project> {
+        self.removed_projects.as_ref()
+    }
+
+    pub fn changed_projects(&self) -> &Vec<ProjectLnk> {
+        self.changed_projects.as_ref()
     }
 }

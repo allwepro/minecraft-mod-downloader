@@ -1,6 +1,6 @@
 use crate::resource_downloader::business::Effect;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ResourceType,
+    GameLoader, GameVersion, ListLnk, MutationResult, ProjectList, ProjectLnk, ResourceType,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -113,6 +113,133 @@ impl ListPool {
             path,
             version,
             loader,
+        });
+    }
+
+    pub fn mutate<F>(&self, lnk: &ListLnk, mutator: F)
+    where
+        F: FnOnce(&mut ProjectList) -> MutationResult + Send + 'static,
+    {
+        let pool = Arc::clone(&self.lists);
+        let sx = self.effect_sx.clone();
+        let l = lnk.clone();
+        self.rt_handle.spawn(async move {
+            let list_arc = { pool.read().get(&l).cloned() };
+            if let Some(arc) = list_arc {
+                let (result, potential_deletions, potential_archival_changes) = {
+                    let mut list = arc.write();
+
+                    let mut pre_archived_status = HashMap::new();
+                    for p in list.get_target_projects() {
+                        let p_lnk = p.get_lnk();
+                        pre_archived_status.insert(p_lnk.clone(), list.is_project_archived(&p_lnk));
+                    }
+
+                    let result = mutator(&mut list);
+
+                    let mut potential_deletions = Vec::new();
+                    let mut potential_archival_changes = Vec::new();
+
+                    if result.is_success() {
+                        for p in result.deleted_projects() {
+                            if let Some(tc) = list.get_resource_type_config(&p.resource_type) {
+                                potential_deletions
+                                    .push((PathBuf::from(&tc.download_dir), p.get_safe_filename()));
+                            }
+                        }
+
+                        for p in list.get_target_projects() {
+                            let p_lnk = p.get_lnk();
+                            let is_archived_now = list.is_project_archived(&p_lnk);
+                            let was_archived_before =
+                                pre_archived_status.get(&p_lnk).copied().unwrap_or(false);
+
+                            if is_archived_now != was_archived_before
+                                && let Some(tc) = list.get_resource_type_config(&p.resource_type)
+                            {
+                                potential_archival_changes.push((
+                                    PathBuf::from(&tc.download_dir),
+                                    p.get_safe_filename(),
+                                    is_archived_now,
+                                ));
+                            }
+                        }
+                    }
+                    (result, potential_deletions, potential_archival_changes)
+                };
+
+                let mut deleted_safe = Vec::new();
+                if result.is_success() {
+                    for (dir, filename) in potential_deletions {
+                        let path = dir.join(&filename);
+                        if tokio::fs::metadata(&path).await.is_ok() {
+                            deleted_safe.push((dir.clone(), filename.clone()));
+                        }
+                        let archive_filename = format!("{filename}.archive");
+                        let archive_path = dir.join(&archive_filename);
+                        if tokio::fs::metadata(&archive_path).await.is_ok() {
+                            deleted_safe.push((dir.clone(), archive_filename));
+                        }
+                    }
+
+                    let mut effective_archival_changes = Vec::new();
+                    for (dir, filename, is_archived_now) in potential_archival_changes {
+                        let file_to_move_from_name = if is_archived_now {
+                            filename.clone()
+                        } else {
+                            format!("{filename}.archive")
+                        };
+
+                        let path_to_check = dir.join(&file_to_move_from_name);
+
+                        if tokio::fs::metadata(&path_to_check).await.is_ok() {
+                            effective_archival_changes.push((dir, filename, is_archived_now));
+                        }
+                    }
+
+                    for (path, filename) in deleted_safe {
+                        let _ = sx.send(Effect::DeleteArtifact { path, filename }).await;
+                    }
+
+                    for (path, filename, is_archived) in effective_archival_changes {
+                        if is_archived {
+                            let _ = sx.send(Effect::ArchiveProjectFile { path, filename }).await;
+                        } else {
+                            let _ = sx
+                                .send(Effect::UnarchiveProjectFile { path, filename })
+                                .await;
+                        }
+                    }
+
+                    let _ = sx.send(Effect::SaveList { list: arc.clone() }).await;
+
+                    let refresh_requests = {
+                        let list = arc.read();
+                        let mut reqs = Vec::new();
+                        for rt in list.get_resource_types() {
+                            if let Some(tc) = list.get_resource_type_config(&rt) {
+                                reqs.push((
+                                    tc.download_dir.clone().into(),
+                                    vec![
+                                        rt.file_extension(),
+                                        format!("{}.archive", rt.file_extension()),
+                                    ],
+                                ));
+                            }
+                        }
+                        reqs
+                    };
+
+                    for (directory, file_extension) in refresh_requests {
+                        let _ = sx
+                            .send(Effect::FindFiles {
+                                directory,
+                                file_extension,
+                            })
+                            .await;
+                    }
+                }
+            }
         });
     }
 

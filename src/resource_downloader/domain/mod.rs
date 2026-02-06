@@ -8,6 +8,7 @@ pub use game::*;
 pub use lnk_types::*;
 pub use project::*;
 pub use project_list::*;
+pub use project_operations::*;
 use serde::{Deserialize, Serialize};
 // ---------------- Runtime Project ----------------
 #[derive(Debug, Clone, Serialize, Deserialize)]

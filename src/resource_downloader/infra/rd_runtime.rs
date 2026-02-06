@@ -338,7 +338,7 @@ impl RDRuntime {
                             .get_project(&project)
                             .map(|p| p.resource_type)
                             .unwrap_or(ResourceType::Mod);
-                        let config = guard.get_resource_type(&rt);
+                        let config = guard.get_resource_type_config(&rt);
                         config.map(|c| {
                             (
                                 guard.get_lnk(),
@@ -374,52 +374,49 @@ impl RDRuntime {
                             if let Some(target) =
                                 rt_versions.into_iter().find(|v| v.version_id == version_id)
                             {
-                                let (lnk, toml_out) = {
-                                    let mut guard = list.write();
-                                    let domain_v = ProjectVersion::new(
-                                        true,
-                                        target.version_id,
-                                        target.artifact_id,
-                                        target.artifact_hash,
-                                        target.channel,
-                                        target
-                                            .depended_on
-                                            .into_iter()
-                                            .map(|d| {
-                                                ProjectDependency::new(
-                                                    d.project,
-                                                    d.dependency_type,
-                                                    None,
-                                                    d.version_id,
-                                                )
-                                            })
-                                            .collect(),
-                                    );
-                                    guard.add_version(&project, domain_v);
-                                    (guard.get_lnk(), toml::to_string_pretty(&*guard).unwrap())
-                                };
-                                if let Err(e) = lm.save_raw(&lnk, toml_out).await {
-                                    let _ = tx
-                                        .send(InternalEvent::Standard(
-                                            Event::FailedProjectVersionSelect {
-                                                list: lnk,
-                                                project,
-                                                version_id,
-                                                error: e.to_string(),
-                                            },
-                                        ))
-                                        .await;
-                                } else {
-                                    let _ = tx
-                                        .send(InternalEvent::Standard(
-                                            Event::ProjectVersionSelected {
-                                                list: lnk,
-                                                project,
-                                                version_id,
-                                            },
-                                        ))
-                                        .await;
+                                let mut dependency_data = Vec::new();
+                                for prj in target.depended_on.iter().map(|d| d.project.clone()) {
+                                    if list.read().has_project(&prj) {
+                                        continue;
+                                    }
+                                    if let Some(rtpm) = api
+                                        .rt_project_pool
+                                        .get_metadata_blocking(prj.clone(), rt)
+                                        .await
+                                        .unwrap_or(None)
+                                    {
+                                        dependency_data.push((prj, rt, rtpm));
+                                    }
                                 }
+
+                                let domain_v = ProjectVersion::new(
+                                    true,
+                                    target.version_id,
+                                    target.artifact_id,
+                                    target.artifact_hash,
+                                    target.channel,
+                                    target
+                                        .depended_on
+                                        .into_iter()
+                                        .map(|d| {
+                                            ProjectDependency::new(
+                                                d.project,
+                                                d.dependency_type,
+                                                None,
+                                                d.version_id,
+                                            )
+                                        })
+                                        .collect(),
+                                );
+
+                                let _ = tx
+                                    .send(InternalEvent::ProjectVersionSelected {
+                                        list_lnk: lnk,
+                                        project,
+                                        version: domain_v,
+                                        dependency_data,
+                                    })
+                                    .await;
                             }
                         }
                         _ => {
@@ -447,7 +444,9 @@ impl RDRuntime {
                         while let Ok(Some(entry)) = dir.next_entry().await {
                             let path = entry.path();
 
-                            if path.extension().and_then(|s| s.to_str()) == Some(&file_extension) {
+                            if let Some(ext) = path.extension().and_then(|s| s.to_str())
+                                && file_extension.contains(&ext.to_string())
+                            {
                                 let hash_result: anyhow::Result<String> = async {
                                     let mut file = tokio::fs::File::open(&path).await?;
                                     let mut hasher = Sha1::new();
@@ -511,14 +510,25 @@ impl RDRuntime {
             Effect::ArchiveProjectFile { path, filename } => {
                 self.rt_handle.spawn(async move {
                     let src = path.join(&filename);
-                    let dest_dir = path.join("archive");
-                    let _ = tokio::fs::create_dir_all(&dest_dir).await;
-                    if let Err(e) = tokio::fs::rename(&src, dest_dir.join(&filename)).await {
+                    let dest = path.join(format!("{filename}.archive"));
+
+                    if !src.exists() && dest.exists() {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
                                 path,
+                                error: format!("Failed to archive {filename}: Already archived"),
                                 filename,
-                                error: e.to_string(),
+                            }))
+                            .await;
+                        return;
+                    }
+
+                    if let Err(e) = tokio::fs::rename(&src, dest).await {
+                        let _ = tx
+                            .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
+                                path,
+                                error: format!("Failed to archive {filename}: {e}"),
+                                filename,
                             }))
                             .await;
                     } else {
@@ -534,14 +544,28 @@ impl RDRuntime {
 
             Effect::UnarchiveProjectFile { path, filename } => {
                 self.rt_handle.spawn(async move {
-                    let src = path.join("archive").join(&filename);
+                    let src = path.join(format!("{filename}.archive"));
                     let dest = path.join(&filename);
+
+                    if !src.exists() && dest.exists() {
+                        let _ = tx
+                            .send(InternalEvent::Standard(Event::FailedProjectFileArchive {
+                                path,
+                                error: format!(
+                                    "Failed to unarchive {filename}: Already unarchived"
+                                ),
+                                filename,
+                            }))
+                            .await;
+                        return;
+                    }
+
                     if let Err(e) = tokio::fs::rename(&src, &dest).await {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedProjectFileUnarchive {
                                 path,
+                                error: format!("Failed to unarchive {filename}: {e}"),
                                 filename,
-                                error: e.to_string(),
                             }))
                             .await;
                     } else {
@@ -557,17 +581,13 @@ impl RDRuntime {
 
             Effect::DeleteArtifact { path, filename } => {
                 self.rt_handle.spawn(async move {
-                    let full_path = if path.clone().ends_with(filename.clone()) {
-                        path
-                    } else {
-                        path.join(&filename)
-                    };
-                    if let Err(e) = tokio::fs::remove_file(full_path.clone()).await {
+                    let full_path = path.join(&filename);
+                    if let Err(e) = tokio::fs::remove_file(&full_path).await {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedArtifactDelete {
                                 path: full_path,
+                                error: format!("Failed to delete {filename}: {e}"),
                                 filename,
-                                error: e.to_string(),
                             }))
                             .await;
                     } else {

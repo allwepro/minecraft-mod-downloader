@@ -7,7 +7,7 @@ use crate::resource_downloader::business::cache::ArtifactCallback;
 use crate::resource_downloader::business::list_pool::ListPool;
 use crate::resource_downloader::business::services::ApiService;
 use crate::resource_downloader::business::{Effect, Event, InternalEvent};
-use crate::resource_downloader::domain::{AppConfig, ListLnk, ProjectLnk, ResourceType};
+use crate::resource_downloader::domain::{AppConfig, ListLnk, Project, ProjectLnk, ResourceType};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -105,26 +105,10 @@ impl RDState {
                 match event {
                     Event::ArtifactDeleted { .. }
                     | Event::ProjectFileArchived { .. }
-                    | Event::ProjectFileUnarchived { .. } => {
-                        if let Some(list) = &self.open_list {
-                            let rt = self
-                                .list_pool
-                                .get(list)
-                                .expect("List not found")
-                                .read()
-                                .get_resource_types()
-                                .first()
-                                .cloned()
-                                .unwrap_or(ResourceType::Mod);
-                            let list = self.list_pool.get(list).unwrap();
-                            let dir = list
-                                .read()
-                                .get_resource_type(&rt)
-                                .unwrap()
-                                .download_dir
-                                .clone();
-                            self.find_files(dir.parse().unwrap(), rt.file_extension());
-                        }
+                    | Event::ProjectFileUnarchived { .. }
+                    | Event::ProjectVersionSelected { .. }
+                    | Event::ListSaved { .. } => {
+                        self.request_full_refresh();
                     }
                     _ => {}
                 }
@@ -169,6 +153,7 @@ impl RDState {
                 list,
             } => {
                 self.list_pool.insert_arc(list);
+                self.request_full_refresh();
                 Some(Event::ListCreated {
                     name,
                     resource_type,
@@ -236,6 +221,38 @@ impl RDState {
                     files,
                 })
             }
+            InternalEvent::ProjectVersionSelected {
+                list_lnk,
+                project,
+                version,
+                dependency_data,
+            } => {
+                let version_id = version.version_id.clone();
+                let p_lnk_clone = project.clone();
+                let l_lnk_clone = list_lnk.clone();
+
+                self.list_pool.mutate(&list_lnk, move |list| {
+                    for (p_lnk, rt, meta) in dependency_data {
+                        if !list.has_project(&p_lnk) {
+                            list.add_project(Project::new(
+                                p_lnk.to_context_id().unwrap(),
+                                rt,
+                                false,
+                                meta.name,
+                                meta.description,
+                                meta.author,
+                            ));
+                        }
+                    }
+                    list.add_version(&project, version)
+                });
+
+                Some(Event::ProjectVersionSelected {
+                    list: l_lnk_clone,
+                    project: p_lnk_clone,
+                    version_id,
+                })
+            }
         }
     }
 
@@ -261,7 +278,10 @@ impl RDState {
     pub fn find_files(&self, directory: PathBuf, file_extension: String) {
         self.dispatch(Effect::FindFiles {
             directory,
-            file_extension,
+            file_extension: vec![
+                file_extension.clone(),
+                format!("{}.archive", file_extension),
+            ],
         });
     }
 
@@ -290,7 +310,7 @@ impl RDState {
                     Some(true) => {
                         state.dispatch(Effect::FindFiles {
                             directory: path.clone(),
-                            file_extension: ext.clone(),
+                            file_extension: vec![ext.clone(), format!("{}.archive", ext)],
                         });
                         DownloadStatus::Complete
                     }
@@ -313,17 +333,25 @@ impl RDState {
         });
     }
 
-    pub fn archive_file(&self, path: PathBuf, filename: String) {
-        self.dispatch(Effect::ArchiveProjectFile { path, filename });
-    }
-    pub fn unarchive_file(&self, path: PathBuf, filename: String) {
-        self.dispatch(Effect::UnarchiveProjectFile { path, filename });
-    }
     pub fn delete_artifact(&self, path: PathBuf, filename: String) {
         self.dispatch(Effect::DeleteArtifact { path, filename });
+        self.request_full_refresh();
     }
 
     pub fn import_modrinth(&self, collection_id: String) {
         self.dispatch(Effect::ImportModrinthCollection { collection_id });
+    }
+
+    fn request_full_refresh(&self) {
+        if let Some(list_lnk) = &self.open_list
+            && let Some(list_arc) = self.list_pool.get(list_lnk)
+        {
+            let list = list_arc.read();
+            for rt in list.get_resource_types() {
+                if let Some(tc) = list.get_resource_type_config(&rt) {
+                    self.find_files(tc.download_dir.clone().into(), rt.file_extension());
+                }
+            }
+        }
     }
 }

@@ -3,9 +3,7 @@ use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{
     GameLoader, GameVersion, ListLnk, Project, ProjectLnk, ResourceType,
 };
-use crate::{
-    get_list_mut, get_project_icon_texture, get_project_link, get_project_metadata, search_projects,
-};
+use crate::{get_project_icon_texture, get_project_link, get_project_metadata, search_projects};
 use eframe::egui;
 use egui::{Id, Ui};
 
@@ -173,12 +171,16 @@ impl ModalWindow for SearchModal {
             && let Ok(Some(data)) =
                 get_project_metadata!(self.state, project.clone(), self.resource_type)
         {
-            get_list_mut!(self.state, &self.list).add_project(Project::new_from_rt_project(
-                project,
-                self.resource_type,
-                true,
-                data,
-            ));
+            let resource_type = self.resource_type;
+            let project_lnk = project.clone();
+            self.state.read().list_pool.mutate(&self.list, move |list| {
+                list.add_project(Project::new_from_rt_project(
+                    project_lnk,
+                    resource_type,
+                    true,
+                    data,
+                ))
+            });
         }
     }
 }

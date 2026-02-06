@@ -101,7 +101,7 @@ impl LegacyListService {
 
         let (projects, _) = {
             let guard = list_arc.read();
-            (guard.get_projects(), guard.get_lnk())
+            (guard.get_manual_projects(), guard.get_lnk())
         };
 
         for (idx, project) in projects.iter().enumerate() {

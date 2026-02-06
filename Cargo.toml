@@ -14,7 +14,6 @@ futures-util = "0.3"
 parking_lot = "0.12.5"
 # web
 reqwest = { version = "0.13", features = ["json", "stream"] }
-urlencoding = "2.1"
 # fs
 dirs = "6.0"
 rfd = "0.17"

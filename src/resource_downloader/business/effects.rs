@@ -59,7 +59,7 @@ pub enum Effect {
     // File effects
     FindFiles {
         directory: PathBuf,
-        file_extension: String,
+        file_extension: Vec<String>,
     },
 
     DownloadProjectArtifact {

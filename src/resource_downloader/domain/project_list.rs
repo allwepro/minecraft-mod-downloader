@@ -154,7 +154,10 @@ impl ProjectList {
         !self.type_config.is_empty()
     }
 
-    pub fn get_resource_type(&self, resource_type: &ResourceType) -> Option<&ProjectTypeConfig> {
+    pub fn get_resource_type_config(
+        &self,
+        resource_type: &ResourceType,
+    ) -> Option<&ProjectTypeConfig> {
         self.type_config.get(resource_type)
     }
 
@@ -206,9 +209,17 @@ impl ProjectList {
         &self.projects
     }
 
-    pub fn get_projects(&self) -> Vec<ProjectLnk> {
+    fn get_projects(&self) -> Vec<ProjectLnk> {
         self.projects
             .iter()
+            .map(|p| p.get_lnk().clone())
+            .collect::<Vec<_>>()
+    }
+
+    pub fn get_manual_projects(&self) -> Vec<ProjectLnk> {
+        self.projects
+            .iter()
+            .filter(|p| p.is_manual())
             .map(|p| p.get_lnk().clone())
             .collect::<Vec<_>>()
     }
@@ -225,6 +236,13 @@ impl ProjectList {
         self.projects
             .iter()
             .filter(|p| p.resource_type == resource_type)
+            .collect()
+    }
+
+    pub fn manual_projects_by_type(&self, resource_type: ResourceType) -> Vec<&Project> {
+        self.projects
+            .iter()
+            .filter(|p| p.is_manual() && p.resource_type == resource_type)
             .collect()
     }
 
@@ -255,10 +273,49 @@ impl ProjectList {
         self.projects.iter_mut().find(|p| p.is_lnk(project))
     }
 
+    pub fn is_project_archived(&self, project: &ProjectLnk) -> bool {
+        !self.is_project_effectively_active(project, &mut Vec::new())
+    }
+
+    fn is_project_effectively_active(
+        &self,
+        project: &ProjectLnk,
+        visited: &mut Vec<ProjectLnk>,
+    ) -> bool {
+        if visited.contains(project) {
+            return false;
+        }
+        visited.push(project.clone());
+
+        let p = match self.get_project(project) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if p.is_manual() && !p.is_archived() {
+            return true;
+        }
+
+        p.get_dependents()
+            .iter()
+            .any(|d| self.is_project_effectively_active(d, visited))
+    }
+
     // public operations
     pub fn add_project(&mut self, project_target: Project) -> MutationResult {
         if self.has_project(&project_target.get_lnk()) {
-            MutationResult::new(MutationOutcome::AlreadyExists)
+            if project_target.is_manual()
+                && self
+                    .get_project(&project_target.get_lnk())
+                    .is_some_and(|a| !a.is_manual())
+            {
+                self.get_project_mut(&project_target.get_lnk())
+                    .unwrap()
+                    .set_manual(true);
+                MutationResult::new(MutationOutcome::ProjectPromoted)
+            } else {
+                MutationResult::new(MutationOutcome::AlreadyExists)
+            }
         } else {
             let project_lnk = project_target.get_lnk();
             let mut mutation =
@@ -283,8 +340,6 @@ impl ProjectList {
         }
 
         let target_project = self.get_project_mut(project).unwrap();
-        let mut mutation =
-            MutationResult::new(MutationOutcome::ProjectRemoved).with_target(project.clone());
 
         if target_project.has_dependents() {
             target_project.set_manual(false);
@@ -292,13 +347,15 @@ impl ProjectList {
                 .with_target(target_project.get_lnk());
         }
 
+        let mut mutation =
+            MutationResult::new(MutationOutcome::ProjectRemoved).with_target(project.clone());
+
         mutation.chain(self.clear_dependencies_internal(project));
 
         if let Some(pos) = self.get_project_internal_id(project) {
-            self.projects.remove(pos);
+            mutation.add_removed(vec![self.projects.remove(pos)]);
         }
-
-        mutation.add_removed(vec![project.clone()]);
+        mutation.chain(self.cleanup_orphaned_dependencies());
         mutation
     }
 
@@ -350,6 +407,7 @@ impl ProjectList {
             return MutationResult::unchanged();
         }
 
+        mutation.chain(self.cleanup_orphaned_dependencies());
         mutation
     }
 
@@ -450,6 +508,88 @@ impl ProjectList {
         versions
     }
 
+    pub fn archive_project(
+        &mut self,
+        project: &ProjectLnk,
+        new_archived_state: bool,
+    ) -> MutationResult {
+        if !self.has_project(project) {
+            return MutationResult::not_found();
+        }
+
+        let mut dependencies_before = Vec::new();
+        self.collect_all_dependencies_with_status(project, &mut dependencies_before);
+
+        let target_project = self.get_project_mut(project).unwrap();
+        target_project.set_archived(new_archived_state);
+
+        let outcome = if new_archived_state {
+            MutationOutcome::ProjectArchived
+        } else {
+            MutationOutcome::ProjectUnarchived
+        };
+
+        let mut mutation = MutationResult::new(outcome).with_target(project.clone());
+
+        let mut dependencies_after = Vec::new();
+        self.collect_all_dependencies_with_status(project, &mut dependencies_after);
+
+        for (dep_lnk, is_archived_after) in dependencies_after {
+            if let Some((_, was_archived_before)) =
+                dependencies_before.iter().find(|(d, _)| d == &dep_lnk)
+                && was_archived_before != &is_archived_after
+            {
+                mutation.add_changed(vec![dep_lnk]);
+            }
+        }
+
+        mutation.add_changed(vec![project.clone()]);
+        mutation
+    }
+
+    pub fn set_compatibility_overruled(
+        &mut self,
+        project: &ProjectLnk,
+        overruled: bool,
+    ) -> MutationResult {
+        if !self.has_project(project) {
+            return MutationResult::not_found();
+        }
+
+        let target_project = self.get_project_mut(project).unwrap();
+        if target_project.is_compatibility_overruled() == overruled {
+            return MutationResult::unchanged();
+        }
+
+        target_project.set_compatibility_overruled(overruled);
+        MutationResult::new(MutationOutcome::ProjectPromoted).with_target(project.clone())
+    }
+
+    fn collect_all_dependencies_with_status(
+        &self,
+        project: &ProjectLnk,
+        dependencies: &mut Vec<(ProjectLnk, bool)>,
+    ) {
+        if let Some(version) = self.get_project(project).and_then(|p| p.get_version()) {
+            let depended_on: Vec<ProjectLnk> = version
+                .depended_on
+                .iter()
+                .map(|d| d.project.clone())
+                .collect();
+
+            for dep_lnk in depended_on {
+                if dependencies.iter().any(|(d, _)| d == &dep_lnk) {
+                    continue;
+                }
+
+                let is_effectively_archived = self.is_project_archived(&dep_lnk);
+                dependencies.push((dep_lnk.clone(), is_effectively_archived));
+
+                self.collect_all_dependencies_with_status(&dep_lnk, dependencies);
+            }
+        }
+    }
+
     // internal helpers
     fn get_project_internal_id(&self, project: &ProjectLnk) -> Option<usize> {
         self.projects.iter().position(|p| p.is_lnk(project))
@@ -476,7 +616,6 @@ impl ProjectList {
         }
 
         mutation.add_changed(depended_on_projects);
-        mutation.chain(self.cleanup_orphaned_dependencies());
         mutation
     }
 
@@ -498,8 +637,7 @@ impl ProjectList {
             for project in to_remove {
                 mutation.chain(self.clear_dependencies_internal(&project));
                 if let Some(pos) = self.get_project_internal_id(&project) {
-                    self.projects.remove(pos);
-                    mutation.add_removed(vec![project.clone()]);
+                    mutation.add_removed(vec![self.projects.remove(pos)]);
                 }
             }
         }
