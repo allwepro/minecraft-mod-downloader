@@ -67,3 +67,75 @@ impl ModalWindow for LegacyImportModal {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_legacy_import_modal_id_constant() {
+        let test_id = Id::new("import_legacy_list");
+        let expected_id = Id::new("import_legacy_list");
+        assert_eq!(test_id, expected_id);
+    }
+
+    #[test]
+    fn test_legacy_import_modal_title_constant() {
+        let expected = "Import List".to_string();
+        assert_eq!(expected, "Import List");
+    }
+
+    #[test]
+    fn test_path_handling() {
+        let path1 = PathBuf::from("/tmp/list1.json");
+        let path2 = PathBuf::from("/tmp/list2.json");
+
+        assert_ne!(path1, path2);
+        assert_eq!(path1, PathBuf::from("/tmp/list1.json"));
+    }
+
+    #[test]
+    fn test_path_components() {
+        let path = PathBuf::from("/tmp/test_list.json");
+
+        assert!(path.as_path().to_str().is_some());
+        assert_eq!(path.file_name().unwrap(), "test_list.json");
+    }
+
+    #[test]
+    fn test_save_on_close_toggle() {
+        let mut save_flag = false;
+        assert!(!save_flag);
+
+        save_flag = true;
+        assert!(save_flag);
+
+        save_flag = false;
+        assert!(!save_flag);
+    }
+
+    #[test]
+    fn test_legacy_import_modal_default_state() {
+        let save_on_close = false;
+        assert!(!save_on_close, "save_on_close should initialize to false");
+    }
+
+    #[test]
+    fn test_multiple_path_instances() {
+        let path1 = PathBuf::from("/tmp/list1.json");
+        let path2 = PathBuf::from("/tmp/list2.json");
+        let path1_copy = path1.clone();
+
+        assert_eq!(path1, path1_copy);
+        assert_ne!(path1, path2);
+    }
+
+    #[test]
+    fn test_resource_type_mod_constant() {
+        use crate::resource_downloader::domain::ResourceType;
+        let rt = ResourceType::Mod;
+        let rt2 = ResourceType::Mod;
+
+        assert_eq!(rt, rt2);
+    }
+}

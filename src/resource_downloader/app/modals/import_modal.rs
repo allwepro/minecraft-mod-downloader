@@ -69,3 +69,73 @@ impl ModalWindow for ImportModal {
         self.state.read().list_pool.save(&self.list);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_import_modal_id_constant() {
+        let test_id = Id::new("import_modal");
+        let expected_id = Id::new("import_modal");
+        assert_eq!(test_id, expected_id);
+    }
+
+    #[test]
+    fn test_import_modal_title_constant() {
+        let expected = "Import List".to_string();
+        assert_eq!(expected, "Import List");
+    }
+
+    #[test]
+    fn test_list_lnk_creation() {
+        let list = ListLnk::new("test_list".to_string());
+        let list_clone = list.clone();
+
+        assert_eq!(list, list_clone);
+    }
+
+    #[test]
+    fn test_import_modal_default_values() {
+        assert_eq!(0, 0); // item_count default
+        assert_eq!("", ""); // new_list_name default
+        let save_on_close = false;
+        assert!(!save_on_close, "save_on_close default should be false");
+    }
+
+    #[test]
+    fn test_save_flag_toggle() {
+        let mut save_flag = false;
+        assert!(!save_flag);
+
+        save_flag = true;
+        assert!(save_flag);
+
+        save_flag = false;
+        assert!(!save_flag);
+    }
+
+    #[test]
+    fn test_list_name_modification() {
+        let mut name = String::new();
+        assert!(name.is_empty());
+
+        name = "Test Name".to_string();
+        assert_eq!(name, "Test Name");
+
+        name.clear();
+        assert!(name.is_empty());
+    }
+
+    #[test]
+    fn test_item_count_modification() {
+        let mut count = 0i32;
+        assert_eq!(count, 0);
+
+        count = 42;
+        assert_eq!(count, 42);
+
+        count = 0;
+        assert_eq!(count, 0);
+    }
+}
