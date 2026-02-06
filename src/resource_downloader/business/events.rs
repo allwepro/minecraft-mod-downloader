@@ -1,6 +1,7 @@
 use crate::resource_downloader::business::cache::ArtifactCallback;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ResourceType,
+    GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ProjectVersion, RTProjectData,
+    ResourceType,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -100,7 +101,7 @@ pub enum Event {
     // File events
     FilesFound {
         directory: PathBuf,
-        file_extension: String,
+        file_extension: Vec<String>,
         /// A vector of (file path, file hash sha1) tuples.
         files: Vec<(PathBuf, String)>,
     },
@@ -242,7 +243,13 @@ pub enum InternalEvent {
     },
     FilesFound {
         directory: PathBuf,
-        file_extension: String,
+        file_extension: Vec<String>,
         files: Vec<(PathBuf, String)>,
+    },
+    ProjectVersionSelected {
+        list_lnk: ListLnk,
+        project: ProjectLnk,
+        version: ProjectVersion,
+        dependency_data: Vec<(ProjectLnk, ResourceType, RTProjectData)>,
     },
 }

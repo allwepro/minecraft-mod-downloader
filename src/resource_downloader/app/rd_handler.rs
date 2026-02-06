@@ -140,11 +140,6 @@ impl ViewController for RDHandler {
             match event {
                 Event::Initialized { .. } => {
                     self.state.write().loading = false;
-                    self.notification_manager
-                        .notify(Box::new(FailedNotification::new(
-                            "Resource Downloader Initialized",
-                            "The Resource Downloader module has been successfully initialized.",
-                        )));
                 }
                 Event::ListImported { list, .. } => {
                     self.state

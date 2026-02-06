@@ -70,13 +70,13 @@ impl ListSettingsComponent {
         let target_list = get_list!(state, &list);
         let loader = target_list
             .read()
-            .get_resource_type(&resource_type)
+            .get_resource_type_config(&resource_type)
             .expect("List without type")
             .loader
             .clone();
         let dir = target_list
             .read()
-            .get_resource_type(&resource_type)
+            .get_resource_type_config(&resource_type)
             .expect("List without type")
             .download_dir
             .clone();

@@ -1,5 +1,5 @@
 use crate::resource_downloader::domain::lnk_types::ProjectLnk;
-use crate::resource_downloader::domain::{RTProjectData, RTProjectVersion, ResourceType};
+use crate::resource_downloader::domain::{RTProjectData, ResourceType};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -102,44 +102,6 @@ impl ProjectVersion {
             artifact_id,
             artifact_hash,
             channel,
-            depended_on,
-        }
-    }
-
-    pub fn from_rt_version(
-        is_manual: bool,
-        rt_version: &RTProjectVersion,
-        prev_version: Option<&ProjectVersion>,
-    ) -> Self {
-        let depended_on = rt_version
-            .clone()
-            .depended_on
-            .into_iter()
-            .map(|d| {
-                if let Some(prev_ver) = prev_version
-                    && let Some(prev_dep) = prev_ver.get_depended_on(d.project.clone())
-                {
-                    return ProjectDependency {
-                        project: d.project,
-                        dependency_type: d.dependency_type,
-                        manual_dependency_type: prev_dep.manual_dependency_type,
-                        version_id: d.version_id,
-                    };
-                }
-                ProjectDependency {
-                    project: d.project,
-                    dependency_type: d.dependency_type,
-                    manual_dependency_type: None,
-                    version_id: d.version_id,
-                }
-            })
-            .collect();
-        Self {
-            is_manual,
-            version_id: rt_version.version_id.clone(),
-            artifact_id: rt_version.artifact_id.clone(),
-            artifact_hash: rt_version.artifact_hash.clone(),
-            channel: rt_version.channel.clone(),
             depended_on,
         }
     }
@@ -288,16 +250,11 @@ impl Project {
 
     // ------------- SETTINGS -------------
     pub fn is_archived(&self) -> bool {
-        self.settings.archived && !self.has_dependents()
+        self.settings.archived
     }
 
     pub fn set_archived(&mut self, archived: bool) {
         self.settings.archived = archived;
-    }
-
-    pub fn toggle_archived(&mut self) -> bool {
-        self.set_archived(!self.is_archived());
-        self.is_archived()
     }
 
     pub fn is_compatibility_overruled(&self) -> bool {
@@ -421,6 +378,16 @@ impl Project {
             changed = true;
         }
         changed
+    }
+
+    pub fn get_safe_filename(&self) -> String {
+        let safe_name: String = self
+            .cache
+            .name
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-')
+            .collect();
+        format!("{}.{}", safe_name, self.resource_type.file_extension())
     }
 }
 
