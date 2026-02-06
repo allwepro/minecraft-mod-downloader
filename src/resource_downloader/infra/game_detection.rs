@@ -96,7 +96,7 @@ mod tests {
         ];
 
         for resource_type in resource_types {
-            let path = game_detection.get_default_minecraft_download_dir(resource_type.clone());
+            let path = game_detection.get_default_minecraft_download_dir(resource_type);
             println!("Resource Type: {:?}", resource_type);
             println!("Detected Path: {}", path.display());
             println!("OS: {}", std::env::consts::OS);
