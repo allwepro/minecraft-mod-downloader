@@ -41,6 +41,46 @@ pub struct RTProjectData {
     pub supported_loaders: Vec<GameLoader>,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum SortMode {
+    #[default]
+    Name,
+    DateAdded,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum FilterMode {
+    #[default]
+    All,
+    CompatibleOnly,
+    IncompatibleOnly,
+    MissingOnly,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum OrderMode {
+    #[default]
+    Ascending,
+    Descending,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SortSettings {
+    pub sort_mode: SortMode,
+    pub order_mode: OrderMode,
+    pub filter_mode: FilterMode,
+}
+
+impl Default for SortSettings {
+    fn default() -> Self {
+        Self {
+            sort_mode: SortMode::Name,
+            order_mode: OrderMode::Ascending,
+            filter_mode: FilterMode::All,
+        }
+    }
+}
+
 // ---------------- Resource Type ----------------
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ResourceType {

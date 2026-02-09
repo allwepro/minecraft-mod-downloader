@@ -1,59 +1,16 @@
 use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::domain::{FilterMode, OrderMode, SortMode};
 use egui::{Id, Ui};
-use parking_lot::RwLock;
-use std::sync::Arc;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum SortMode {
-    #[default]
-    Name,
-    DateAdded,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum FilterMode {
-    #[default]
-    All,
-    CompatibleOnly,
-    IncompatibleOnly,
-    MissingOnly,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum OrderMode {
-    #[default]
-    Ascending,
-    Descending,
-}
-
-#[derive(Clone, Debug)]
-pub struct SortSettings {
-    pub sort_mode: SortMode,
-    pub order_mode: OrderMode,
-    pub filter_mode: FilterMode,
-}
-
-impl Default for SortSettings {
-    fn default() -> Self {
-        Self {
-            sort_mode: SortMode::Name,
-            order_mode: OrderMode::Ascending,
-            filter_mode: FilterMode::All,
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct SortPopup {
-    pub settings: Arc<RwLock<SortSettings>>,
+    state: SharedRDState,
 }
 
 impl SortPopup {
-    pub fn new(_state: SharedRDState) -> Self {
-        Self {
-            settings: Arc::new(RwLock::new(SortSettings::default())),
-        }
+    pub fn new(state: SharedRDState) -> Self {
+        Self { state }
     }
 }
 
@@ -63,82 +20,104 @@ impl Popup for SortPopup {
     }
 
     fn render_contents(&mut self, ui: &mut Ui, open: &mut bool) {
-        let mut settings = self.settings.write();
+        let open_list_lnk = self.state.read().open_list.clone();
+        let Some(lnk) = open_list_lnk else {
+            ui.label("No list open");
+            return;
+        };
+
+        let list_arc = crate::get_list!(self.state, &lnk);
+        let mut list = list_arc.write();
+        let mut changed = false;
+
         ui.set_min_width(140.0);
         ui.label("Sort by:");
+
+        let mut sort_mode = list.get_sort_settings().sort_mode;
         if ui
-            .selectable_value(&mut settings.sort_mode, SortMode::Name, "Name")
+            .selectable_value(&mut sort_mode, SortMode::Name, "Name")
             .clicked()
         {
+            list.set_sort_mode(sort_mode);
+            changed = true;
             *open = false;
         }
         if ui
-            .selectable_value(&mut settings.sort_mode, SortMode::DateAdded, "Date Added")
+            .selectable_value(&mut sort_mode, SortMode::DateAdded, "Date Added")
             .clicked()
         {
+            list.set_sort_mode(sort_mode);
+            changed = true;
             *open = false;
         }
 
         ui.separator();
         ui.label("Order:");
+        let mut order_mode = list.get_sort_settings().order_mode;
         if ui
-            .selectable_value(
-                &mut settings.order_mode,
-                OrderMode::Ascending,
-                "⬇ Ascending",
-            )
+            .selectable_value(&mut order_mode, OrderMode::Ascending, "⬇ Ascending")
             .clicked()
         {
+            list.set_order_mode(order_mode);
+            changed = true;
             *open = false;
         }
         if ui
-            .selectable_value(
-                &mut settings.order_mode,
-                OrderMode::Descending,
-                "⬆ Descending",
-            )
+            .selectable_value(&mut order_mode, OrderMode::Descending, "⬆ Descending")
             .clicked()
         {
+            list.set_order_mode(order_mode);
+            changed = true;
             *open = false;
         }
 
         ui.separator();
         ui.label("Filter:");
+        let mut filter_mode = list.get_sort_settings().filter_mode;
         if ui
-            .selectable_value(&mut settings.filter_mode, FilterMode::All, "⭕ All")
+            .selectable_value(&mut filter_mode, FilterMode::All, "⭕ All")
             .clicked()
         {
+            list.set_filter_mode(filter_mode);
+            changed = true;
             *open = false;
         }
         if ui
             .selectable_value(
-                &mut settings.filter_mode,
+                &mut filter_mode,
                 FilterMode::CompatibleOnly,
                 "✅ Compatible",
             )
             .clicked()
         {
+            list.set_filter_mode(filter_mode);
+            changed = true;
             *open = false;
         }
         if ui
             .selectable_value(
-                &mut settings.filter_mode,
+                &mut filter_mode,
                 FilterMode::IncompatibleOnly,
                 "❎ Incompatible",
             )
             .clicked()
         {
+            list.set_filter_mode(filter_mode);
+            changed = true;
             *open = false;
         }
         if ui
-            .selectable_value(
-                &mut settings.filter_mode,
-                FilterMode::MissingOnly,
-                "❔ Missing",
-            )
+            .selectable_value(&mut filter_mode, FilterMode::MissingOnly, "❔ Missing")
             .clicked()
         {
+            list.set_filter_mode(filter_mode);
+            changed = true;
             *open = false;
+        }
+
+        if changed {
+            drop(list);
+            self.state.read().list_pool.save(&lnk);
         }
     }
 }
