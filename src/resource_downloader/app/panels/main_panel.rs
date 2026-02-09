@@ -832,22 +832,31 @@ impl MainPanel {
                 self.search_query.clear();
             }
 
-            if ui
-                .button("🔄")
-                .on_hover_text("Refresh files from disk")
-                .clicked()
-                && !is_measurement
-            {
-                self.state.write().found_files = None;
-                let list = list_arc.read();
-                for rt in list.get_resource_types() {
-                    if let Some(tc) = list.get_resource_type_config(&rt) {
-                        self.state
-                            .read()
-                            .find_files(tc.download_dir.clone().into(), rt.file_extension());
+            let is_loading = self.state.read().found_files.is_none();
+
+            ui.add_enabled_ui(!is_loading, |ui| {
+                let button_res = if is_loading {
+                    ui.add_sized([28.0, 24.0], egui::Spinner::new()).on_hover_text("Loading files...")
+                } else {
+                    ui.button("🔄").on_hover_text("Refresh files from disk")
+                };
+
+                if button_res.clicked() && !is_measurement {
+                    {
+                        let mut state = self.state.write();
+                        state.found_files = None;
+                    }
+
+                    let list = list_arc.read();
+                    for rt in list.get_resource_types() {
+                        if let Some(tc) = list.get_resource_type_config(&rt) {
+                            self.state
+                                .read()
+                                .find_files(tc.download_dir.clone().into(), rt.file_extension());
+                        }
                     }
                 }
-            }
+            });
 
             {
                 let sort_id = self.sort_popup.id();
