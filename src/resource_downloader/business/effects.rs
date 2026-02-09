@@ -93,6 +93,7 @@ pub enum Effect {
     // Legacy effects
     ImportLegacyList {
         path: PathBuf,
+        list_name: String,
         version: GameVersion,
         loader: GameLoader,
         download_dir: String,
