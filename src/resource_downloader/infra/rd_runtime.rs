@@ -118,6 +118,9 @@ impl RDRuntime {
                         );
                     }
 
+                    lm.set_default_download_dirs(default_download_dir_by_type.clone())
+                        .await;
+
                     let _ = tx
                         .send(InternalEvent::Initialized {
                             last_open_list_id: config.last_open_list_id,
