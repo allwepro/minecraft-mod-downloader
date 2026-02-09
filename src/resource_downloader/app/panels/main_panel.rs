@@ -836,7 +836,8 @@ impl MainPanel {
 
             ui.add_enabled_ui(!is_loading, |ui| {
                 let button_res = if is_loading {
-                    ui.add_sized([28.0, 24.0], egui::Spinner::new()).on_hover_text("Loading files...")
+                    ui.add_sized([28.0, 24.0], egui::Spinner::new())
+                        .on_hover_text("Loading files...")
                 } else {
                     ui.button("🔄").on_hover_text("Refresh files from disk")
                 };
