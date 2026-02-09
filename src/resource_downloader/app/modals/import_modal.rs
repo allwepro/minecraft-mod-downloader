@@ -57,11 +57,11 @@ impl ModalWindow for ImportModal {
         if let Some(list) = self.state.read().list_pool.get(&self.list) {
             self.item_count = list.read().project_count() as i32;
         }
-        
-        if let Some(file_name) = self.file_path.file_stem() {
-            if let Some(name_str) = file_name.to_str() {
-                self.new_list_name = name_str.to_string();
-            }
+
+        if let Some(file_name) = self.file_path.file_stem()
+            && let Some(name_str) = file_name.to_str()
+        {
+            self.new_list_name = name_str.to_string();
         }
     }
 
