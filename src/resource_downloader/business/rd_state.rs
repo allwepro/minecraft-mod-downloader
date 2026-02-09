@@ -47,6 +47,7 @@ pub struct RDState {
     pub found_files: Option<Vec<(PathBuf, String)>>,
     pub download_status: HashMap<ProjectLnk, (DownloadStatus, f32)>,
     pub pending_scroll: Option<(ListLnk, ProjectLnk)>,
+    pub pending_list_scroll: Option<ListLnk>,
 }
 
 impl RDState {
@@ -82,6 +83,7 @@ impl RDState {
             found_files: None,
             download_status: Default::default(),
             pending_scroll: None,
+            pending_list_scroll: None,
         }
     }
 
@@ -153,6 +155,7 @@ impl RDState {
             } => {
                 self.list_pool.insert_arc(list);
                 self.request_full_refresh();
+                self.pending_list_scroll = Some(lnk.clone());
                 Some(Event::ListCreated {
                     name,
                     resource_type,
@@ -169,6 +172,7 @@ impl RDState {
                 dup_list,
             } => {
                 self.list_pool.insert_arc(dup_list);
+                self.pending_list_scroll = Some(list.clone());
                 Some(Event::ListDuplicated {
                     list,
                     dup_list: dup_lnk,
@@ -184,6 +188,7 @@ impl RDState {
                 path,
             } => {
                 self.list_pool.insert_arc(list);
+                self.pending_list_scroll = Some(list_lnk.clone());
                 Some(Event::ListImported {
                     list: list_lnk,
                     path,
@@ -199,6 +204,7 @@ impl RDState {
                 unresolved,
             } => {
                 self.list_pool.insert_arc(list_data);
+                self.pending_list_scroll = Some(list.clone());
                 Some(Event::LegacyListImported {
                     path,
                     version,

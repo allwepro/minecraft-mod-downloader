@@ -121,7 +121,7 @@ impl MainPanel {
                     ui.add_space(1.0);
                     ui.label(
                         egui::RichText::new(format!(
-                            "{} Pcs + {} | {} | {}",
+                            "{} (+ {}) | {} | {}",
                             manual_prj_count,
                             proj_count - manual_prj_count,
                             ver.name,
