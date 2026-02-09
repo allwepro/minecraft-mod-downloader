@@ -73,7 +73,7 @@ impl MainPanel {
             let content_type = get_list_type!(self.state, &lnk);
             let list_arc = get_list!(self.state, &lnk);
 
-            let (list_name, ver, loader, dir, projects_empty) = {
+            let (list_name, ver, loader, dir, projects_empty, proj_count, manual_prj_count) = {
                 let list = list_arc.read();
                 let rt_config = list
                     .get_resource_type_config(&content_type)
@@ -84,6 +84,8 @@ impl MainPanel {
                     rt_config.loader.clone(),
                     rt_config.download_dir.clone(),
                     list.manual_projects_by_type(content_type).is_empty(),
+                    list.count_projects_by_type(content_type),
+                    list.count_manual_projects_by_type(content_type),
                 )
             };
 
@@ -103,8 +105,9 @@ impl MainPanel {
                     ui.add_space(1.0);
                     ui.label(
                         egui::RichText::new(format!(
-                            "{} List | {} | {}",
-                            content_type.display_name(),
+                            "{} Pcs + {} | {} | {}",
+                            manual_prj_count,
+                            proj_count - manual_prj_count,
                             ver.name,
                             loader.name
                         ))

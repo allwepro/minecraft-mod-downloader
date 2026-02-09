@@ -48,6 +48,7 @@ impl ProjectIconPool {
                 version: None,
                 loader: None,
             };
+            let cache_key = cache_ctx.hashed_key(CacheType::ProjectIcons);
 
             let res = self.cache.get::<Vec<u8>>(
                 CacheType::ProjectIcons,
@@ -64,12 +65,12 @@ impl ProjectIconPool {
                         loading.remove(&project);
                     }
                     Err(e) => {
-                        log::error!("Failed to decode icon for {project}: {e}");
+                        log::error!("Failed to decode icon for {project} ({cache_key}): {e}");
                         self.loading.write().remove(&project);
                     }
                 },
                 Err(e) => {
-                    log::error!("Icon fetch failed for {project}: {e}");
+                    log::error!("Icon fetch failed for {project} ({cache_key}): {e}");
                     self.loading.write().remove(&project);
                 }
                 Ok(None) => {}

@@ -2,6 +2,7 @@ use crate::common::modal_manager::SharedModalManager;
 use crate::common::notification_manager::SharedNotificationManager;
 use crate::common::pop_up_manager::SharedPopupManager;
 use crate::common::prefabs::view_controller::ViewController;
+use crate::common::program_args::{ArgRegistryBuilder, SharedArgRegistry};
 use crate::common::top_panel::TopBarAction;
 use crate::resource_downloader::app::modals::import_modal::ImportModal;
 use crate::resource_downloader::app::modals::legacy_import_progress_modal::LegacyProgressImportModal;
@@ -18,6 +19,7 @@ use crate::resource_downloader::infra::{
 use eframe::egui;
 use egui::{Context, Ui};
 use parking_lot::RwLock;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -37,20 +39,29 @@ pub struct RDHandler {
 }
 
 impl RDHandler {
+    pub fn args(arb: &mut ArgRegistryBuilder) {
+        arb.add("p", "path", "The path where the program data are saved.");
+    }
+
     pub fn new(
         rt_handle: tokio::runtime::Handle,
         modal_manager: SharedModalManager,
         popup_manager: SharedPopupManager,
         notification_manager: SharedNotificationManager,
+        args_registry: SharedArgRegistry,
     ) -> Self {
         // 1. Communication Channels
         let (effect_sx, effect_rx) = mpsc::channel::<Effect>(1024);
         let (event_sx, event_rx) = mpsc::channel::<InternalEvent>(1024);
 
         // 2. Infrastructure
-        let config_dir = dirs::config_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("flux-launcher");
+        let config_dir = if let Some(path) = args_registry.get("path") {
+            PathBuf::from(path)
+        } else {
+            dirs::config_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("flux-launcher")
+        };
 
         let game_detection = Arc::new(GameDetection::new());
         let config_manager = Arc::new(ConfigManager::new(config_dir.clone()));

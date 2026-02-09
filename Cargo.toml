@@ -20,7 +20,7 @@ rfd = "0.17"
 sha1 = "0.11.0-rc.4"
 # gui
 egui = "0.33"
-image = { version = "0.25", features = ["png"] }
+image = { version = "0.25", features = ["png", "webp"] }
 eframe = "0.33"
 egui_extras = { version = "0.33", features = ["image"] }
 # serialization
