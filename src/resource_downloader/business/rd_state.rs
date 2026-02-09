@@ -46,6 +46,7 @@ pub struct RDState {
     pub open_list: Option<ListLnk>,
     pub found_files: Option<Vec<(PathBuf, String)>>,
     pub download_status: HashMap<ProjectLnk, (DownloadStatus, f32)>,
+    pub pending_scroll: Option<(ListLnk, ProjectLnk)>,
 }
 
 impl RDState {
@@ -80,6 +81,7 @@ impl RDState {
             open_list: None,
             found_files: None,
             download_status: Default::default(),
+            pending_scroll: None,
         }
     }
 

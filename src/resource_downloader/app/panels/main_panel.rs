@@ -46,10 +46,20 @@ impl MainPanel {
     }
 
     pub fn show(&mut self, ctx: &Context, _ui: &mut Ui) {
-        let (open_list_lnk, found_files) = {
-            let s = self.state.read();
-            (s.open_list.clone(), s.found_files.clone())
+        let (open_list_lnk, found_files, pending_scroll) = {
+            let mut s = self.state.write();
+            (
+                s.open_list.clone(),
+                s.found_files.clone(),
+                s.pending_scroll.take(),
+            )
         };
+
+        if let Some((l, p)) = pending_scroll
+            && Some(l) == open_list_lnk
+        {
+            self.should_scroll_into_view = Some(p);
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let lnk = match open_list_lnk {
