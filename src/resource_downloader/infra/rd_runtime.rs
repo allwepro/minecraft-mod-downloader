@@ -386,7 +386,7 @@ impl RDRuntime {
                                         .rt_project_pool
                                         .get_metadata_blocking(prj.clone(), rt)
                                         .await
-                                        .unwrap_or(None)
+                                        .expect("Valid metadata expected")
                                     {
                                         dependency_data.push((prj, rt, rtpm));
                                     }
