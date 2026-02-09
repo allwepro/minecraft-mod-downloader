@@ -405,12 +405,11 @@ impl ProjectList {
             MutationResult::new(MutationOutcome::VersionAdded).with_target(project.clone());
 
         for dep in version.depended_on.as_slice() {
-            let depended_on_project_target =
-                self.get_project_mut(&dep.project).unwrap_or_else(|| {
-                    panic!("A dependency was added to a project that does not exist!");
-                });
-
-            depended_on_project_target.add_dependent(project.clone());
+            if let Some(depended_on_project_target) = self.get_project_mut(&dep.project) {
+                depended_on_project_target.add_dependent(project.clone());
+            } else {
+                eprintln!("Warning: Dependency project {:?} not found in list", &dep.project);
+            }
         }
 
         mutation.add_changed(

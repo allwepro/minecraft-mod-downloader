@@ -90,12 +90,14 @@ impl ListPool {
     pub fn import_legacy(
         &self,
         path: PathBuf,
+        list_name: String,
         version: GameVersion,
         loader: GameLoader,
         download_dir: String,
     ) {
         let _ = self.effect_sx.try_send(Effect::ImportLegacyList {
             path,
+            list_name,
             version,
             loader,
             download_dir,

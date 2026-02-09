@@ -51,13 +51,14 @@ impl ListSettingsComponent {
         }
     }
 
-    pub fn new_wo_name_rt(state: SharedRDState, resource_type: ResourceType) -> Self {
+
+    pub fn new_wo_name_rt_with_default(state: SharedRDState, resource_type: ResourceType, default_name: String) -> Self {
         Self {
             state,
             hide_rt_and_name: true,
             new_resource_type: resource_type,
             resource_types: vec![resource_type],
-            new_list_name: String::new(),
+            new_list_name: default_name,
             new_game_version: None,
             new_game_loader: None,
             new_download_dir: String::new(),

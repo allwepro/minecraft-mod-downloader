@@ -3,6 +3,7 @@ use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::ListLnk;
 use eframe::egui;
 use egui::{Id, Ui};
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct ImportModal {
@@ -11,16 +12,18 @@ pub struct ImportModal {
     item_count: i32,
     save_on_close: bool,
     new_list_name: String,
+    file_path: PathBuf,
 }
 
 impl ImportModal {
-    pub fn new(state: SharedRDState, list: ListLnk) -> Self {
+    pub fn new(state: SharedRDState, list: ListLnk, file_path: PathBuf) -> Self {
         Self {
             state,
             list,
             item_count: 0,
             save_on_close: false,
             new_list_name: String::new(),
+            file_path,
         }
     }
 }
@@ -52,8 +55,13 @@ impl ModalWindow for ImportModal {
 
     fn on_open(&mut self) {
         if let Some(list) = self.state.read().list_pool.get(&self.list) {
-            self.new_list_name = list.read().get_name().clone();
             self.item_count = list.read().project_count() as i32;
+        }
+        
+        if let Some(file_name) = self.file_path.file_stem() {
+            if let Some(name_str) = file_name.to_str() {
+                self.new_list_name = name_str.to_string();
+            }
         }
     }
 
