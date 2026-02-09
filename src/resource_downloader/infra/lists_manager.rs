@@ -296,7 +296,12 @@ impl ListFileManager {
     pub async fn import_from_string(&self, content: &str) -> Result<ListFile> {
         let mut list: ListFile = toml::from_str(content)?;
         let defaults = self.default_download_dirs.lock().await.clone();
-        list = ListFile::with_system_defaults(&list, ProjectList::generate_id(), &defaults);
+        list = ListFile::new_from_existing(&list, ProjectList::generate_id());
+        for tc in &mut list.type_config {
+            if !PathBuf::from(tc.1.download_dir.clone()).exists() {
+                tc.1.download_dir = defaults.get(tc.0).unwrap().clone();
+            }
+        }
         self.save(&list).await?;
         Ok(list)
     }

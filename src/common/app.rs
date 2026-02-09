@@ -3,6 +3,7 @@ use crate::common::modal_manager::SharedModalManager;
 use crate::common::notification_manager::SharedNotificationManager;
 use crate::common::pop_up_manager::SharedPopupManager;
 use crate::common::prefabs::view_controller::ViewController;
+use crate::common::program_args::SharedArgRegistry;
 use crate::common::top_panel::TopPanel;
 use crate::resource_downloader::app::rd_handler::RDHandler;
 use eframe::{egui, glow};
@@ -30,7 +31,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(_cc: &eframe::CreationContext<'_>, runtime: tokio::runtime::Runtime) -> Self {
+    pub fn new(
+        _cc: &eframe::CreationContext<'_>,
+        runtime: tokio::runtime::Runtime,
+        args_registry: SharedArgRegistry,
+    ) -> Self {
         let rt_handle = runtime.handle().clone();
 
         let modal_manager = SharedModalManager::default();
@@ -51,6 +56,7 @@ impl App {
                 modal_manager.clone(),
                 popup_manager.clone(),
                 notification_manager.clone(),
+                args_registry.clone(),
             ),
             // launcher_manager: LauncherManager::new(rt_handle),
         }
