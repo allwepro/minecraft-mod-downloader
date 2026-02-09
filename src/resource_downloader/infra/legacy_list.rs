@@ -21,6 +21,7 @@ impl LegacyListService {
     pub async fn import_legacy_list(
         &self,
         path: PathBuf,
+        list_name: String,
         list_version: &GameVersion,
         list_loader: &GameLoader,
         default_download_dir: String,
@@ -74,7 +75,7 @@ impl LegacyListService {
 
         let mut target_list = ProjectList::new(
             ProjectList::generate_id(),
-            format!("Mods of {}", path.file_stem().unwrap().to_str().unwrap()),
+            list_name,
             list_version.clone(),
         );
 

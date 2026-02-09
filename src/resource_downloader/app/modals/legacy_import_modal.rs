@@ -15,9 +15,23 @@ pub struct LegacyImportModal {
 
 impl LegacyImportModal {
     pub fn new(state: SharedRDState, path: PathBuf) -> Self {
+        let default_name = if let Some(file_name) = path.file_stem() {
+            if let Some(name_str) = file_name.to_str() {
+                name_str.to_string()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
         Self {
             state: state.clone(),
-            list_settings_component: ListSettingsComponent::new_wo_name_rt(state.clone(), Mod),
+            list_settings_component: ListSettingsComponent::new_wo_name_rt_with_default(
+                state.clone(),
+                Mod,
+                default_name,
+            ),
             path,
             save_on_close: false,
         }
@@ -55,6 +69,7 @@ impl ModalWindow for LegacyImportModal {
         }
         self.state.read().list_pool.import_legacy(
             self.path.clone(),
+            self.list_settings_component.new_list_name.clone(),
             self.list_settings_component
                 .new_game_version
                 .clone()

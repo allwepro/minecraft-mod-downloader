@@ -621,6 +621,7 @@ impl RDRuntime {
             }
             Effect::ImportLegacyList {
                 path,
+                list_name,
                 version,
                 loader,
                 download_dir,
@@ -629,6 +630,7 @@ impl RDRuntime {
                     match legacy
                         .import_legacy_list(
                             path.clone(),
+                            list_name.clone(),
                             &version,
                             &loader,
                             download_dir.clone(),
