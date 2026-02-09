@@ -1,7 +1,7 @@
 use crate::resource_downloader::business::cache::ArtifactCallback;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ProjectVersion, RTProjectData,
-    ResourceType,
+    AppConfig, GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ProjectVersion,
+    RTProjectData, ResourceType,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -12,8 +12,7 @@ use std::sync::Arc;
 pub enum Event {
     // Load-in events
     Initialized {
-        last_open_list_id: Option<ListLnk>,
-        default_list_name: String,
+        config: AppConfig,
         lists: Vec<ListLnk>,
         default_download_dir_by_type: HashMap<ResourceType, String>,
     },
@@ -204,8 +203,7 @@ pub enum Event {
 pub enum InternalEvent {
     Standard(Event),
     Initialized {
-        last_open_list_id: Option<ListLnk>,
-        default_list_name: String,
+        config: AppConfig,
         lists: Vec<(ListLnk, Arc<RwLock<ProjectList>>)>,
         default_download_dir_by_type: HashMap<ResourceType, String>,
     },

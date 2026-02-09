@@ -119,27 +119,28 @@ impl SidebarPanel {
                     .frame(true)
                     .right_text("");
                 if ui.add_sized([ui.available_width(), 0.0], button).clicked() {
-                    self.state.write().found_files = None;
-                    self.state.write().download_status.clear();
-                    if let Some(list) = self.state.read().open_list.clone() {
-                        self.state.read().list_pool.save(&list);
-                    }
-                    if is_selected {
-                        self.state.write().open_list = None;
+                    let next_state = if is_selected {
+                        None
                     } else {
-                        let list_type = { get_list_type!(self.state, &list) };
-                        let dir = {
-                            get_list!(self.state, &list)
-                                .read()
-                                .get_resource_type_config(&list_type)
-                                .expect("List without type")
-                                .download_dir
-                                .clone()
-                        };
-                        self.state
-                            .write()
-                            .find_files(dir.parse().unwrap(), list_type.file_extension());
-                        self.state.write().open_list = Some(list.clone());
+                        let list_type = get_list_type!(self.state, &list);
+                        let dir = get_list!(self.state, &list)
+                            .read()
+                            .get_resource_type_config(&list_type)
+                            .expect("List without type")
+                            .download_dir
+                            .clone();
+                        Some((list_type, dir))
+                    };
+
+                    let mut state = self.state.write();
+                    state.found_files = None;
+                    state.download_status.clear();
+
+                    if let Some((lt, dir)) = next_state {
+                        state.find_files(dir.parse().unwrap(), lt.file_extension());
+                        state.set_open_list(Some(list.clone()));
+                    } else {
+                        state.set_open_list(None);
                     }
                 }
             }

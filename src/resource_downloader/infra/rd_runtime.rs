@@ -3,7 +3,7 @@ use crate::resource_downloader::business::cache::ArtifactRequest;
 use crate::resource_downloader::business::services::ApiService;
 use crate::resource_downloader::business::{Effect, Event};
 use crate::resource_downloader::domain::{
-    AppConfig, GameVersion, Project, ProjectDependency, ProjectList, ProjectLnk, ProjectTypeConfig,
+    GameVersion, Project, ProjectDependency, ProjectList, ProjectLnk, ProjectTypeConfig,
     ProjectVersion, RESOURCE_TYPES, ResourceType,
 };
 use crate::resource_downloader::infra::{
@@ -123,8 +123,7 @@ impl RDRuntime {
 
                     let _ = tx
                         .send(InternalEvent::Initialized {
-                            last_open_list_id: config.last_open_list_id,
-                            default_list_name: config.default_list_name,
+                            config: config.clone(),
                             lists: lists_with_lnks,
                             default_download_dir_by_type,
                         })
@@ -132,17 +131,9 @@ impl RDRuntime {
                 });
             }
 
-            Effect::SaveConfig {
-                last_open_list_id,
-                default_list_name,
-            } => {
+            Effect::SaveConfig { config } => {
                 self.rt_handle.spawn(async move {
-                    let _ = cm
-                        .save_config(&AppConfig {
-                            last_open_list_id,
-                            default_list_name,
-                        })
-                        .await;
+                    let _ = cm.save_config(&config).await;
                 });
             }
 

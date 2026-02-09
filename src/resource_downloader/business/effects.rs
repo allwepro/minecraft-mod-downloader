@@ -1,6 +1,6 @@
 use crate::resource_downloader::business::cache::ArtifactCallback;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ResourceType,
+    AppConfig, GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ResourceType,
 };
 use parking_lot::RwLock;
 use std::path::PathBuf;
@@ -13,8 +13,7 @@ pub enum Effect {
 
     // Program effects
     SaveConfig {
-        last_open_list_id: Option<ListLnk>,
-        default_list_name: String,
+        config: AppConfig,
     },
 
     // List effects

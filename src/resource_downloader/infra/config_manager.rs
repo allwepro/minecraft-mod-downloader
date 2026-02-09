@@ -52,10 +52,7 @@ impl ConfigManager {
     }
 
     pub async fn create_default_config(&self) -> anyhow::Result<AppConfig> {
-        let config = AppConfig {
-            last_open_list_id: None,
-            default_list_name: "New List".to_string(),
-        };
+        let config = AppConfig::default();
         self.save_config(&config).await?;
         Ok(config)
     }

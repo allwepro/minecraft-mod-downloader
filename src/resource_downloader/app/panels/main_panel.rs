@@ -2,14 +2,12 @@ use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::app::dialogs::Dialogs;
 use crate::resource_downloader::app::modals::list_settings_modal::ListSettingsModal;
 use crate::resource_downloader::app::modals::search_modal::SearchModal;
-use crate::resource_downloader::app::popups::sort_popup::{
-    FilterMode, OrderMode, SortMode, SortPopup,
-};
+use crate::resource_downloader::app::popups::sort_popup::SortPopup;
 use crate::resource_downloader::business::DownloadStatus;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, ProjectDependencyType, ProjectList, ProjectLnk,
-    RTProjectVersion, ResourceType,
+    FilterMode, GameLoader, GameVersion, ListLnk, OrderMode, ProjectDependencyType, ProjectList,
+    ProjectLnk, RTProjectVersion, ResourceType, SortMode,
 };
 use crate::{
     clear_project_metadata, get_list, get_list_type, get_project_icon_texture, get_project_link,
@@ -30,8 +28,6 @@ pub struct MainPanel {
     rename_input: String,
 
     search_query: String,
-    show_archived: bool,
-    show_unknown_mods: bool,
     should_scroll_into_view: Option<ProjectLnk>,
     expanded_depended_on: Option<ProjectLnk>,
 }
@@ -44,8 +40,6 @@ impl MainPanel {
             rename_input_open: false,
             rename_input: String::new(),
             search_query: String::new(),
-            show_archived: false,
-            show_unknown_mods: false,
             should_scroll_into_view: None,
             expanded_depended_on: None,
         }
@@ -73,7 +67,17 @@ impl MainPanel {
             let content_type = get_list_type!(self.state, &lnk);
             let list_arc = get_list!(self.state, &lnk);
 
-            let (list_name, ver, loader, dir, projects_empty, proj_count, manual_prj_count) = {
+            let (
+                list_name,
+                ver,
+                loader,
+                dir,
+                projects_empty,
+                proj_count,
+                manual_prj_count,
+                show_archived,
+                show_unknown_mods,
+            ) = {
                 let list = list_arc.read();
                 let rt_config = list
                     .get_resource_type_config(&content_type)
@@ -86,6 +90,8 @@ impl MainPanel {
                     list.manual_projects_by_type(content_type).is_empty(),
                     list.count_projects_by_type(content_type),
                     list.count_manual_projects_by_type(content_type),
+                    list.is_show_archived(),
+                    list.is_show_unknown_mods(),
                 )
             };
 
@@ -122,7 +128,7 @@ impl MainPanel {
                             ))
                             .clicked()
                         {
-                            self.state.write().open_list = None;
+                            self.state.write().set_open_list(None);
                             self.state.read().list_pool.delete(&lnk);
                         }
                         if ui.add(egui::Button::new("✏ Rename")).clicked() {
@@ -212,9 +218,8 @@ impl MainPanel {
                 .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let missing: Vec<ProjectLnk> = {
-                            let list = list_arc.read();
                             self.get_filtered_projects(
-                                &list,
+                                &list_arc,
                                 &content_type,
                                 &found_hashes,
                                 &ver,
@@ -222,6 +227,7 @@ impl MainPanel {
                             )
                             .into_iter()
                             .filter(|p| {
+                                let list = list_arc.read();
                                 if let Some(proj) = list.get_project(p) {
                                     let is_downloaded = proj
                                         .get_version()
@@ -326,7 +332,7 @@ impl MainPanel {
                 });
             } else {
                 let filtered = self.get_filtered_projects(
-                    &list_arc.read(),
+                    &list_arc,
                     &content_type,
                     &found_hashes,
                     &ver,
@@ -352,20 +358,23 @@ impl MainPanel {
                         );
                     }
 
-                    if !archived.is_empty() {
+                    let archived_count = archived.len();
+                    if archived_count > 0 {
                         ui.add_space(8.0);
                         ui.separator();
                         if ui
-                            .button(format!(
-                                "{} Archived ({})",
-                                if self.show_archived { "🔽" } else { "▶" },
-                                archived.len()
-                            ))
+                            .button(egui::RichText::new(format!(
+                                "{} Archived Projects ({})",
+                                if show_archived { "🔽" } else { "▶" },
+                                archived_count
+                            )))
                             .clicked()
                         {
-                            self.show_archived = !self.show_archived;
+                            list_arc.write().set_show_archived(!show_archived);
+                            self.state.read().list_pool.save(&lnk);
                         }
-                        if self.show_archived {
+
+                        if show_archived {
                             for p_lnk in archived {
                                 self.render_project_entry(
                                     ui,
@@ -390,24 +399,23 @@ impl MainPanel {
                         &found_files,
                         &search_lower,
                     );
-                    if !unknown_files.is_empty() {
+                    let unknown_count = unknown_files.len();
+                    if unknown_count > 0 {
                         ui.add_space(8.0);
                         ui.separator();
                         if ui
                             .button(format!(
-                                "{} Unknown Files ({})",
-                                if self.show_unknown_mods {
-                                    "🔽"
-                                } else {
-                                    "▶"
-                                },
-                                unknown_files.len()
+                                "{} Unknown Projects ({})",
+                                if show_unknown_mods { "🔽" } else { "▶" },
+                                unknown_count
                             ))
                             .clicked()
                         {
-                            self.show_unknown_mods = !self.show_unknown_mods;
+                            list_arc.write().set_show_unknown_mods(!show_unknown_mods);
+                            self.state.read().list_pool.save(&lnk);
                         }
-                        if self.show_unknown_mods {
+
+                        if show_unknown_mods {
                             for (path, _hash) in unknown_files {
                                 let filename = path
                                     .file_name()
@@ -861,12 +869,11 @@ impl MainPanel {
 
             {
                 let sort_id = self.sort_popup.id();
-                let sort_settings = self.sort_popup.settings.read();
+                let sort_settings = list_arc.read().get_sort_settings();
                 let sort_btn = ui.button(match sort_settings.order_mode {
                     OrderMode::Ascending => "⬇ Sort",
                     OrderMode::Descending => "⬆ Sort",
                 });
-                drop(sort_settings);
 
                 if !is_measurement {
                     self.state
@@ -887,53 +894,73 @@ impl MainPanel {
 
     fn get_filtered_projects(
         &self,
-        list: &ProjectList,
+        list_arc: &Arc<RwLock<ProjectList>>,
         rt: &ResourceType,
         hashes: &HashSet<String>,
         current_ver: &GameVersion,
         current_loader: &GameLoader,
     ) -> Vec<ProjectLnk> {
-        let mut mods = list.manual_projects_by_type(*rt);
-        let query = self.search_query.to_lowercase();
-        let settings = self.sort_popup.settings.read();
+        let (mut candidates, settings) = {
+            let list = list_arc.read();
+            let mods = list
+                .manual_projects_by_type(*rt)
+                .into_iter()
+                .map(|p| {
+                    (
+                        p.get_lnk().clone(),
+                        p.get_name().clone(),
+                        p.get_author().clone(),
+                        p.added_at,
+                        p.get_version().map(|v| v.artifact_hash.clone()),
+                    )
+                })
+                .collect::<Vec<_>>();
+            (mods, list.get_sort_settings())
+        };
 
-        mods.retain(|p| {
+        let query = self.search_query.to_lowercase();
+
+        candidates.retain(|(lnk, name, author, _added_at, artifact_hash)| {
             let matches_query = query.is_empty()
-                || p.get_name().to_lowercase().contains(&query)
-                || p.get_author().to_lowercase().contains(&query);
-            let is_downloaded = p
-                .get_version()
-                .is_some_and(|v| hashes.contains(&v.artifact_hash));
+                || name.to_lowercase().contains(&query)
+                || author.to_lowercase().contains(&query);
+
+            if !matches_query {
+                return false;
+            }
+
+            let is_downloaded = artifact_hash.as_ref().is_some_and(|h| hashes.contains(h));
 
             match settings.filter_mode {
-                FilterMode::All => matches_query,
+                FilterMode::All => true,
                 FilterMode::MissingOnly => {
-                    matches_query && !is_downloaded && !list.is_project_archived(&p.get_lnk())
+                    let is_archived = list_arc.read().is_project_archived(lnk);
+                    !is_downloaded && !is_archived
                 }
                 FilterMode::CompatibleOnly => {
                     let vers_res = get_project_versions!(
                         self.state,
-                        p.get_lnk().clone(),
+                        lnk.clone(),
                         *rt,
                         current_ver.clone(),
                         current_loader.clone()
                     );
                     if let Ok(Some(vers)) = vers_res {
-                        matches_query && !vers.is_empty()
+                        !vers.is_empty()
                     } else {
-                        matches_query
+                        true
                     }
                 }
                 FilterMode::IncompatibleOnly => {
                     let vers_res = get_project_versions!(
                         self.state,
-                        p.get_lnk().clone(),
+                        lnk.clone(),
                         *rt,
                         current_ver.clone(),
                         current_loader.clone()
                     );
                     if let Ok(Some(vers)) = vers_res {
-                        matches_query && vers.is_empty()
+                        vers.is_empty()
                     } else {
                         false
                     }
@@ -941,19 +968,20 @@ impl MainPanel {
             }
         });
 
-        mods.sort_by(|a, b| match settings.sort_mode {
-            SortMode::Name => a
-                .get_name()
-                .to_lowercase()
-                .cmp(&b.get_name().to_lowercase()),
-            SortMode::DateAdded => a.added_at.cmp(&b.added_at),
+        candidates.sort_by(|a, b| {
+            let res = match settings.sort_mode {
+                SortMode::Name => a.1.to_lowercase().cmp(&b.1.to_lowercase()),
+                SortMode::DateAdded => a.3.cmp(&b.3),
+            };
+
+            if settings.order_mode == OrderMode::Descending {
+                res.reverse()
+            } else {
+                res
+            }
         });
 
-        if settings.order_mode == OrderMode::Descending {
-            mods.reverse();
-        }
-
-        mods.iter().map(|p| p.get_lnk().clone()).collect()
+        candidates.into_iter().map(|(lnk, ..)| lnk).collect()
     }
 
     fn get_unknown_files(
