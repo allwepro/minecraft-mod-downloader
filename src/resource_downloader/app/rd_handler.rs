@@ -142,9 +142,11 @@ impl ViewController for RDHandler {
                     self.state.write().loading = false;
                 }
                 Event::ListImported { list, path } => {
-                    self.state
-                        .read()
-                        .submit_modal(Box::new(ImportModal::new(self.state.clone(), list, path)));
+                    self.state.read().submit_modal(Box::new(ImportModal::new(
+                        self.state.clone(),
+                        list,
+                        path,
+                    )));
                 }
                 Event::LegacyListProgress {
                     import,
