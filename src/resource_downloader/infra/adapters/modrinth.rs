@@ -188,12 +188,33 @@ impl ResourceProvider for ModrinthProvider {
             })
             .collect();
 
+        let sort_logic = |list: &mut Vec<GameLoader>, rt: ResourceType| {
+            let priority = match rt {
+                ResourceType::Mod => vec!["fabric", "neoforge", "forge", "quilt"],
+                ResourceType::Shader => vec!["iris", "optifine"],
+                ResourceType::Plugin => vec!["paper", "spigot", "velocity"],
+                _ => vec!["minecraft"],
+            };
+
+            list.sort_by(|a, b| {
+                let pos_a = priority.iter().position(|&p| p == a.id);
+                let pos_b = priority.iter().position(|&p| p == b.id);
+
+                match (pos_a, pos_b) {
+                    (Some(ia), Some(ib)) => ia.cmp(&ib),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => a.name.cmp(&b.name),
+                }
+            });
+        };
+
         for rt in RESOURCE_TYPES {
             if rt == resource_type {
                 continue;
             }
             let other_type_id = rt.id();
-            let conflicting_loaders: Vec<GameLoader> = loaders
+            let mut conflicting_loaders: Vec<GameLoader> = loaders
                 .iter()
                 .filter(|(tag, _)| {
                     tag.supported_project_types
@@ -201,14 +222,16 @@ impl ResourceProvider for ModrinthProvider {
                 })
                 .map(|g| g.1.clone())
                 .collect();
+
             if !conflicting_loaders.is_empty() {
+                sort_logic(&mut conflicting_loaders, rt);
                 context
                     .game_loader_pool
                     .warm_loader(rt, conflicting_loaders);
             }
         }
 
-        Ok(loaders
+        let mut result: Vec<GameLoader> = loaders
             .into_iter()
             .filter_map(|(tag, game_loader)| {
                 if tag
@@ -220,7 +243,11 @@ impl ResourceProvider for ModrinthProvider {
                     None
                 }
             })
-            .collect())
+            .collect();
+
+        sort_logic(&mut result, resource_type);
+
+        Ok(result)
     }
 
     async fn search_projects(
