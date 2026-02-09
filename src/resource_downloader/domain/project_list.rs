@@ -114,6 +114,43 @@ impl ProjectList {
         }
     }
 
+    pub fn with_system_defaults(
+        list_file: &ProjectList,
+        list_id: String,
+        default_download_dirs: &HashMap<ResourceType, String>,
+    ) -> Self {
+        let mut type_config: HashMap<ResourceType, ProjectTypeConfig> = HashMap::new();
+        for tc in list_file.type_config.iter() {
+            let download_dir = default_download_dirs
+                .get(tc.0)
+                .cloned()
+                .unwrap_or_else(|| tc.1.download_dir.clone());
+            type_config.insert(
+                *tc.0,
+                ProjectTypeConfig::new(tc.1.loader.clone(), download_dir),
+            );
+        }
+        let mut project_list = Vec::new();
+        for pr in list_file.projects.iter() {
+            project_list.push(Project::new_from_existing(pr));
+        }
+
+        Self {
+            list_id,
+            metadata: ListMetadata {
+                name: list_file.metadata.name.clone(),
+                game_version: list_file.metadata.game_version.clone(),
+            },
+            type_config,
+            projects: project_list,
+            config: ListConfig {
+                version: list_file.config.version,
+                do_updates: list_file.config.do_updates,
+                created_at: Utc::now(),
+            },
+        }
+    }
+
     // -------------  LIST -------------
 
     pub fn get_id(&self) -> String {

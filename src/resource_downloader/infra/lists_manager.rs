@@ -1,4 +1,6 @@
-use crate::resource_downloader::domain::{ListLnk, ProjectList as ListFile, ProjectList};
+use crate::resource_downloader::domain::{
+    ListLnk, ProjectList as ListFile, ProjectList, ResourceType,
+};
 use anyhow::{Context, Result};
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -12,6 +14,7 @@ pub struct ListFileManager {
     lists_dir: PathBuf,
     id_filename_map: Arc<Mutex<HashMap<ListLnk, String>>>,
     locks: Arc<RwLock<HashMap<ListLnk, Arc<Mutex<()>>>>>,
+    default_download_dirs: Arc<Mutex<HashMap<ResourceType, String>>>,
 }
 
 #[allow(dead_code)]
@@ -21,7 +24,13 @@ impl ListFileManager {
             lists_dir,
             id_filename_map: Arc::new(Mutex::new(HashMap::new())),
             locks: Arc::new(RwLock::new(HashMap::new())),
+            default_download_dirs: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub async fn set_default_download_dirs(&self, defaults: HashMap<ResourceType, String>) {
+        let mut dirs = self.default_download_dirs.lock().await;
+        *dirs = defaults;
     }
 
     fn primitive_get_list_path(&self, filename: &str) -> PathBuf {
@@ -286,7 +295,8 @@ impl ListFileManager {
 
     pub async fn import_from_string(&self, content: &str) -> Result<ListFile> {
         let mut list: ListFile = toml::from_str(content)?;
-        list = ListFile::new_from_existing(&list, ProjectList::generate_id());
+        let defaults = self.default_download_dirs.lock().await.clone();
+        list = ListFile::with_system_defaults(&list, ProjectList::generate_id(), &defaults);
         self.save(&list).await?;
         Ok(list)
     }
