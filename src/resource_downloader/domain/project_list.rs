@@ -408,7 +408,10 @@ impl ProjectList {
             if let Some(depended_on_project_target) = self.get_project_mut(&dep.project) {
                 depended_on_project_target.add_dependent(project.clone());
             } else {
-                eprintln!("Warning: Dependency project {:?} not found in list", &dep.project);
+                eprintln!(
+                    "Warning: Dependency project {:?} not found in list",
+                    &dep.project
+                );
             }
         }
 

@@ -73,11 +73,8 @@ impl LegacyListService {
             }
         }
 
-        let mut target_list = ProjectList::new(
-            ProjectList::generate_id(),
-            list_name,
-            list_version.clone(),
-        );
+        let mut target_list =
+            ProjectList::new(ProjectList::generate_id(), list_name, list_version.clone());
 
         target_list.set_resource_type(
             Mod,

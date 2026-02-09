@@ -51,8 +51,11 @@ impl ListSettingsComponent {
         }
     }
 
-
-    pub fn new_wo_name_rt_with_default(state: SharedRDState, resource_type: ResourceType, default_name: String) -> Self {
+    pub fn new_wo_name_rt_with_default(
+        state: SharedRDState,
+        resource_type: ResourceType,
+        default_name: String,
+    ) -> Self {
         Self {
             state,
             hide_rt_and_name: true,
