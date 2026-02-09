@@ -1,6 +1,7 @@
 use crate::resource_downloader::domain::project_operations::{MutationOutcome, MutationResult};
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, Project, ProjectLnk, ProjectVersion, ResourceType,
+    FilterMode, GameLoader, GameVersion, ListLnk, OrderMode, Project, ProjectLnk, ProjectVersion,
+    ResourceType, SortMode, SortSettings,
 };
 use crate::resource_downloader::infra::cache::time_now;
 use chrono::{DateTime, Utc};
@@ -47,6 +48,12 @@ pub struct ListConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     do_updates: Option<bool>,
     created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub sort_settings: SortSettings,
+    #[serde(default)]
+    pub show_archived: bool,
+    #[serde(default)]
+    pub show_unknown_mods: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,6 +88,9 @@ impl ProjectList {
                 version: 1,
                 do_updates: None,
                 created_at: Utc::now(),
+                sort_settings: SortSettings::default(),
+                show_archived: false,
+                show_unknown_mods: false,
             },
         }
     }
@@ -110,6 +120,9 @@ impl ProjectList {
                 version: list_file.config.version,
                 do_updates: list_file.config.do_updates,
                 created_at: Utc::now(),
+                sort_settings: list_file.config.sort_settings.clone(),
+                show_archived: list_file.config.show_archived,
+                show_unknown_mods: list_file.config.show_unknown_mods,
             },
         }
     }
@@ -195,6 +208,38 @@ impl ProjectList {
 
     pub fn set_do_updates(&mut self, do_updates: Option<bool>) {
         self.config.do_updates = do_updates;
+    }
+
+    pub fn get_sort_settings(&self) -> SortSettings {
+        self.config.sort_settings.clone()
+    }
+
+    pub fn set_sort_mode(&mut self, sort_mode: SortMode) {
+        self.config.sort_settings.sort_mode = sort_mode;
+    }
+
+    pub fn set_order_mode(&mut self, order_mode: OrderMode) {
+        self.config.sort_settings.order_mode = order_mode;
+    }
+
+    pub fn set_filter_mode(&mut self, filter_mode: FilterMode) {
+        self.config.sort_settings.filter_mode = filter_mode;
+    }
+
+    pub fn is_show_archived(&self) -> bool {
+        self.config.show_archived
+    }
+
+    pub fn set_show_archived(&mut self, show: bool) {
+        self.config.show_archived = show;
+    }
+
+    pub fn is_show_unknown_mods(&self) -> bool {
+        self.config.show_unknown_mods
+    }
+
+    pub fn set_show_unknown_mods(&mut self, show: bool) {
+        self.config.show_unknown_mods = show;
     }
 
     pub fn get_config_created_at(&self) -> DateTime<Utc> {

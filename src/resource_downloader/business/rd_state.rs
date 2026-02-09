@@ -115,15 +115,13 @@ impl RDState {
                 Some(event)
             }
             InternalEvent::Initialized {
-                default_list_name,
-                last_open_list_id,
+                config,
                 lists,
                 default_download_dir_by_type,
             } => {
-                self.config.write().default_list_name = default_list_name.clone();
-                self.config.write().last_open_list_id = last_open_list_id.clone();
+                *self.config.write() = config.clone();
 
-                self.open_list = last_open_list_id.clone();
+                self.open_list = config.last_open_list_id.clone();
 
                 let list_lnks: Vec<ListLnk> = lists
                     .into_iter()
@@ -136,8 +134,7 @@ impl RDState {
                 self.default_dirs = default_download_dir_by_type.clone();
 
                 Some(Event::Initialized {
-                    last_open_list_id,
-                    default_list_name,
+                    config,
                     lists: list_lnks,
                     default_download_dir_by_type,
                 })
@@ -268,11 +265,23 @@ impl RDState {
         self.dispatch(Effect::OpenExplorer { path });
     }
 
+    pub fn set_open_list(&mut self, list: Option<ListLnk>) {
+        if self.open_list == list {
+            return;
+        }
+
+        if let Some(old_list) = self.open_list.clone() {
+            self.list_pool.save(&old_list);
+        }
+
+        self.open_list = list.clone();
+        self.config.write().last_open_list_id = list;
+        self.save_config();
+    }
+
     pub fn save_config(&self) {
-        self.dispatch(Effect::SaveConfig {
-            last_open_list_id: self.config.read().last_open_list_id.clone(),
-            default_list_name: self.config.read().default_list_name.clone(),
-        });
+        let config = self.config.read().clone();
+        self.dispatch(Effect::SaveConfig { config });
     }
 
     pub fn find_files(&self, directory: PathBuf, file_extension: String) {
