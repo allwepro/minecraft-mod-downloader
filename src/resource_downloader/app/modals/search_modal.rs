@@ -173,6 +173,9 @@ impl ModalWindow for SearchModal {
         {
             let resource_type = self.resource_type;
             let project_lnk = project.clone();
+
+            self.state.write().pending_scroll = Some((self.list.clone(), project_lnk.clone()));
+
             self.state.read().list_pool.mutate(&self.list, move |list| {
                 list.add_project(Project::new_from_rt_project(
                     project_lnk,
