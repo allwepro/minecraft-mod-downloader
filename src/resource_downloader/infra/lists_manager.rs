@@ -215,13 +215,12 @@ impl ListFileManager {
 
         self.internal_remove_filename_cache(list).await;
 
-        if let Some(path) = path_target {
-            if path.exists() {
-                fs::remove_file(&path).await.context(format!(
-                    "Failed to delete list file: {}",
-                    path.display()
-                ))?;
-            }
+        if let Some(path) = path_target
+            && path.exists()
+        {
+            fs::remove_file(&path)
+                .await
+                .context(format!("Failed to delete list file: {}", path.display()))?;
         }
 
         drop(_guard);
@@ -230,7 +229,6 @@ impl ListFileManager {
             let mut locks = self.locks.write();
             locks.remove(list);
         }
-
 
         Ok(())
     }

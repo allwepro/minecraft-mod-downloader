@@ -38,15 +38,15 @@ impl Popup for ImportPopup {
                         self.state.read().list_pool.import(path);
                     }
                     Some("mods") | Some("all-mods") | Some("queue-mods") => {
-                        self.state
-                            .read()
-                            .submit_modal(Box::new(LegacyImportModal::new(
-                                self.state.clone(),
-                                path,
-                            )));
+                        let sm = LegacyImportModal::new(self.state.clone(), path);
+                        self.state.read().submit_modal(Box::new(sm));
                     }
                     _ => {
-                        self.state.read().submit_notification(Box::new(FailedNotification::new("Unsupported file type for import", "The selected file type is not supported for import. Please select a valid Mod List file (.toml, .mmd) or a legacy mods file (.mods, .all-mods, .queue-mods).")));
+                        let sn = FailedNotification::new(
+                            "Unsupported file type for import",
+                            "The selected file type is not supported for import. Please select a valid Mod List file (.toml, .mmd) or a legacy mods file (.mods, .all-mods, .queue-mods).",
+                        );
+                        self.state.read().submit_notification(Box::new(sn));
                     }
                 }
             }
@@ -60,11 +60,8 @@ impl Popup for ImportPopup {
             .clicked()
         {
             *open = false;
-            self.state
-                .read()
-                .submit_modal(Box::new(ModrinthCollectionImportModal::new(
-                    self.state.clone(),
-                )))
+            let sm = ModrinthCollectionImportModal::new(self.state.clone());
+            self.state.read().submit_modal(Box::new(sm));
         }
     }
 }

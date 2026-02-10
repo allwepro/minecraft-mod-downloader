@@ -153,11 +153,8 @@ impl ViewController for RDHandler {
                     self.state.write().loading = false;
                 }
                 Event::ListImported { list, path } => {
-                    self.state.read().submit_modal(Box::new(ImportModal::new(
-                        self.state.clone(),
-                        list,
-                        path,
-                    )));
+                    let sm = ImportModal::new(self.state.clone(), list, path);
+                    self.state.read().submit_modal(Box::new(sm));
                 }
                 Event::LegacyListProgress {
                     import,
@@ -166,38 +163,36 @@ impl ViewController for RDHandler {
                     message,
                     ..
                 } => {
-                    self.state.read().submit_modal(Box::new(
-                        LegacyProgressImportModal::new_progress(
-                            import,
-                            self.state.clone(),
-                            current,
-                            total,
-                            message,
-                        ),
-                    ));
+                    let sm = LegacyProgressImportModal::new_progress(
+                        import,
+                        self.state.clone(),
+                        current,
+                        total,
+                        message,
+                    );
+                    self.state.read().submit_modal(Box::new(sm));
                 }
                 Event::LegacyListImported {
                     list, unresolved, ..
                 } => {
-                    self.state.read().submit_modal(Box::new(
-                        LegacyProgressImportModal::new_import(self.state.clone(), list, unresolved),
-                    ));
+                    let sm =
+                        LegacyProgressImportModal::new_import(self.state.clone(), list, unresolved);
+                    self.state.read().submit_modal(Box::new(sm));
                 }
                 Event::LegacyListExported { unresolved, .. } => {
-                    self.state.read().submit_modal(Box::new(
-                        LegacyProgressImportModal::new_export(self.state.clone(), unresolved),
-                    ));
+                    let sm = LegacyProgressImportModal::new_export(self.state.clone(), unresolved);
+                    self.state.read().submit_modal(Box::new(sm));
                 }
                 Event::ModrinthCollectionImported {
                     collection_id,
                     contained_resource_ids,
                 } => {
-                    let modal = Box::new(ModrinthCollectionImportModal::new_finalizing(
+                    let modal = ModrinthCollectionImportModal::new_finalizing(
                         self.state.clone(),
                         collection_id,
                         contained_resource_ids,
-                    ));
-                    self.state.read().submit_modal(modal);
+                    );
+                    self.state.read().submit_modal(Box::new(modal));
                 }
                 Event::FailedModrinthCollectionImport { error, .. } => {
                     self.modal_manager.close_active();
@@ -243,7 +238,8 @@ impl ViewController for RDHandler {
             "⚙ Settings",
             "Open the Settings",
             move |_ctx| {
-                vs.read().submit_modal(Box::new(settings_modal));
+                let ms = vs.read().modal_manager.clone();
+                ms.open(Box::new(settings_modal.clone()));
             },
         )]
     }
