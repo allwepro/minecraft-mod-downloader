@@ -32,9 +32,15 @@ impl Popup for ListContextMenu {
             if ui.button("📂  Open Folder").clicked() {
                 if let Some(list_arc) = list_pool.get(&list_lnk) {
                     let list = list_arc.read();
-                    let rt = list.get_resource_types().first().cloned().unwrap_or(ResourceType::Mod);
+                    let rt = list
+                        .get_resource_types()
+                        .first()
+                        .cloned()
+                        .unwrap_or(ResourceType::Mod);
                     if let Some(config) = list.get_resource_type_config(&rt) {
-                        self.state.read().open_explorer(config.download_dir.clone().into());
+                        self.state
+                            .read()
+                            .open_explorer(config.download_dir.clone().into());
                     }
                 }
                 *open = false;
@@ -48,7 +54,7 @@ impl Popup for ListContextMenu {
             ui.separator();
 
             let delete_btn = egui::Button::new(
-                egui::RichText::new("🗑  Delete").color(Color32::from_rgb(255, 100, 100))
+                egui::RichText::new("🗑  Delete").color(Color32::from_rgb(255, 100, 100)),
             );
 
             if ui.add(delete_btn).clicked() {

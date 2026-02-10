@@ -2,6 +2,7 @@ use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::app::dialogs::Dialogs;
 use crate::resource_downloader::app::modals::list_settings_modal::ListSettingsModal;
 use crate::resource_downloader::app::modals::search_modal::SearchModal;
+use crate::resource_downloader::app::popups::multi_select_context_menu::MultiSelectContextMenu;
 use crate::resource_downloader::app::popups::sort_popup::SortPopup;
 use crate::resource_downloader::business::DownloadStatus;
 use crate::resource_downloader::business::SharedRDState;
@@ -28,6 +29,10 @@ pub struct MainPanel {
     rename_input: String,
 
     search_query: String,
+    selected_projects: HashSet<ProjectLnk>,
+    last_selected: Option<ProjectLnk>,
+    current_list: Option<ListLnk>,
+    context_menu_target: Option<egui::Rect>,
     should_scroll_into_view: Option<ProjectLnk>,
     expanded_depended_on: Option<ProjectLnk>,
 }
@@ -40,6 +45,10 @@ impl MainPanel {
             rename_input_open: false,
             rename_input: String::new(),
             search_query: String::new(),
+            selected_projects: HashSet::new(),
+            last_selected: None,
+            current_list: None,
+            context_menu_target: None,
             should_scroll_into_view: None,
             expanded_depended_on: None,
         }
@@ -56,6 +65,11 @@ impl MainPanel {
             )
         };
 
+        if self.current_list != open_list_lnk {
+            self.selected_projects.clear();
+            self.current_list = open_list_lnk.clone();
+        }
+
         if let Some((l, p)) = pending_scroll
             && Some(l) == open_list_lnk
         {
@@ -63,8 +77,12 @@ impl MainPanel {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let lnk = match open_list_lnk {
-                Some(l) => l,
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.selected_projects.clear();
+            }
+
+            let lnk = match &open_list_lnk {
+                Some(l) => l.clone(),
                 None => {
                     ui.vertical_centered(|ui| {
                         ui.add_space(100.0);
@@ -341,6 +359,33 @@ impl MainPanel {
                 ui.vertical_centered(|ui| {
                     ui.add_space(50.0);
                     ui.heading("No items in this list");
+
+                    let (has_clipboard, clip_list_name) = {
+                        let s = self.state.read();
+                        if let Some(c) = &s.clipboard {
+                            let name = s
+                                .list_pool
+                                .get(&c.source_list)
+                                .map(|l| l.read().get_name())
+                                .unwrap_or_default();
+                            (true, name)
+                        } else {
+                            (false, String::new())
+                        }
+                    };
+
+                    if has_clipboard {
+                        ui.add_space(10.0);
+                        if ui
+                            .add(egui::Button::new(
+                                egui::RichText::new(format!("📋 Paste from {}", clip_list_name))
+                                    .color(Color32::LIGHT_BLUE),
+                            ))
+                            .clicked()
+                        {
+                            self.state.write().paste_clipboard(lnk.clone());
+                        }
+                    }
                 });
             } else {
                 let filtered = self.get_filtered_projects(
@@ -355,12 +400,12 @@ impl MainPanel {
                         .into_iter()
                         .partition(|p| !list_arc.read().is_project_archived(p));
 
-                    for p_lnk in active {
+                    for (idx, p_lnk) in active.iter().enumerate() {
                         self.render_project_entry(
                             ui,
                             &lnk,
                             &list_arc,
-                            &p_lnk,
+                            p_lnk,
                             &content_type,
                             &ver,
                             &loader,
@@ -369,6 +414,8 @@ impl MainPanel {
                             &dir,
                             false,
                             &active_scans,
+                            &active,
+                            idx,
                         );
                     }
 
@@ -389,12 +436,12 @@ impl MainPanel {
                         }
 
                         if show_archived {
-                            for p_lnk in archived {
+                            for (idx, p_lnk) in archived.iter().enumerate() {
                                 self.render_project_entry(
                                     ui,
                                     &lnk,
                                     &list_arc,
-                                    &p_lnk,
+                                    p_lnk,
                                     &content_type,
                                     &ver,
                                     &loader,
@@ -403,6 +450,8 @@ impl MainPanel {
                                     &dir,
                                     false,
                                     &active_scans,
+                                    &archived,
+                                    idx,
                                 );
                             }
                         }
@@ -445,6 +494,25 @@ impl MainPanel {
                 });
             }
         });
+
+        if let Some(rect) = self.context_menu_target {
+            let pm = self.state.read().popup_manager.clone();
+            let menu_id = egui::Id::new("multi_select_context_menu");
+
+            if pm.is_open(menu_id) {
+                if let Some(open_lnk) = &open_list_lnk {
+                    let menu = MultiSelectContextMenu::new(
+                        self.state.clone(),
+                        open_lnk.clone(),
+                        self.selected_projects.clone(),
+                    );
+                    pm.register_interaction_area(menu_id, rect);
+                    pm.request_show(Box::new(menu), rect);
+                }
+            } else {
+                self.context_menu_target = None;
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -462,6 +530,8 @@ impl MainPanel {
         dir: &String,
         is_dependency: bool,
         active_scans: &HashSet<PathBuf>,
+        ordered_list: &[ProjectLnk],
+        current_idx: usize,
     ) {
         let (metadata, versions) = {
             let meta = get_project_metadata!(self.state, p_lnk.clone(), *rt);
@@ -560,15 +630,24 @@ impl MainPanel {
             .cloned()
             .unwrap_or((DownloadStatus::Idle, 0.0));
         let should_scroll = self.should_scroll_into_view.as_ref() == Some(p_lnk);
+        let is_selected = self.selected_projects.contains(p_lnk);
 
-        let frame = egui::Frame::new()
+        let mut frame = egui::Frame::new()
             .fill(ui.visuals().faint_bg_color)
             .stroke(egui::Stroke::new(
                 1.0,
-                ui.visuals().widgets.noninteractive.bg_stroke.color,
+                if is_selected {
+                    Color32::from_rgb(100, 150, 255)
+                } else {
+                    ui.visuals().widgets.noninteractive.bg_stroke.color
+                },
             ))
             .corner_radius(6.0)
             .inner_margin(8.0);
+
+        if is_selected {
+            frame = frame.fill(ui.visuals().selection.bg_fill.linear_multiply(0.1));
+        }
 
         let response = frame
             .show(ui, |ui| {
@@ -824,6 +903,53 @@ impl MainPanel {
             .response;
 
         if !is_dependency {
+            let is_button_clicked = ui.ctx().is_using_pointer();
+
+            let primary_clicked = response.hovered()
+                && ui.input(|i| i.pointer.primary_clicked())
+                && !is_button_clicked;
+
+            let secondary_clicked = response.hovered()
+                && ui.input(|i| i.pointer.secondary_clicked())
+                && !is_button_clicked;
+
+            if primary_clicked {
+                let modifiers = ui.input(|i| i.modifiers);
+                if modifiers.shift
+                    && let Some(last_id) = self.last_selected.as_ref()
+                {
+                    if let Some(last_idx) = ordered_list.iter().position(|id| id == last_id) {
+                        let start = last_idx.min(current_idx);
+                        let end = last_idx.max(current_idx);
+                        for item in ordered_list.iter().take(end + 1).skip(start) {
+                            self.selected_projects.insert(item.clone());
+                        }
+                    }
+                } else if modifiers.command {
+                    if is_selected {
+                        self.selected_projects.remove(p_lnk);
+                    } else {
+                        self.selected_projects.insert(p_lnk.clone());
+                        self.last_selected = Some(p_lnk.clone());
+                    }
+                } else {
+                    self.selected_projects.clear();
+                    self.selected_projects.insert(p_lnk.clone());
+                    self.last_selected = Some(p_lnk.clone());
+                }
+            }
+
+            if secondary_clicked {
+                if !is_selected {
+                    self.selected_projects.clear();
+                    self.selected_projects.insert(p_lnk.clone());
+                    self.last_selected = Some(p_lnk.clone());
+                }
+                self.context_menu_target = Some(response.rect);
+                let menu_id = egui::Id::new("multi_select_context_menu");
+                self.state.read().popup_manager.toggle(menu_id);
+            }
+
             if let Some(ref expanded_id) = self.expanded_depended_on.clone()
                 && expanded_id == p_lnk
                 && let Some(depended_ons) = depended_on
@@ -850,6 +976,8 @@ impl MainPanel {
                                 dir,
                                 true,
                                 active_scans,
+                                &[],
+                                0,
                             );
                         }
                     });
