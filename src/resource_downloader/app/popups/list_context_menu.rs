@@ -1,6 +1,7 @@
 use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::business::SharedRDState;
-use crate::resource_downloader::domain::{ListLnk, ResourceType};
+use crate::resource_downloader::business::list_actions::ListActions;
+use crate::resource_downloader::domain::ListLnk;
 use eframe::egui;
 use egui::{Color32, Id, Ui};
 
@@ -26,28 +27,15 @@ impl Popup for ListContextMenu {
         ui.spacing_mut().item_spacing.y = 4.0;
 
         let list_lnk = self.list_lnk.clone();
-        let list_pool = self.state.read().list_pool.clone();
 
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
             if ui.button("📂  Open Folder").clicked() {
-                if let Some(list_arc) = list_pool.get(&list_lnk) {
-                    let list = list_arc.read();
-                    let rt = list
-                        .get_resource_types()
-                        .first()
-                        .cloned()
-                        .unwrap_or(ResourceType::Mod);
-                    if let Some(config) = list.get_resource_type_config(&rt) {
-                        self.state
-                            .read()
-                            .open_explorer(config.download_dir.clone().into());
-                    }
-                }
+                ListActions::open_folder(self.state.clone(), list_lnk.clone());
                 *open = false;
             }
 
             if ui.button("👥  Duplicate").clicked() {
-                list_pool.duplicate(&list_lnk);
+                ListActions::duplicate_list(self.state.clone(), list_lnk.clone());
                 *open = false;
             }
 
@@ -58,10 +46,7 @@ impl Popup for ListContextMenu {
             );
 
             if ui.add(delete_btn).clicked() {
-                if self.state.read().open_list.as_ref() == Some(&list_lnk) {
-                    self.state.write().set_open_list_no_save(None);
-                }
-                list_pool.delete(&list_lnk);
+                ListActions::delete_list(self.state.clone(), list_lnk.clone());
                 *open = false;
             }
         });

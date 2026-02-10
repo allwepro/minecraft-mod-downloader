@@ -153,7 +153,8 @@ impl RDState {
                         }
                     }
 
-                    for (p_lnk, ver) in versions_to_add {
+                    for (p_lnk, mut ver) in versions_to_add {
+                        ver.depended_on.retain(|dep| list.has_project(&dep.project));
                         list.add_version(&p_lnk, ver);
                     }
 

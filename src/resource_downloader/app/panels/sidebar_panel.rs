@@ -3,6 +3,7 @@ use crate::resource_downloader::app::modals::create_modal::CreateModal;
 use crate::resource_downloader::app::popups::import_popup::ImportPopup;
 use crate::resource_downloader::app::popups::list_context_menu::ListContextMenu;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::domain::{ListLnk, ResourceType};
 use eframe::egui;
 use egui::{Color32, StrokeKind, Ui};
@@ -112,46 +113,39 @@ impl SidebarPanel {
             list_items.retain(|item| item.2.to_lowercase().contains(&query));
             list_items.sort_by(|a, b| a.2.to_lowercase().cmp(&b.2.to_lowercase()));
         } else {
-            let state = self.state.write();
-            let mut config = state.config.write();
-            let mut order = config.list_order.clone();
+            let (changed, order) = {
+                let state = self.state.read();
+                let config = state.config.read();
+                let mut order = config.list_order.clone();
 
-            let available: HashSet<String> = list_items.iter().map(|i| i.0.to_string()).collect();
-            let mut changed = false;
+                let available: HashSet<String> =
+                    list_items.iter().map(|i| i.0.to_string()).collect();
+                let mut changed = false;
 
-            let initial_len = order.len();
-            order.retain(|id| available.contains(id));
-            if order.len() != initial_len {
-                changed = true;
-            }
-
-            let current_order_set: HashSet<String> = order.iter().cloned().collect();
-            let mut new_items: Vec<_> = list_items
-                .iter()
-                .filter(|i| !current_order_set.contains(&i.0.to_string()))
-                .collect();
-
-            if !new_items.is_empty() {
-                changed = true;
-                new_items.sort_by(|a, b| a.2.to_lowercase().cmp(&b.2.to_lowercase()));
-                for item in new_items {
-                    order.push(item.0.to_string());
+                let initial_len = order.len();
+                order.retain(|id| available.contains(id));
+                if order.len() != initial_len {
+                    changed = true;
                 }
-            }
+
+                let current_order_set: HashSet<String> = order.iter().cloned().collect();
+                let mut new_items: Vec<_> = list_items
+                    .iter()
+                    .filter(|i| !current_order_set.contains(&i.0.to_string()))
+                    .collect();
+
+                if !new_items.is_empty() {
+                    changed = true;
+                    new_items.sort_by(|a, b| a.2.to_lowercase().cmp(&b.2.to_lowercase()));
+                    for item in new_items {
+                        order.push(item.0.to_string());
+                    }
+                }
+                (changed, order)
+            };
 
             if changed {
-                config.list_order = order.clone();
-                drop(config);
-                drop(state);
-
-                self.state.read().dispatch(
-                    crate::resource_downloader::business::Effect::SaveConfig {
-                        config: self.state.read().config.read().clone(),
-                    },
-                );
-            } else {
-                drop(config);
-                drop(state);
+                ListActions::set_list_order(self.state.clone(), order.clone());
             }
 
             let mut item_map: HashMap<String, _> = list_items
@@ -272,11 +266,7 @@ impl SidebarPanel {
                     let new_order: Vec<String> =
                         list_items.iter().map(|i| i.0.to_string()).collect();
 
-                    let state = self.state.write();
-                    state.config.write().list_order = new_order;
-                    state.dispatch(crate::resource_downloader::business::Effect::SaveConfig {
-                        config: state.config.read().clone(),
-                    });
+                    ListActions::set_list_order(self.state.clone(), new_order);
                 }
             }
         });
@@ -294,14 +284,8 @@ impl SidebarPanel {
         }
     }
 
-    fn handle_list_click(&self, list: &ListLnk, open_list: &Option<ListLnk>) {
-        if open_list.as_ref() == Some(list) {
-            self.state.write().set_open_list(None);
-            return;
-        }
-
-        let mut state = self.state.write();
-        state.set_open_list(Some(list.clone()));
+    fn handle_list_click(&self, list: &ListLnk, _open_list: &Option<ListLnk>) {
+        ListActions::toggle_open_list(self.state.clone(), list);
     }
 
     fn render_row(

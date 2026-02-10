@@ -1,7 +1,8 @@
 use crate::common::prefabs::modal_window::ModalWindow;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::project_actions::ProjectActions;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, Project, ProjectLnk, ResourceType,
+    GameLoader, GameVersion, ListLnk, ProjectLnk, ResourceType,
 };
 use crate::{get_project_icon_texture, get_project_link, get_project_metadata, search_projects};
 use eframe::egui;
@@ -171,21 +172,13 @@ impl ModalWindow for SearchModal {
         if let Some(project) = self.project_to_add.take() {
             let metadata = get_project_metadata!(self.state, project.clone(), self.resource_type);
             if let Ok(Some(data)) = metadata {
-                let resource_type = self.resource_type;
-                let project_lnk = project.clone();
-                let list_lnk = self.list.clone();
-
-                let mut state = self.state.write();
-                state.pending_scroll = Some((list_lnk.clone(), project_lnk.clone()));
-
-                state.list_pool.mutate(&list_lnk, move |list| {
-                    list.add_project(Project::new_from_rt_project(
-                        project_lnk,
-                        resource_type,
-                        true,
-                        data,
-                    ))
-                });
+                ProjectActions::add_project(
+                    self.state.clone(),
+                    self.list.clone(),
+                    project.clone(),
+                    self.resource_type,
+                    data,
+                );
             }
         }
     }

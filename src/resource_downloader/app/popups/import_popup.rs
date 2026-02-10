@@ -4,6 +4,7 @@ use crate::resource_downloader::app::modals::legacy_import_modal::LegacyImportMo
 use crate::resource_downloader::app::modals::modrinth_collection_import_modal::ModrinthCollectionImportModal;
 use crate::resource_downloader::app::notifications::fail_notification::FailedNotification;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::list_actions::ListActions;
 use egui::{Color32, Id, Ui};
 
 #[derive(Clone)]
@@ -35,7 +36,7 @@ impl Popup for ImportPopup {
             if let Some(path) = Dialogs::pick_import_list_file() {
                 match path.extension().and_then(|s| s.to_str()) {
                     Some("toml") | Some("mmd") => {
-                        self.state.read().list_pool.import(path);
+                        ListActions::import_list(self.state.clone(), path);
                     }
                     Some("mods") | Some("all-mods") | Some("queue-mods") => {
                         let sm = LegacyImportModal::new(self.state.clone(), path);
