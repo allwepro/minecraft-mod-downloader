@@ -105,7 +105,7 @@ impl ProjectList {
         }
         let mut project_list = Vec::new();
         for pr in list_file.projects.iter() {
-            project_list.push(Project::new_from_existing(pr));
+            project_list.push(Project::new_from_existing(pr, true));
         }
 
         Self {

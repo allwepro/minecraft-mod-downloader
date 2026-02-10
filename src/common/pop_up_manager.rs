@@ -75,6 +75,8 @@ impl SharedPopupManager {
         let mut inner = self.0.write();
         let id = popup.id();
         if inner.open_ids.contains(&id) {
+            inner.requests.retain(|r| r.popup.id() != id);
+
             inner.requests.push(PopupRequest { popup, anchor_rect });
             inner
                 .interaction_areas
