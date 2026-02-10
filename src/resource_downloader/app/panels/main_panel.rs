@@ -6,9 +6,11 @@ use crate::resource_downloader::app::popups::multi_select_context_menu::MultiSel
 use crate::resource_downloader::app::popups::sort_popup::SortPopup;
 use crate::resource_downloader::business::DownloadStatus;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::list_actions::ListActions;
+use crate::resource_downloader::business::project_actions::ProjectActions;
 use crate::resource_downloader::domain::{
     FilterMode, GameLoader, GameVersion, ListLnk, OrderMode, ProjectDependencyType, ProjectList,
-    ProjectLnk, RTProjectVersion, ResourceType, SortMode,
+    ProjectLnk, ResourceType, SortMode,
 };
 use crate::{
     clear_project_metadata, get_list, get_list_type, get_project_icon_texture, get_project_link,
@@ -128,8 +130,11 @@ impl MainPanel {
                 if self.rename_input_open {
                     ui.text_edit_singleline(&mut self.rename_input);
                     if ui.button("✔").clicked() {
-                        let mut list = list_arc.write();
-                        list.set_list_name(self.rename_input.clone());
+                        ListActions::rename_list(
+                            self.state.clone(),
+                            lnk.clone(),
+                            self.rename_input.clone(),
+                        );
                         self.rename_input_open = false;
                     }
                     if ui.button("❌").clicked() {
@@ -157,18 +162,17 @@ impl MainPanel {
                             ))
                             .clicked()
                         {
-                            self.state.write().set_open_list_no_save(None);
-                            self.state.read().list_pool.delete(&lnk);
+                            ListActions::delete_list(self.state.clone(), lnk.clone());
                         }
                         if ui.add(egui::Button::new("✏ Rename")).clicked() {
                             self.rename_input = list_name.clone();
                             self.rename_input_open = true;
                         }
                         if ui.add(egui::Button::new("👥 Duplicate")).clicked() {
-                            self.state.read().list_pool.duplicate(&lnk);
+                            ListActions::duplicate_list(self.state.clone(), lnk.clone());
                         }
                         if ui.add(egui::Button::new("📂 Open Folder")).clicked() {
-                            self.state.read().open_explorer(dir.clone().into());
+                            ListActions::open_folder(self.state.clone(), lnk.clone());
                         }
 
                         if ui.add(egui::Button::new("📤 Export")).clicked()
@@ -179,10 +183,11 @@ impl MainPanel {
                         {
                             let ext = path.extension().and_then(|s| s.to_str());
                             if ext == Some("toml") || ext == Some("mmd") {
-                                self.state.read().list_pool.export(&lnk, path);
+                                ListActions::export_list(self.state.clone(), lnk.clone(), path);
                             } else if content_type == ResourceType::Mod {
-                                self.state.read().list_pool.export_legacy(
-                                    &lnk,
+                                ListActions::export_legacy_list(
+                                    self.state.clone(),
+                                    lnk.clone(),
                                     path,
                                     ver.clone(),
                                     loader.clone(),
@@ -278,32 +283,12 @@ impl MainPanel {
                             )
                             .clicked()
                         {
-                            let mut triggered = HashSet::new();
-                            let list_projects: Vec<ProjectLnk> = missing.clone();
-
-                            for p_lnk in list_projects {
-                                let versions = get_project_versions!(
-                                    self.state,
-                                    p_lnk.clone(),
-                                    content_type,
-                                    ver.clone(),
-                                    loader.clone()
-                                );
-
-                                if let Ok(Some(v_list)) = versions
-                                    && let Some(latest) = v_list.first()
-                                {
-                                    self.trigger_download(
-                                        &lnk,
-                                        &p_lnk,
-                                        latest,
-                                        &dir,
-                                        &content_type,
-                                        &found_hashes,
-                                        &mut triggered,
-                                    );
-                                }
-                            }
+                            ProjectActions::download_projects_latest(
+                                self.state.clone(),
+                                lnk.clone(),
+                                missing,
+                                &found_hashes,
+                            );
                         }
                     })
                     .response
@@ -677,11 +662,11 @@ impl MainPanel {
                                 .on_hover_text("Remove from list")
                                 .clicked()
                             {
-                                let p_lnk_clone = p_lnk.clone();
-                                self.state
-                                    .read()
-                                    .list_pool
-                                    .mutate(lnk, move |list| list.remove_project(&p_lnk_clone));
+                                ProjectActions::delete_projects(
+                                    self.state.clone(),
+                                    lnk.clone(),
+                                    vec![p_lnk.clone()],
+                                );
                             }
 
                             let archive_label = if is_archived {
@@ -699,11 +684,12 @@ impl MainPanel {
                                 )
                                 .clicked()
                             {
-                                let p_lnk_clone = p_lnk.clone();
-                                self.state.read().list_pool.mutate(lnk, move |list| {
-                                    let new_state = !list.is_project_archived(&p_lnk_clone);
-                                    list.archive_project(&p_lnk_clone, new_state)
-                                });
+                                ProjectActions::archive_projects(
+                                    self.state.clone(),
+                                    lnk.clone(),
+                                    vec![p_lnk.clone()],
+                                    !is_archived,
+                                );
 
                                 if is_archived {
                                     self.should_scroll_into_view = Some(p_lnk.clone());
@@ -748,15 +734,12 @@ impl MainPanel {
                                     if btn.clicked()
                                         && let Some(v) = latest_version
                                     {
-                                        let mut triggered = HashSet::new();
-                                        self.trigger_download(
-                                            lnk,
-                                            p_lnk,
+                                        ProjectActions::download_project_specific(
+                                            self.state.clone(),
+                                            lnk.clone(),
+                                            p_lnk.clone(),
                                             v,
-                                            dir,
-                                            rt,
                                             found_hashes,
-                                            &mut triggered,
                                         );
                                     }
 
@@ -1208,107 +1191,5 @@ impl MainPanel {
             });
         });
         ui.separator();
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn trigger_download(
-        &self,
-        lnk: &ListLnk,
-        p_lnk: &ProjectLnk,
-        version: &RTProjectVersion,
-        dir: &String,
-        rt: &ResourceType,
-        found_hashes: &HashSet<String>,
-        triggered: &mut HashSet<ProjectLnk>,
-    ) {
-        if triggered.contains(p_lnk) {
-            return;
-        }
-        triggered.insert(p_lnk.clone());
-
-        let is_downloaded = found_hashes.contains(&version.artifact_hash);
-
-        if !is_downloaded {
-            let safe_name = {
-                let list_arc = get_list!(self.state, lnk);
-                let list = list_arc.read();
-                list.get_project(p_lnk).unwrap().get_safe_filename()
-            };
-
-            let dest = PathBuf::from(dir).join(safe_name);
-
-            self.state.write().download_artifact(
-                &self.state,
-                p_lnk.clone(),
-                *rt,
-                version.version_id.clone(),
-                version.artifact_id.clone(),
-                dest,
-            );
-        }
-
-        for dep in &version.depended_on {
-            if dep.dependency_type == ProjectDependencyType::Required {
-                self.trigger_list_project_download(lnk, &dep.project, dir, found_hashes, triggered);
-            }
-        }
-    }
-
-    fn trigger_list_project_download(
-        &self,
-        lnk: &ListLnk,
-        p_lnk: &ProjectLnk,
-        dir: &String,
-        found_hashes: &HashSet<String>,
-        triggered: &mut HashSet<ProjectLnk>,
-    ) {
-        if triggered.contains(p_lnk) {
-            return;
-        }
-
-        let download_info = {
-            let list_arc = get_list!(self.state, lnk);
-            let list = list_arc.read();
-            list.get_project(p_lnk).and_then(|p| {
-                p.get_version().map(|v| {
-                    (
-                        p.resource_type,
-                        v.version_id.clone(),
-                        v.artifact_id.clone(),
-                        v.artifact_hash.clone(),
-                        v.get_depended_ons().to_vec(),
-                        p.get_safe_filename(),
-                    )
-                })
-            })
-        };
-
-        if let Some((rt, v_id, a_id, a_hash, deps, safe_name)) = download_info {
-            triggered.insert(p_lnk.clone());
-
-            if !found_hashes.contains(&a_hash) {
-                let dest = PathBuf::from(dir).join(safe_name);
-                self.state.write().download_artifact(
-                    &self.state,
-                    p_lnk.clone(),
-                    rt,
-                    v_id,
-                    a_id,
-                    dest,
-                );
-            }
-
-            for dep in deps {
-                if dep.dependency_type == ProjectDependencyType::Required {
-                    self.trigger_list_project_download(
-                        lnk,
-                        &dep.project,
-                        dir,
-                        found_hashes,
-                        triggered,
-                    );
-                }
-            }
-        }
     }
 }

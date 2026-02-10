@@ -1,6 +1,7 @@
 use crate::common::prefabs::modal_window::ModalWindow;
 use crate::resource_downloader::app::components::list_settings_component::ListSettingsComponent;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::list_actions::ListActions;
 use egui::{Id, Ui};
 
 #[derive(Clone)]
@@ -50,7 +51,8 @@ impl ModalWindow for CreateModal {
         if !self.save_on_close {
             return;
         }
-        self.state.read().list_pool.create_list(
+        ListActions::create_list(
+            self.state.clone(),
             self.list_settings_component.new_list_name.clone(),
             self.list_settings_component.new_resource_type,
             self.list_settings_component
@@ -62,7 +64,6 @@ impl ModalWindow for CreateModal {
                 .clone()
                 .unwrap(),
             self.list_settings_component.new_download_dir.clone(),
-            vec![],
         );
     }
 }
