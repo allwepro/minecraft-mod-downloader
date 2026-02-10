@@ -1,6 +1,7 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod artifact_cache_worker;
+pub mod file_index;
 
 pub(crate) use artifact_cache_worker::ArtifactWorker;
 

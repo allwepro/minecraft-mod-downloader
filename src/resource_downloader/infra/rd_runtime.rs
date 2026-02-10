@@ -3,9 +3,10 @@ use crate::resource_downloader::business::cache::ArtifactRequest;
 use crate::resource_downloader::business::services::ApiService;
 use crate::resource_downloader::business::{Effect, Event};
 use crate::resource_downloader::domain::{
-    GameVersion, Project, ProjectDependency, ProjectList, ProjectLnk, ProjectTypeConfig,
+    GameVersion, ListLnk, Project, ProjectDependency, ProjectList, ProjectLnk, ProjectTypeConfig,
     ProjectVersion, RESOURCE_TYPES, ResourceType,
 };
+use crate::resource_downloader::infra::cache::file_index::{FileIndexCache, FileIndexEntry};
 use crate::resource_downloader::infra::{
     ConfigManager, GameDetection, LegacyListService, ListFileManager,
 };
@@ -15,7 +16,6 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::process::Command;
 use std::sync::Arc;
-use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 
 pub type AsyncRunFn = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
@@ -29,6 +29,7 @@ pub struct RDRuntime {
     legacy_list_manager: Arc<LegacyListService>,
     effect_rx: mpsc::Receiver<Effect>,
     event_tx: mpsc::Sender<InternalEvent>,
+    file_index_cache: Arc<RwLock<FileIndexCache>>,
 }
 
 impl RDRuntime {
@@ -52,6 +53,7 @@ impl RDRuntime {
             legacy_list_manager,
             effect_rx,
             event_tx,
+            file_index_cache: Arc::new(RwLock::new(FileIndexCache::default())),
         };
 
         Box::pin(async move {
@@ -65,6 +67,32 @@ impl RDRuntime {
         }
     }
 
+    async fn hash_file(path: std::path::PathBuf) -> anyhow::Result<String> {
+        tokio::task::spawn_blocking(move || {
+            use std::fmt::Write as _;
+            use std::io::Read;
+            let mut file = std::fs::File::open(&path)?;
+            let mut hasher = Sha1::new();
+            let mut buffer = [0u8; 8192];
+
+            loop {
+                let n = file.read(&mut buffer)?;
+                if n == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..n]);
+            }
+
+            let result = hasher.finalize();
+            let mut s = String::with_capacity(40);
+            for byte in result {
+                write!(s, "{byte:02x}").expect("String write failed");
+            }
+            Ok(s)
+        })
+        .await?
+    }
+
     async fn handle_effect(&self, effect: Effect) {
         let api = self.api_service.clone();
         let cm = self.config_manager.clone();
@@ -72,6 +100,7 @@ impl RDRuntime {
         let legacy = self.legacy_list_manager.clone();
         let gd = self.game_detection.clone();
         let tx = self.event_tx.clone();
+        let fic = self.file_index_cache.clone();
         match effect {
             Effect::Initialize => {
                 self.rt_handle.spawn(async move {
@@ -92,19 +121,45 @@ impl RDRuntime {
                         return;
                     }
 
-                    let config = cm.load_config().await.unwrap_or_default();
-                    let raw_lists: Vec<ProjectList> = lm.load_all().await.unwrap_or_default();
-
-                    let mut lists_with_lnks = Vec::new();
-                    for list in raw_lists {
-                        let lnk = list.get_lnk();
-                        lists_with_lnks.push((lnk, Arc::new(RwLock::new(list))));
+                    let cache_path = cm.get_cache_dir().join("file_index.json");
+                    if let Ok(loaded_cache) = FileIndexCache::load(&cache_path).await {
+                        let mut cache = fic.write();
+                        *cache = loaded_cache;
                     }
 
-                    let _ = api.game_version_pool.get_versions_blocking().await;
+                    let config = cm.load_config().await.unwrap_or_default();
+
+                    let mut lists_with_lnks = Vec::new();
+                    let available_lnks = lm.get_available_lists().await;
+                    let mut join_set = tokio::task::JoinSet::new();
+
+                    for lnk in available_lnks {
+                        let lm_clone = lm.clone();
+                        join_set.spawn(async move {
+                            let list = lm_clone.load(&lnk).await?;
+                            Ok::<(ListLnk, Arc<RwLock<ProjectList>>), anyhow::Error>((
+                                lnk,
+                                Arc::new(RwLock::new(list)),
+                            ))
+                        });
+                    }
+
+                    while let Some(res) = join_set.join_next().await {
+                        if let Ok(Ok(list_entry)) = res {
+                            lists_with_lnks.push(list_entry);
+                        }
+                    }
+
+                    let api_v = api.clone();
+                    tokio::spawn(async move {
+                        let _ = api_v.game_version_pool.get_versions_blocking().await;
+                    });
 
                     for rt in RESOURCE_TYPES {
-                        let _ = api.game_loader_pool.get_loaders_blocking(rt).await;
+                        let api_l = api.clone();
+                        tokio::spawn(async move {
+                            let _ = api_l.game_loader_pool.get_loaders_blocking(rt).await;
+                        });
                     }
 
                     let mut default_download_dir_by_type = HashMap::new();
@@ -431,45 +486,137 @@ impl RDRuntime {
                 directory,
                 file_extension,
             } => {
+                let fic = self.file_index_cache.clone();
+                let cm = self.config_manager.clone();
+                let tx = self.event_tx.clone();
                 self.rt_handle.spawn(async move {
-                    use std::fmt::Write as _;
                     let mut files = Vec::new();
+                    let mut files_to_hash = Vec::new();
+
+                    let mut metadata_join_set: tokio::task::JoinSet<
+                        anyhow::Result<Option<(std::path::PathBuf, u64, u64)>>,
+                    > = tokio::task::JoinSet::new();
+
                     if let Ok(mut dir) = tokio::fs::read_dir(&directory).await {
                         while let Ok(Some(entry)) = dir.next_entry().await {
                             let path = entry.path();
+                            let ext_list = file_extension.clone();
 
-                            if let Some(ext) = path.extension().and_then(|s| s.to_str())
-                                && file_extension.contains(&ext.to_string())
-                            {
-                                let hash_result: anyhow::Result<String> = async {
-                                    let mut file = tokio::fs::File::open(&path).await?;
-                                    let mut hasher = Sha1::new();
-                                    let mut buffer = [0u8; 8192];
-
-                                    loop {
-                                        let n = file.read(&mut buffer).await?;
-                                        if n == 0 {
-                                            break;
-                                        }
-                                        hasher.update(&buffer[..n]);
+                            metadata_join_set.spawn(async move {
+                                let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or_default();
+                                let mut matches = false;
+                                for target_ext in &ext_list {
+                                    if file_name.ends_with(target_ext) {
+                                        matches = true;
+                                        break;
                                     }
-
-                                    let result = hasher.finalize();
-
-                                    let mut s = String::with_capacity(40);
-                                    for byte in result {
-                                        write!(s, "{byte:02x}").expect("String write failed");
-                                    }
-                                    Ok(s)
                                 }
-                                .await;
 
-                                if let Ok(sha1_hash) = hash_result {
-                                    files.push((path, sha1_hash));
+                                if !matches {
+                                    return Ok(None);
                                 }
+
+                                let metadata = tokio::fs::metadata(&path).await?;
+                                if !metadata.is_file() {
+                                    return Ok(None);
+                                }
+
+                                let size = metadata.len();
+                                let modified = crate::resource_downloader::infra::cache::file_index::get_system_time_secs(
+                                    metadata.modified().unwrap_or(std::time::UNIX_EPOCH),
+                                );
+
+                                Ok(Some((path, size, modified)))
+                            });
+                        }
+                    }
+
+                    let mut scan_results = Vec::new();
+                    while let Some(res) = metadata_join_set.join_next().await {
+                        if let Ok(Ok(Some(item))) = res {
+                            scan_results.push(item);
+                        }
+                    }
+
+                    {
+                        let cache = fic.read();
+                        for (path, size, modified) in scan_results {
+                            let cached_hash = cache.get(&path).and_then(|e| {
+                                if e.size == size && e.modified == modified {
+                                    Some(e.hash.clone())
+                                } else {
+                                    None
+                                }
+                            });
+
+                            if let Some(h) = cached_hash {
+                                files.push((path, h));
+                            } else {
+                                files.push((path.clone(), String::new()));
+                                files_to_hash.push((path, size, modified));
                             }
                         }
                     }
+
+                    let _ = tx
+                        .send(InternalEvent::FilesFound {
+                            directory: directory.clone(),
+                            file_extension: file_extension.clone(),
+                            files: files.clone(),
+                        })
+                        .await;
+
+                    if files_to_hash.is_empty() {
+                        return;
+                    }
+
+                    let mut hashing_join_set: tokio::task::JoinSet<
+                        anyhow::Result<(std::path::PathBuf, String, u64, u64)>,
+                    > = tokio::task::JoinSet::new();
+
+                    let hashing_semaphore = Arc::new(tokio::sync::Semaphore::new(4));
+
+                    for (path, size, modified) in files_to_hash {
+                        let path_clone = path.clone();
+                        let sem_clone = hashing_semaphore.clone();
+                        hashing_join_set.spawn(async move {
+                            let _permit = sem_clone.acquire().await;
+                            let sha1_hash = RDRuntime::hash_file(path_clone).await?;
+                            Ok((path, sha1_hash, size, modified))
+                        });
+                    }
+
+                    let mut cache_changed = false;
+                    let mut files_updated = 0;
+
+                    while let Some(res) = hashing_join_set.join_next().await {
+                        if let Ok(Ok((p, h, s, m))) = res {
+                            if let Some(entry) = files.iter_mut().find(|(path, _)| *path == p) {
+                                entry.1 = h.clone();
+                            }
+                            {
+                                let mut cache = fic.write();
+                                cache.insert(p, FileIndexEntry { hash: h, size: s, modified: m });
+                            }
+                            cache_changed = true;
+                            files_updated += 1;
+
+                            if files_updated % 10 == 0 {
+                                let _ = tx.send(InternalEvent::FilesFound {
+                                    directory: directory.clone(),
+                                    file_extension: file_extension.clone(),
+                                    files: files.clone(),
+                                }).await;
+                            }
+                        }
+                    }
+
+                    if cache_changed {
+                        let cache_to_save = fic.read().clone();
+                        let cache_path = cm.get_cache_dir().join("file_index.json");
+                        let _ = cache_to_save.save(&cache_path).await;
+                    }
+
                     let _ = tx
                         .send(InternalEvent::FilesFound {
                             directory,

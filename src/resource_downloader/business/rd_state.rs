@@ -10,7 +10,7 @@ use crate::resource_downloader::business::{Effect, Event, InternalEvent};
 use crate::resource_downloader::domain::{AppConfig, ListLnk, Project, ProjectLnk, ResourceType};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -44,8 +44,10 @@ pub struct RDState {
     pub list_pool: Arc<ListPool>,
 
     pub open_list: Option<ListLnk>,
-    pub found_files: Option<Vec<(PathBuf, String)>>,
+    pub found_files: HashMap<PathBuf, Vec<(PathBuf, String)>>,
+    pub active_scans: HashSet<PathBuf>,
     pub download_status: HashMap<ProjectLnk, (DownloadStatus, f32)>,
+
     pub pending_scroll: Option<(ListLnk, ProjectLnk)>,
     pub pending_list_scroll: Option<ListLnk>,
 }
@@ -80,7 +82,8 @@ impl RDState {
             list_pool,
 
             open_list: None,
-            found_files: None,
+            found_files: Default::default(),
+            active_scans: Default::default(),
             download_status: Default::default(),
             pending_scroll: None,
             pending_list_scroll: None,
@@ -125,8 +128,6 @@ impl RDState {
             } => {
                 *self.config.write() = config.clone();
 
-                self.open_list = config.last_open_list_id.clone();
-
                 let list_lnks: Vec<ListLnk> = lists
                     .into_iter()
                     .map(|(lnk, list)| {
@@ -136,6 +137,8 @@ impl RDState {
                     .collect();
 
                 self.default_dirs = default_download_dir_by_type.clone();
+
+                self.set_open_list_no_save(config.last_open_list_id.clone());
 
                 Some(Event::Initialized {
                     config,
@@ -219,9 +222,11 @@ impl RDState {
                 file_extension,
                 files,
             } => {
-                self.found_files = Some(files.clone());
+                let norm_dir = Self::normalize_path(directory);
+                self.active_scans.remove(&norm_dir);
+                self.found_files.insert(norm_dir.clone(), files.clone());
                 Some(Event::FilesFound {
-                    directory,
+                    directory: norm_dir,
                     file_extension,
                     files,
                 })
@@ -285,6 +290,11 @@ impl RDState {
         self.open_list = list.clone();
         self.config.write().last_open_list_id = list;
         self.save_config();
+
+        self.found_files.clear();
+        self.active_scans.clear();
+        self.download_status.clear();
+        self.request_full_refresh();
     }
 
     pub fn set_open_list_no_save(&mut self, list: Option<ListLnk>) {
@@ -295,6 +305,11 @@ impl RDState {
         self.open_list = list.clone();
         self.config.write().last_open_list_id = list;
         self.save_config();
+
+        self.found_files.clear();
+        self.active_scans.clear();
+        self.download_status.clear();
+        self.request_full_refresh();
     }
 
     pub fn save_config(&self) {
@@ -302,7 +317,9 @@ impl RDState {
         self.dispatch(Effect::SaveConfig { config });
     }
 
-    pub fn find_files(&self, directory: PathBuf, file_extension: String) {
+    pub fn find_files(&mut self, directory: PathBuf, file_extension: String) {
+        let norm_dir = Self::normalize_path(directory.clone());
+        self.active_scans.insert(norm_dir);
         self.dispatch(Effect::FindFiles {
             directory,
             file_extension: vec![
@@ -360,7 +377,7 @@ impl RDState {
         });
     }
 
-    pub fn delete_artifact(&self, path: PathBuf, filename: String) {
+    pub fn delete_artifact(&mut self, path: PathBuf, filename: String) {
         self.dispatch(Effect::DeleteArtifact { path, filename });
         self.request_full_refresh();
     }
@@ -369,10 +386,13 @@ impl RDState {
         self.dispatch(Effect::ImportModrinthCollection { collection_id });
     }
 
-    fn request_full_refresh(&self) {
-        if let Some(list_lnk) = &self.open_list
-            && let Some(list_arc) = self.list_pool.get(list_lnk)
-        {
+    fn request_full_refresh(&mut self) {
+        if self.open_list.is_none() {
+            return;
+        }
+        let list_lnk = self.open_list.as_ref().unwrap();
+
+        if let Some(list_arc) = self.list_pool.get(list_lnk) {
             let list = list_arc.read();
             for rt in list.get_resource_types() {
                 if let Some(tc) = list.get_resource_type_config(&rt) {
@@ -380,5 +400,10 @@ impl RDState {
                 }
             }
         }
+    }
+
+    fn normalize_path(path: PathBuf) -> PathBuf {
+        let s = path.to_string_lossy().replace('\\', "/");
+        PathBuf::from(s)
     }
 }

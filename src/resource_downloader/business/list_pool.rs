@@ -265,17 +265,12 @@ impl ListPool {
 
     pub(crate) fn insert_arc(&self, list_arc: Arc<RwLock<ProjectList>>) {
         let pool = Arc::clone(&self.lists);
-        self.rt_handle.spawn(async move {
-            let lnk = list_arc.read().get_lnk();
-            pool.write().insert(lnk, list_arc);
-        });
+        let lnk = list_arc.read().get_lnk();
+        pool.write().insert(lnk, list_arc);
     }
 
     pub(crate) fn remove_sync(&self, lnk: &ListLnk) {
         let pool = Arc::clone(&self.lists);
-        let l = lnk.clone();
-        self.rt_handle.spawn(async move {
-            pool.write().remove(&l);
-        });
+        pool.write().remove(lnk);
     }
 }
