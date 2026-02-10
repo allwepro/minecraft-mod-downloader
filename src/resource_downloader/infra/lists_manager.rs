@@ -211,17 +211,17 @@ impl ListFileManager {
         let lock = self.get_lock(list).await;
         let _guard = lock.lock().await;
 
-        let path = self.get_list_path(list).await;
-        if path.is_none() {
-            return Err(anyhow::anyhow!("List file not found for list ID: {list}"));
-        }
-        let path_target = path.unwrap();
+        let path_target = self.get_list_path(list).await;
 
-        if path_target.exists() {
-            fs::remove_file(&path_target).await.context(format!(
-                "Failed to delete list file: {}",
-                path_target.display()
-            ))?;
+        self.internal_remove_filename_cache(list).await;
+
+        if let Some(path) = path_target {
+            if path.exists() {
+                fs::remove_file(&path).await.context(format!(
+                    "Failed to delete list file: {}",
+                    path.display()
+                ))?;
+            }
         }
 
         drop(_guard);
@@ -231,7 +231,6 @@ impl ListFileManager {
             locks.remove(list);
         }
 
-        self.internal_remove_filename_cache(list).await;
 
         Ok(())
     }
