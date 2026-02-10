@@ -138,7 +138,7 @@ impl MainPanel {
                             ))
                             .clicked()
                         {
-                            self.state.write().set_open_list(None);
+                            self.state.write().set_open_list_no_save(None);
                             self.state.read().list_pool.delete(&lnk);
                         }
                         if ui.add(egui::Button::new("✏ Rename")).clicked() {

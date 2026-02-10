@@ -287,6 +287,16 @@ impl RDState {
         self.save_config();
     }
 
+    pub fn set_open_list_no_save(&mut self, list: Option<ListLnk>) {
+        if self.open_list == list {
+            return;
+        }
+
+        self.open_list = list.clone();
+        self.config.write().last_open_list_id = list;
+        self.save_config();
+    }
+
     pub fn save_config(&self) {
         let config = self.config.read().clone();
         self.dispatch(Effect::SaveConfig { config });
