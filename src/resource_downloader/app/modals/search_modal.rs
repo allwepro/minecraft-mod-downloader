@@ -5,6 +5,7 @@ use crate::resource_downloader::domain::{
 };
 use crate::{get_project_icon_texture, get_project_link, get_project_metadata, search_projects};
 use eframe::egui;
+use eframe::epaint::Color32;
 use egui::{Id, Ui};
 
 pub struct SearchModal {
@@ -133,7 +134,13 @@ impl ModalWindow for SearchModal {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        if ui.button("Add").clicked() {
+                                        if ui
+                                            .button(
+                                                egui::RichText::new("Add")
+                                                    .color(Color32::LIGHT_GREEN),
+                                            )
+                                            .clicked()
+                                        {
                                             self.project_to_add = Some(project.clone());
                                             *open = false;
                                         }
