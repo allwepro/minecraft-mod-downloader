@@ -206,6 +206,8 @@ pub struct AppConfig {
     #[serde(default = "default_list_name")]
     pub default_list_name: String,
     pub last_open_list_id: Option<ListLnk>,
+    #[serde(default)]
+    pub list_order: Vec<String>,
 }
 
 impl Default for AppConfig {
@@ -213,6 +215,7 @@ impl Default for AppConfig {
         Self {
             default_list_name: default_list_name(),
             last_open_list_id: None,
+            list_order: Vec::new(),
         }
     }
 }
