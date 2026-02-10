@@ -3,11 +3,14 @@ use crate::common::notification_manager::SharedNotificationManager;
 use crate::common::pop_up_manager::SharedPopupManager;
 use crate::common::prefabs::modal_window::ModalWindow;
 use crate::common::prefabs::notification_window::Notification;
+use crate::resource_downloader::business::Effect;
 use crate::resource_downloader::business::cache::ArtifactCallback;
 use crate::resource_downloader::business::list_pool::ListPool;
 use crate::resource_downloader::business::services::ApiService;
-use crate::resource_downloader::business::{Effect, Event, InternalEvent};
-use crate::resource_downloader::domain::{AppConfig, ListLnk, Project, ProjectLnk, ResourceType};
+use crate::resource_downloader::business::{Event, InternalEvent};
+use crate::resource_downloader::domain::{
+    AppConfig, ListLnk, MutationOutcome, MutationResult, Project, ProjectLnk, ResourceType,
+};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -22,6 +25,13 @@ pub enum DownloadStatus {
     Downloading,
     Complete,
     Failed,
+}
+
+#[derive(Clone, Debug)]
+pub struct ClipboardContent {
+    pub source_list: ListLnk,
+    pub projects: Vec<ProjectLnk>,
+    pub is_cut: bool,
 }
 
 pub type SharedRDState = Arc<RwLock<RDState>>;
@@ -47,6 +57,8 @@ pub struct RDState {
     pub found_files: HashMap<PathBuf, Vec<(PathBuf, String)>>,
     pub active_scans: HashSet<PathBuf>,
     pub download_status: HashMap<ProjectLnk, (DownloadStatus, f32)>,
+
+    pub clipboard: Option<ClipboardContent>,
 
     pub pending_scroll: Option<(ListLnk, ProjectLnk)>,
     pub pending_list_scroll: Option<ListLnk>,
@@ -85,8 +97,95 @@ impl RDState {
             found_files: Default::default(),
             active_scans: Default::default(),
             download_status: Default::default(),
+            clipboard: None,
             pending_scroll: None,
             pending_list_scroll: None,
+        }
+    }
+
+    pub fn set_clipboard(&mut self, source_list: ListLnk, projects: Vec<ProjectLnk>, is_cut: bool) {
+        self.clipboard = Some(ClipboardContent {
+            source_list,
+            projects,
+            is_cut,
+        });
+    }
+
+    pub fn paste_clipboard(&mut self, target_list_lnk: ListLnk) {
+        if let Some(content) = &self.clipboard {
+            let source_list_arc = self.list_pool.get(&content.source_list);
+            if source_list_arc.is_none() {
+                return;
+            }
+            let source_list = source_list_arc.unwrap();
+
+            let mut projects_to_add = Vec::new();
+            {
+                let s_list = source_list.read();
+                for p_lnk in &content.projects {
+                    if let Some(proj) = s_list.get_project(p_lnk) {
+                        projects_to_add.push(Project::new_from_existing(proj, false));
+                    }
+                }
+            }
+
+            let is_same_list = content.source_list == target_list_lnk;
+            let should_remove_from_source = content.is_cut && !is_same_list;
+
+            if !projects_to_add.is_empty() {
+                let projects = projects_to_add;
+                self.list_pool.mutate(&target_list_lnk, move |list| {
+                    let mut modified = false;
+                    let mut versions_to_add = Vec::new();
+
+                    for mut proj in projects {
+                        let lnk = proj.get_lnk();
+                        if !list.has_project(&lnk) {
+                            let version_opt = proj.clear_project_version();
+                            let p_lnk = proj.get_lnk();
+
+                            list.add_project(proj);
+                            modified = true;
+
+                            if let Some(ver) = version_opt {
+                                versions_to_add.push((p_lnk, ver));
+                            }
+                        }
+                    }
+
+                    for (p_lnk, ver) in versions_to_add {
+                        list.add_version(&p_lnk, ver);
+                    }
+
+                    if modified {
+                        MutationResult::new(MutationOutcome::ProjectAdded)
+                    } else {
+                        MutationResult::unchanged()
+                    }
+                });
+
+                if should_remove_from_source {
+                    let projects_to_remove = content.projects.clone();
+                    let src_lnk = content.source_list.clone();
+                    self.list_pool.mutate(&src_lnk, move |list| {
+                        let mut modified = false;
+                        for p_lnk in projects_to_remove {
+                            if list.remove_project(&p_lnk).is_success() {
+                                modified = true;
+                            }
+                        }
+                        if modified {
+                            MutationResult::new(MutationOutcome::ProjectRemoved)
+                        } else {
+                            MutationResult::unchanged()
+                        }
+                    });
+                }
+            }
+
+            if content.is_cut {
+                self.clipboard = None;
+            }
         }
     }
 

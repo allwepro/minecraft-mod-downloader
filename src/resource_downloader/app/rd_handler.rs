@@ -30,7 +30,7 @@ pub struct RDHandler {
     update_fn: UpdateFn,
 
     modal_manager: SharedModalManager,
-    popup_manager: SharedPopupManager,
+    _popup_manager: SharedPopupManager,
     notification_manager: SharedNotificationManager,
 
     sidebar: SidebarPanel,
@@ -119,7 +119,7 @@ impl RDHandler {
             state: state.clone(),
             update_fn,
             modal_manager: modal_manager.clone(),
-            popup_manager: popup_manager.clone(),
+            _popup_manager: popup_manager.clone(),
             notification_manager: notification_manager.clone(),
             sidebar: SidebarPanel::new(state.clone()),
             main: MainPanel::new(state.clone()),

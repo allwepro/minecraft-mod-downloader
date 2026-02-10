@@ -191,7 +191,7 @@ impl Project {
         }
     }
 
-    pub fn new_from_existing(project: &Project) -> Self {
+    pub fn new_from_existing(project: &Project, keep_depended_ons: bool) -> Self {
         Self {
             project_id: project.project_id.clone(),
             resource_type: project.resource_type,
@@ -209,7 +209,11 @@ impl Project {
                         v.depended_on.clone(),
                     )
                 }),
-                dependents: project.get_dependents().to_vec(),
+                dependents: if keep_depended_ons {
+                    project.get_dependents().to_vec()
+                } else {
+                    Vec::new()
+                },
             },
             cache: ProjectCache {
                 name: project.cache.name.clone(),
