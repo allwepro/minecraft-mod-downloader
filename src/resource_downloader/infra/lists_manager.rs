@@ -56,23 +56,27 @@ impl ListFileManager {
             }
         }
 
+        let mut join_set = tokio::task::JoinSet::new();
         for filename in list_filenames {
-            let path = self.primitive_get_list_path(&filename);
-            if path.exists() {
+            let path = self.lists_dir.join(format!("{filename}.mmd"));
+            join_set.spawn(async move {
                 let content = fs::read_to_string(&path)
                     .await
                     .context(format!("Failed to read list file: {}", path.display()))?;
                 let list_file: ListFile = toml::from_str(&content)
                     .context(format!("Failed to parse list file: {}", path.display()))?;
-                self.internal_set_filename_cache(
-                    &ListLnk::new(list_file.get_id()),
-                    filename.clone(),
-                )
-                .await;
+                Ok::<(ListLnk, String), anyhow::Error>((ListLnk::new(list_file.get_id()), filename))
+            });
+        }
+
+        while let Some(res) = join_set.join_next().await {
+            if let Ok(Ok((lnk, filename))) = res {
+                self.internal_set_filename_cache(&lnk, filename).await;
             }
         }
         Ok(())
     }
+
     async fn internal_get_filename_cache(&self, list: &ListLnk) -> Option<String> {
         let map = self.id_filename_map.lock().await;
         map.get(list).cloned()
@@ -88,7 +92,7 @@ impl ListFileManager {
         map.remove(list);
     }
 
-    async fn get_available_lists(&self) -> Vec<ListLnk> {
+    pub async fn get_available_lists(&self) -> Vec<ListLnk> {
         let map = self.id_filename_map.lock().await;
         map.keys().cloned().collect()
     }

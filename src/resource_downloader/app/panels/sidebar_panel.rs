@@ -3,7 +3,6 @@ use crate::resource_downloader::app::modals::create_modal::CreateModal;
 use crate::resource_downloader::app::popups::import_popup::ImportPopup;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{ListLnk, ResourceType};
-use crate::{get_list, get_list_type};
 use eframe::egui;
 use egui::{Color32, StrokeKind, Ui};
 use std::collections::{HashMap, HashSet};
@@ -270,30 +269,13 @@ impl SidebarPanel {
     }
 
     fn handle_list_click(&self, list: &ListLnk, open_list: &Option<ListLnk>) {
-        let is_selected = open_list.clone().is_some_and(|l| l == *list);
-        let next_state = if is_selected {
-            None
-        } else {
-            let list_type = get_list_type!(self.state, list);
-            let dir = get_list!(self.state, list)
-                .read()
-                .get_resource_type_config(&list_type)
-                .expect("List without type")
-                .download_dir
-                .clone();
-            Some((list_type, dir))
-        };
+        if open_list.as_ref() == Some(list) {
+            self.state.write().set_open_list(None);
+            return;
+        }
 
         let mut state = self.state.write();
-        state.found_files = None;
-        state.download_status.clear();
-
-        if let Some((lt, dir)) = next_state {
-            state.find_files(dir.parse().unwrap(), lt.file_extension());
-            state.set_open_list(Some(list.clone()));
-        } else {
-            state.set_open_list(None);
-        }
+        state.set_open_list(Some(list.clone()));
     }
 
     fn render_row(
