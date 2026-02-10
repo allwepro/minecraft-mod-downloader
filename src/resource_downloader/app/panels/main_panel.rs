@@ -46,11 +46,12 @@ impl MainPanel {
     }
 
     pub fn show(&mut self, ctx: &Context, _ui: &mut Ui) {
-        let (open_list_lnk, found_files, pending_scroll) = {
+        let (open_list_lnk, found_files_map, active_scans, pending_scroll) = {
             let mut s = self.state.write();
             (
                 s.open_list.clone(),
                 s.found_files.clone(),
+                s.active_scans.clone(),
                 s.pending_scroll.take(),
             )
         };
@@ -181,10 +182,12 @@ impl MainPanel {
 
             ui.separator();
 
-            let found_hashes: HashSet<String> = found_files
-                .as_ref()
-                .map(|f| f.iter().map(|(_, h)| h.clone()).collect())
-                .unwrap_or_default();
+            let combined_found_files: Vec<(PathBuf, String)> =
+                found_files_map.values().flatten().cloned().collect();
+            let found_hashes: HashSet<String> = combined_found_files
+                .iter()
+                .map(|(_, h)| h.clone())
+                .collect();
 
             let row_height = 32.0;
             let full_rect = ui.available_rect_before_wrap();
@@ -361,10 +364,11 @@ impl MainPanel {
                             &content_type,
                             &ver,
                             &loader,
-                            &found_files,
+                            &combined_found_files,
                             &found_hashes,
                             &dir,
                             false,
+                            &active_scans,
                         );
                     }
 
@@ -394,10 +398,11 @@ impl MainPanel {
                                     &content_type,
                                     &ver,
                                     &loader,
-                                    &found_files,
+                                    &combined_found_files,
                                     &found_hashes,
                                     &dir,
                                     false,
+                                    &active_scans,
                                 );
                             }
                         }
@@ -407,7 +412,7 @@ impl MainPanel {
                     let unknown_files = self.get_unknown_files(
                         &list_arc.read(),
                         &content_type,
-                        &found_files,
+                        &combined_found_files,
                         &search_lower,
                     );
                     let unknown_count = unknown_files.len();
@@ -452,10 +457,11 @@ impl MainPanel {
         rt: &ResourceType,
         g_ver: &GameVersion,
         g_ld: &GameLoader,
-        found_files: &Option<Vec<(PathBuf, String)>>,
+        combined_found_files: &[(PathBuf, String)],
         found_hashes: &HashSet<String>,
         dir: &String,
         is_dependency: bool,
+        active_scans: &HashSet<PathBuf>,
     ) {
         let (metadata, versions) = {
             let meta = get_project_metadata!(self.state, p_lnk.clone(), *rt);
@@ -512,18 +518,17 @@ impl MainPanel {
             )
         };
 
-        let file_on_disk = found_files.as_ref().and_then(|files| {
-            files.iter().find(|(path, _)| {
-                path.file_name().is_some_and(|n| {
-                    n == filename.as_str() || n == format!("{filename}.archive").as_str()
-                })
+        let file_on_disk = combined_found_files.iter().find(|(path, _)| {
+            path.file_name().is_some_and(|n| {
+                n == filename.as_str() || n == format!("{filename}.archive").as_str()
             })
         });
         let is_file_present = file_on_disk.is_some();
         let disk_hash = file_on_disk.map(|(_, h)| h.clone());
 
         let has_failed = metadata.is_err() || versions.is_err();
-        let has_loaded_files = found_files.is_some();
+        let is_scanning_this_dir = active_scans.contains(&PathBuf::from(dir));
+        let has_loaded_files = !is_scanning_this_dir;
         let is_downloaded = disk_hash.is_some() && disk_hash == cur_hash;
 
         let mut is_updatable = false;
@@ -840,10 +845,11 @@ impl MainPanel {
                                 rt,
                                 g_ver,
                                 g_ld,
-                                found_files,
+                                combined_found_files,
                                 found_hashes,
                                 dir,
                                 true,
+                                active_scans,
                             );
                         }
                     });
@@ -880,7 +886,7 @@ impl MainPanel {
                 self.search_query.clear();
             }
 
-            let is_loading = self.state.read().found_files.is_none();
+            let is_loading = !self.state.read().active_scans.is_empty();
 
             ui.add_enabled_ui(!is_loading, |ui| {
                 let button_res = if is_loading {
@@ -893,14 +899,15 @@ impl MainPanel {
                 if button_res.clicked() && !is_measurement {
                     {
                         let mut state = self.state.write();
-                        state.found_files = None;
+                        state.found_files.clear();
+                        state.active_scans.clear();
                     }
 
                     let list = list_arc.read();
                     for rt in list.get_resource_types() {
                         if let Some(tc) = list.get_resource_type_config(&rt) {
                             self.state
-                                .read()
+                                .write()
                                 .find_files(tc.download_dir.clone().into(), rt.file_extension());
                         }
                     }
@@ -1028,7 +1035,7 @@ impl MainPanel {
         &self,
         list: &ProjectList,
         rt: &ResourceType,
-        found: &Option<Vec<(PathBuf, String)>>,
+        combined_found_files: &[(PathBuf, String)],
         query: &str,
     ) -> Vec<(PathBuf, String)> {
         let known_filenames: HashSet<String> = list
@@ -1037,27 +1044,23 @@ impl MainPanel {
             .map(|p| p.get_safe_filename())
             .collect();
 
-        found
-            .as_ref()
-            .map(|f| {
-                f.iter()
-                    .filter(|(path, _hash)| {
-                        let name = path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
-                        let name_lower = name.to_lowercase();
+        combined_found_files
+            .iter()
+            .filter(|(path, _hash)| {
+                let name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                let name_lower = name.to_lowercase();
 
-                        let is_known_name = known_filenames.contains(&name);
-                        let matches_query = query.is_empty() || name_lower.contains(query);
+                let is_known_name = known_filenames.contains(&name);
+                let matches_query = query.is_empty() || name_lower.contains(query);
 
-                        !is_known_name && matches_query
-                    })
-                    .cloned()
-                    .collect()
+                !is_known_name && matches_query
             })
-            .unwrap_or_default()
+            .cloned()
+            .collect()
     }
 
     fn render_unknown_entry(&self, ui: &mut Ui, path: PathBuf, filename: &str) {
@@ -1069,7 +1072,7 @@ impl MainPanel {
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("🗑").clicked() {
-                    self.state.read().delete_artifact(
+                    self.state.write().delete_artifact(
                         path.parent().unwrap().to_path_buf(),
                         filename.to_string(),
                     );
