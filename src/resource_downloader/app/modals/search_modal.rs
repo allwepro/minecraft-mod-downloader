@@ -82,81 +82,75 @@ impl ModalWindow for SearchModal {
                 } else {
                     None
                 };
-                if let Ok(searched) =
-                    search_projects!(self.state, searched_query, self.resource_type, vd, ld)
-                {
-                    if let Some(results) = searched {
-                        for project in results {
-                            if let Ok(Some(data)) = get_project_metadata!(
-                                self.state,
-                                project.clone(),
-                                self.resource_type
-                            ) {
-                                ui.horizontal(|ui| {
-                                    if !data.icon_url.is_empty() {
-                                        if let Some(handle) =
-                                            get_project_icon_texture!(self.state, &project)
-                                        {
-                                            ui.add(
-                                                egui::Image::from_texture(&handle)
-                                                    .fit_to_exact_size(egui::vec2(32.0, 32.0)),
-                                            );
-                                        } else {
-                                            ui.add_sized(
-                                                egui::vec2(32.0, 32.0),
-                                                egui::Spinner::new(),
-                                            );
-                                        }
-                                    } else {
-                                        ui.add_space(32.0);
-                                    }
-                                    ui.add_space(4.0);
 
-                                    let button_width = 50.0;
-                                    let spacing = 8.0;
-                                    let available_width =
-                                        ui.available_width() - button_width - spacing;
+                let searched =
+                    search_projects!(self.state, searched_query, self.resource_type, vd, ld);
 
-                                    ui.vertical(|ui| {
-                                        ui.set_max_width(available_width);
-                                        let project_link = get_project_link!(
-                                            self.state,
-                                            &project,
-                                            &self.resource_type
-                                        );
-                                        ui.hyperlink_to(&data.name, project_link);
+                if let Ok(Some(results)) = searched {
+                    for project in results {
+                        let metadata =
+                            get_project_metadata!(self.state, project.clone(), self.resource_type);
+
+                        if let Ok(Some(data)) = metadata {
+                            ui.horizontal(|ui| {
+                                let icon_tex = get_project_icon_texture!(self.state, &project);
+                                if !data.icon_url.is_empty() {
+                                    if let Some(handle) = icon_tex {
                                         ui.add(
-                                            egui::Label::new(&data.description)
-                                                .wrap_mode(egui::TextWrapMode::Wrap),
+                                            egui::Image::from_texture(&handle)
+                                                .fit_to_exact_size(egui::vec2(32.0, 32.0)),
                                         );
-                                        ui.label(format!(
-                                            "👤 {} | ⬇ {}",
-                                            data.author, data.download_count
-                                        ));
-                                    });
+                                    } else {
+                                        ui.add_sized(egui::vec2(32.0, 32.0), egui::Spinner::new());
+                                    }
+                                } else {
+                                    ui.add_space(32.0);
+                                }
+                                ui.add_space(4.0);
 
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            if ui.button("Add").clicked() {
-                                                self.project_to_add = Some(project.clone());
-                                                *open = false;
-                                            }
-                                        },
+                                let button_width = 50.0;
+                                let spacing = 8.0;
+                                let available_width = ui.available_width() - button_width - spacing;
+
+                                ui.vertical(|ui| {
+                                    ui.set_max_width(available_width);
+                                    let project_link = get_project_link!(
+                                        self.state,
+                                        &project,
+                                        &self.resource_type
                                     );
+                                    ui.hyperlink_to(&data.name, project_link);
+                                    ui.add(
+                                        egui::Label::new(&data.description)
+                                            .wrap_mode(egui::TextWrapMode::Wrap),
+                                    );
+                                    ui.label(format!(
+                                        "👤 {} | ⬇ {}",
+                                        data.author, data.download_count
+                                    ));
                                 });
-                            }
-                            ui.separator();
+
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui.button("Add").clicked() {
+                                            self.project_to_add = Some(project.clone());
+                                            *open = false;
+                                        }
+                                    },
+                                );
+                            });
                         }
-                    } else {
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(10.0);
-                            ui.add(egui::Spinner::new().size(48.0));
-                            ui.add_space(10.0);
-                            ui.label("Searching...");
-                            ui.add_space(10.0);
-                        });
+                        ui.separator();
                     }
+                } else if let Ok(None) = searched {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(10.0);
+                        ui.add(egui::Spinner::new().size(48.0));
+                        ui.add_space(10.0);
+                        ui.label("Searching...");
+                        ui.add_space(10.0);
+                    });
                 } else {
                     ui.label("Search failed. Please try again.");
                 }
@@ -167,23 +161,25 @@ impl ModalWindow for SearchModal {
     }
 
     fn on_close(&mut self) {
-        if let Some(project) = self.project_to_add.take()
-            && let Ok(Some(data)) =
-                get_project_metadata!(self.state, project.clone(), self.resource_type)
-        {
-            let resource_type = self.resource_type;
-            let project_lnk = project.clone();
+        if let Some(project) = self.project_to_add.take() {
+            let metadata = get_project_metadata!(self.state, project.clone(), self.resource_type);
+            if let Ok(Some(data)) = metadata {
+                let resource_type = self.resource_type;
+                let project_lnk = project.clone();
+                let list_lnk = self.list.clone();
 
-            self.state.write().pending_scroll = Some((self.list.clone(), project_lnk.clone()));
+                let mut state = self.state.write();
+                state.pending_scroll = Some((list_lnk.clone(), project_lnk.clone()));
 
-            self.state.read().list_pool.mutate(&self.list, move |list| {
-                list.add_project(Project::new_from_rt_project(
-                    project_lnk,
-                    resource_type,
-                    true,
-                    data,
-                ))
-            });
+                state.list_pool.mutate(&list_lnk, move |list| {
+                    list.add_project(Project::new_from_rt_project(
+                        project_lnk,
+                        resource_type,
+                        true,
+                        data,
+                    ))
+                });
+            }
         }
     }
 }
