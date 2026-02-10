@@ -6,6 +6,7 @@ use crate::resource_downloader::domain::{ListLnk, ResourceType};
 use crate::{get_list, get_list_type};
 use eframe::egui;
 use egui::{Color32, StrokeKind, Ui};
+use std::collections::{HashMap, HashSet};
 
 pub struct SidebarPanel {
     state: SharedRDState,
@@ -77,14 +78,9 @@ impl SidebarPanel {
             (state.open_list.clone(), state.pending_list_scroll.take())
         };
 
-        let mut list_info: Vec<(ListLnk, String, String, String, String)> = {
+        let mut list_items: Vec<(ListLnk, String, String, String, String)> = {
             let state = self.state.read();
-            let query = self.list_search_query.to_lowercase();
             state.list_pool.map_filter(|list| {
-                if !query.is_empty() && !list.get_name().to_lowercase().contains(&query) {
-                    return None;
-                }
-
                 let resource_type = list
                     .get_resource_types()
                     .first()
@@ -107,112 +103,269 @@ impl SidebarPanel {
             })
         };
 
-        list_info.sort_by(|a, b| a.2.to_lowercase().cmp(&b.2.to_lowercase()));
+        let is_searching = !self.list_search_query.is_empty();
+
+        if is_searching {
+            let query = self.list_search_query.to_lowercase();
+            list_items.retain(|item| item.2.to_lowercase().contains(&query));
+            list_items.sort_by(|a, b| a.2.to_lowercase().cmp(&b.2.to_lowercase()));
+        } else {
+            let state = self.state.write();
+            let mut config = state.config.write();
+            let mut order = config.list_order.clone();
+
+            let available: HashSet<String> = list_items.iter().map(|i| i.0.to_string()).collect();
+            let mut changed = false;
+
+            let initial_len = order.len();
+            order.retain(|id| available.contains(id));
+            if order.len() != initial_len {
+                changed = true;
+            }
+
+            let current_order_set: HashSet<String> = order.iter().cloned().collect();
+            let mut new_items: Vec<_> = list_items
+                .iter()
+                .filter(|i| !current_order_set.contains(&i.0.to_string()))
+                .collect();
+
+            if !new_items.is_empty() {
+                changed = true;
+                new_items.sort_by(|a, b| a.2.to_lowercase().cmp(&b.2.to_lowercase()));
+                for item in new_items {
+                    order.push(item.0.to_string());
+                }
+            }
+
+            if changed {
+                config.list_order = order.clone();
+                drop(config);
+                drop(state);
+
+                self.state.read().dispatch(
+                    crate::resource_downloader::business::Effect::SaveConfig {
+                        config: self.state.read().config.read().clone(),
+                    },
+                );
+            } else {
+                drop(config);
+                drop(state);
+            }
+
+            let mut item_map: HashMap<String, _> = list_items
+                .into_iter()
+                .map(|i| (i.0.to_string(), i))
+                .collect();
+            list_items = order
+                .into_iter()
+                .filter_map(|id| item_map.remove(&id))
+                .collect();
+        }
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.set_width(ui.available_width());
-            for (list, icon, name, version, loader) in list_info {
-                let is_selected = open_list.clone().is_some_and(|l| l == list);
-                let should_scroll = pending_list_scroll.as_ref().is_some_and(|l| l == &list);
 
-                let padding = egui::Margin {
-                    left: 8,
-                    right: 8,
-                    top: 6,
-                    bottom: 6,
-                };
-                let mut frame = egui::Frame::default()
-                    .inner_margin(padding)
-                    .corner_radius(4);
+            if ui.input(|i| i.pointer.is_decidedly_dragging()) {
+                let clip_rect = ui.clip_rect();
+                if let Some(pointer_pos) = ui.ctx().pointer_hover_pos() {
+                    if clip_rect.contains(pointer_pos) {
+                        let margin = 20.0;
+                        let speed = 5.0;
+                        if pointer_pos.y < clip_rect.min.y + margin {
+                            ui.scroll_with_delta(egui::vec2(0.0, speed));
+                            ui.ctx().request_repaint();
+                        } else if pointer_pos.y > clip_rect.max.y - margin {
+                            ui.scroll_with_delta(egui::vec2(0.0, -speed));
+                            ui.ctx().request_repaint();
+                        }
+                    }
+                }
+            }
 
-                if is_selected {
-                    frame = frame
-                        .fill(ui.visuals().faint_bg_color)
-                        .stroke(egui::Stroke::new(1.0, Color32::from_gray(100)));
+            if is_searching {
+                for item in list_items {
+                    let response = self.render_row(ui, &item, &open_list, &pending_list_scroll);
+
+                    let response = ui.interact(response.rect, response.id, egui::Sense::click());
+                    if response.hovered() {
+                        ui.painter().rect_stroke(
+                            response.rect,
+                            4.0,
+                            egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
+                            StrokeKind::Middle,
+                        );
+                    }
+                    if response.clicked() {
+                        self.handle_list_click(&item.0, &open_list);
+                    }
+                }
+            } else {
+                let mut moved_item = None;
+                for (idx, item) in list_items.iter().enumerate() {
+                    let item_id = ui.make_persistent_id("list_dnd").with(&item.0);
+                    let payload = idx;
+
+                    let inner_response = ui.dnd_drag_source(item_id, payload, |ui| {
+                        self.render_row(ui, item, &open_list, &pending_list_scroll)
+                    });
+
+                    let drag_response = inner_response
+                        .response
+                        .interact(egui::Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+                    if drag_response.hovered() {
+                        ui.painter().rect_stroke(
+                            drag_response.rect,
+                            4.0,
+                            egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
+                            StrokeKind::Middle,
+                        );
+                    }
+
+                    if drag_response.clicked() {
+                        self.handle_list_click(&item.0, &open_list);
+                    }
+
+                    if let Some(source_idx) = inner_response.response.dnd_release_payload::<usize>()
+                    {
+                        moved_item = Some((*source_idx, idx));
+                    }
                 }
 
-                let response = frame
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(icon);
-                                ui.add(
-                                    egui::Label::new(egui::RichText::new(name).strong()).truncate(),
-                                );
-                            });
-                            ui.add_space(2.0);
-                            ui.horizontal(|ui| {
-                                let badge_bg = ui.visuals().widgets.noninteractive.bg_fill;
-                                let badge_fill = Color32::from_rgb(
-                                    badge_bg.r().saturating_add(15),
-                                    badge_bg.g().saturating_add(15),
-                                    badge_bg.b().saturating_add(15),
-                                );
-
-                                egui::Frame::default()
-                                    .fill(badge_fill)
-                                    .stroke(egui::Stroke::new(1.0, Color32::from_rgb(0, 100, 0)))
-                                    .corner_radius(3)
-                                    .inner_margin(egui::Margin::symmetric(4, 1))
-                                    .show(ui, |ui| {
-                                        ui.label(egui::RichText::new(version).small());
-                                    });
-
-                                egui::Frame::default()
-                                    .fill(badge_fill)
-                                    .stroke(egui::Stroke::new(1.0, Color32::from_rgb(0, 50, 150)))
-                                    .corner_radius(3)
-                                    .inner_margin(egui::Margin::symmetric(4, 1))
-                                    .show(ui, |ui| {
-                                        ui.label(egui::RichText::new(loader).small());
-                                    });
-                            });
-                        });
-                    })
-                    .response;
-
-                if should_scroll {
-                    response.scroll_to_me(Some(egui::Align::Center));
-                }
-
-                let response = ui.interact(response.rect, response.id, egui::Sense::click());
-
-                if response.hovered() {
-                    ui.painter().rect_stroke(
-                        response.rect,
-                        4.0,
-                        egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
-                        StrokeKind::Middle,
+                if ui.input(|i| i.pointer.is_decidedly_dragging()) {
+                    let unused_height =
+                        ui.clip_rect().max.y - ui.cursor().min.y - ui.spacing().item_spacing.y;
+                    let remaining_height = unused_height.max(50.0);
+                    let spacer = ui.allocate_response(
+                        egui::vec2(ui.available_width(), remaining_height),
+                        egui::Sense::hover(),
                     );
+
+                    if let Some(source_idx) = spacer.dnd_release_payload::<usize>() {
+                        moved_item = Some((*source_idx, list_items.len()));
+                    }
                 }
 
-                if response.clicked() {
-                    let next_state = if is_selected {
-                        None
-                    } else {
-                        let list_type = get_list_type!(self.state, &list);
-                        let dir = get_list!(self.state, &list)
-                            .read()
-                            .get_resource_type_config(&list_type)
-                            .expect("List without type")
-                            .download_dir
-                            .clone();
-                        Some((list_type, dir))
-                    };
+                if let Some((from_idx, mut to_idx)) = moved_item {
+                    if from_idx != to_idx {
+                        if from_idx < to_idx {
+                            to_idx -= 1;
+                        }
+                        let moved = list_items.remove(from_idx);
+                        list_items.insert(to_idx, moved);
 
-                    let mut state = self.state.write();
-                    state.found_files = None;
-                    state.download_status.clear();
+                        let new_order: Vec<String> =
+                            list_items.iter().map(|i| i.0.to_string()).collect();
 
-                    if let Some((lt, dir)) = next_state {
-                        state.find_files(dir.parse().unwrap(), lt.file_extension());
-                        state.set_open_list(Some(list.clone()));
-                    } else {
-                        state.set_open_list(None);
+                        let state = self.state.write();
+                        state.config.write().list_order = new_order;
+                        state.dispatch(crate::resource_downloader::business::Effect::SaveConfig {
+                            config: state.config.read().clone(),
+                        });
                     }
                 }
             }
         });
+    }
+
+    fn handle_list_click(&self, list: &ListLnk, open_list: &Option<ListLnk>) {
+        let is_selected = open_list.clone().is_some_and(|l| l == *list);
+        let next_state = if is_selected {
+            None
+        } else {
+            let list_type = get_list_type!(self.state, list);
+            let dir = get_list!(self.state, list)
+                .read()
+                .get_resource_type_config(&list_type)
+                .expect("List without type")
+                .download_dir
+                .clone();
+            Some((list_type, dir))
+        };
+
+        let mut state = self.state.write();
+        state.found_files = None;
+        state.download_status.clear();
+
+        if let Some((lt, dir)) = next_state {
+            state.find_files(dir.parse().unwrap(), lt.file_extension());
+            state.set_open_list(Some(list.clone()));
+        } else {
+            state.set_open_list(None);
+        }
+    }
+
+    fn render_row(
+        &self,
+        ui: &mut Ui,
+        item: &(ListLnk, String, String, String, String),
+        open_list: &Option<ListLnk>,
+        pending_list_scroll: &Option<ListLnk>,
+    ) -> egui::Response {
+        let (list, icon, name, version, loader) = item;
+        let is_selected = open_list.clone().is_some_and(|l| l == *list);
+        let should_scroll = pending_list_scroll.as_ref().is_some_and(|l| l == list);
+
+        let padding = egui::Margin {
+            left: 8,
+            right: 8,
+            top: 6,
+            bottom: 6,
+        };
+        let mut frame = egui::Frame::default()
+            .inner_margin(padding)
+            .corner_radius(4);
+
+        if is_selected {
+            frame = frame
+                .fill(ui.visuals().faint_bg_color)
+                .stroke(egui::Stroke::new(1.0, Color32::from_gray(100)));
+        }
+
+        let response = frame
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(icon);
+                        ui.add(egui::Label::new(egui::RichText::new(name).strong()).truncate());
+                    });
+                    ui.add_space(2.0);
+                    ui.horizontal(|ui| {
+                        let badge_bg = ui.visuals().widgets.noninteractive.bg_fill;
+                        let badge_fill = Color32::from_rgb(
+                            badge_bg.r().saturating_add(15),
+                            badge_bg.g().saturating_add(15),
+                            badge_bg.b().saturating_add(15),
+                        );
+
+                        egui::Frame::default()
+                            .fill(badge_fill)
+                            .stroke(egui::Stroke::new(1.0, Color32::from_rgb(0, 100, 0)))
+                            .corner_radius(3)
+                            .inner_margin(egui::Margin::symmetric(4, 1))
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new(version).small());
+                            });
+
+                        egui::Frame::default()
+                            .fill(badge_fill)
+                            .stroke(egui::Stroke::new(1.0, Color32::from_rgb(0, 50, 150)))
+                            .corner_radius(3)
+                            .inner_margin(egui::Margin::symmetric(4, 1))
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new(loader).small());
+                            });
+                    });
+                });
+            })
+            .response;
+
+        if should_scroll {
+            response.scroll_to_me(Some(egui::Align::Center));
+        }
+
+        response
     }
 }
