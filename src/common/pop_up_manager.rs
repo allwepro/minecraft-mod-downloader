@@ -56,6 +56,10 @@ impl SharedPopupManager {
         self.0.write().open_ids.retain(|&i| i != id);
     }
 
+    pub fn is_open(&self, id: egui::Id) -> bool {
+        self.0.read().open_ids.contains(&id)
+    }
+
     pub fn begin_frame(&self) {
         let mut inner = self.0.write();
         inner.requests.clear();

@@ -873,19 +873,6 @@ impl MainPanel {
         is_measurement: bool,
     ) {
         ui.horizontal(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut self.search_query)
-                    .hint_text(format!("🔍 Search {}s...", content_type.display_name()))
-                    .desired_width(200.0),
-            );
-            if ui
-                .add_enabled(!self.search_query.is_empty(), egui::Button::new("❌"))
-                .clicked()
-                && !is_measurement
-            {
-                self.search_query.clear();
-            }
-
             let is_loading = !self.state.read().active_scans.is_empty();
 
             ui.add_enabled_ui(!is_loading, |ui| {
@@ -913,6 +900,19 @@ impl MainPanel {
                     }
                 }
             });
+
+            ui.add(
+                egui::TextEdit::singleline(&mut self.search_query)
+                    .hint_text(format!("🔍 Search {}s...", content_type.display_name()))
+                    .desired_width(200.0),
+            );
+            if ui
+                .add_enabled(!self.search_query.is_empty(), egui::Button::new("❌"))
+                .clicked()
+                && !is_measurement
+            {
+                self.search_query.clear();
+            }
 
             {
                 let sort_id = self.sort_popup.id();

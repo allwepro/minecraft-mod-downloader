@@ -1,6 +1,7 @@
 use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::app::modals::create_modal::CreateModal;
 use crate::resource_downloader::app::popups::import_popup::ImportPopup;
+use crate::resource_downloader::app::popups::list_context_menu::ListContextMenu;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{ListLnk, ResourceType};
 use eframe::egui;
@@ -12,6 +13,7 @@ pub struct SidebarPanel {
     list_search_query: String,
     new_list_modal: CreateModal,
     import_popup: ImportPopup,
+    context_menu_target: Option<(ListLnk, egui::Rect)>,
 }
 
 impl SidebarPanel {
@@ -21,6 +23,7 @@ impl SidebarPanel {
             list_search_query: String::new(),
             new_list_modal: CreateModal::new(state.clone()),
             import_popup: ImportPopup::new(state.clone()),
+            context_menu_target: None,
         }
     }
 
@@ -197,6 +200,11 @@ impl SidebarPanel {
                     if response.clicked() {
                         self.handle_list_click(&item.0, &open_list);
                     }
+                    if response.secondary_clicked() {
+                        self.context_menu_target = Some((item.0.clone(), response.rect));
+                        let menu_id = egui::Id::new("list_context_menu").with(&item.0);
+                        self.state.read().popup_manager.toggle(menu_id);
+                    }
                 }
             } else {
                 let mut moved_item = None;
@@ -224,6 +232,12 @@ impl SidebarPanel {
 
                     if drag_response.clicked() {
                         self.handle_list_click(&item.0, &open_list);
+                    }
+
+                    if drag_response.secondary_clicked() {
+                        self.context_menu_target = Some((item.0.clone(), drag_response.rect));
+                        let menu_id = egui::Id::new("list_context_menu").with(&item.0);
+                        self.state.read().popup_manager.toggle(menu_id);
                     }
 
                     if let Some(source_idx) = inner_response.response.dnd_release_payload::<usize>()
@@ -266,6 +280,18 @@ impl SidebarPanel {
                 }
             }
         });
+
+        if let Some((target_lnk, rect)) = &self.context_menu_target {
+            let menu = ListContextMenu::new(self.state.clone(), target_lnk.clone());
+            let menu_id = menu.id();
+            let pm = self.state.read().popup_manager.clone();
+            if pm.is_open(menu_id) {
+                pm.register_interaction_area(menu_id, *rect);
+                pm.request_show(Box::new(menu), *rect);
+            } else {
+                self.context_menu_target = None;
+            }
+        }
     }
 
     fn handle_list_click(&self, list: &ListLnk, open_list: &Option<ListLnk>) {
