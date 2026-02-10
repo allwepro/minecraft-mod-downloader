@@ -26,14 +26,19 @@ impl Default for SharedModalManager {
 #[allow(dead_code)]
 impl SharedModalManager {
     pub fn open(&self, modal: Box<dyn ModalWindow>) {
-        let mut inner = self.0.write();
-        if let Some(mut old) = inner.active_modal.take() {
-            old.instance.on_close();
+        let old = {
+            let mut inner = self.0.write();
+            let old = inner.active_modal.take();
+            inner.active_modal = Some(ModalState {
+                instance: modal,
+                was_initialized: false,
+            });
+            old
+        };
+
+        if let Some(mut old_modal) = old {
+            old_modal.instance.on_close();
         }
-        inner.active_modal = Some(ModalState {
-            instance: modal,
-            was_initialized: false,
-        });
     }
 
     pub fn is_any_open(&self) -> bool {
@@ -41,8 +46,12 @@ impl SharedModalManager {
     }
 
     pub fn close_active(&self) {
-        let mut inner = self.0.write();
-        if let Some(mut modal) = inner.active_modal.take() {
+        let old = {
+            let mut inner = self.0.write();
+            inner.active_modal.take()
+        };
+
+        if let Some(mut modal) = old {
             modal.instance.on_close();
         }
     }

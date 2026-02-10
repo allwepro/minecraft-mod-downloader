@@ -45,9 +45,8 @@ impl SidebarPanel {
                 )
                 .clicked()
             {
-                self.state
-                    .read()
-                    .submit_modal(Box::new(self.new_list_modal.clone()));
+                let mm = self.state.read().modal_manager.clone();
+                mm.open(Box::new(self.new_list_modal.clone()));
             }
 
             let import_btn = ui
@@ -78,7 +77,7 @@ impl SidebarPanel {
             (state.open_list.clone(), state.pending_list_scroll.take())
         };
 
-        let mut list_items: Vec<(ListLnk, String, String, String, String)> = {
+        let mut list_items: Vec<(ListLnk, ResourceType, String, String, String, String)> = {
             let state = self.state.read();
             state.list_pool.map_filter(|list| {
                 let resource_type = list
@@ -95,6 +94,7 @@ impl SidebarPanel {
 
                 Some((
                     list.get_lnk(),
+                    resource_type,
                     type_icon,
                     list.get_name(),
                     version_display,
@@ -167,17 +167,17 @@ impl SidebarPanel {
 
             if ui.input(|i| i.pointer.is_decidedly_dragging()) {
                 let clip_rect = ui.clip_rect();
-                if let Some(pointer_pos) = ui.ctx().pointer_hover_pos() {
-                    if clip_rect.contains(pointer_pos) {
-                        let margin = 20.0;
-                        let speed = 5.0;
-                        if pointer_pos.y < clip_rect.min.y + margin {
-                            ui.scroll_with_delta(egui::vec2(0.0, speed));
-                            ui.ctx().request_repaint();
-                        } else if pointer_pos.y > clip_rect.max.y - margin {
-                            ui.scroll_with_delta(egui::vec2(0.0, -speed));
-                            ui.ctx().request_repaint();
-                        }
+                if let Some(pointer_pos) = ui.ctx().pointer_hover_pos()
+                    && clip_rect.contains(pointer_pos)
+                {
+                    let margin = 20.0;
+                    let speed = 5.0;
+                    if pointer_pos.y < clip_rect.min.y + margin {
+                        ui.scroll_with_delta(egui::vec2(0.0, speed));
+                        ui.ctx().request_repaint();
+                    } else if pointer_pos.y > clip_rect.max.y - margin {
+                        ui.scroll_with_delta(egui::vec2(0.0, -speed));
+                        ui.ctx().request_repaint();
                     }
                 }
             }
@@ -247,23 +247,23 @@ impl SidebarPanel {
                     }
                 }
 
-                if let Some((from_idx, mut to_idx)) = moved_item {
-                    if from_idx != to_idx {
-                        if from_idx < to_idx {
-                            to_idx -= 1;
-                        }
-                        let moved = list_items.remove(from_idx);
-                        list_items.insert(to_idx, moved);
-
-                        let new_order: Vec<String> =
-                            list_items.iter().map(|i| i.0.to_string()).collect();
-
-                        let state = self.state.write();
-                        state.config.write().list_order = new_order;
-                        state.dispatch(crate::resource_downloader::business::Effect::SaveConfig {
-                            config: state.config.read().clone(),
-                        });
+                if let Some((from_idx, mut to_idx)) = moved_item
+                    && from_idx != to_idx
+                {
+                    if from_idx < to_idx {
+                        to_idx -= 1;
                     }
+                    let moved = list_items.remove(from_idx);
+                    list_items.insert(to_idx, moved);
+
+                    let new_order: Vec<String> =
+                        list_items.iter().map(|i| i.0.to_string()).collect();
+
+                    let state = self.state.write();
+                    state.config.write().list_order = new_order;
+                    state.dispatch(crate::resource_downloader::business::Effect::SaveConfig {
+                        config: state.config.read().clone(),
+                    });
                 }
             }
         });
@@ -299,11 +299,11 @@ impl SidebarPanel {
     fn render_row(
         &self,
         ui: &mut Ui,
-        item: &(ListLnk, String, String, String, String),
+        item: &(ListLnk, ResourceType, String, String, String, String),
         open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
     ) -> egui::Response {
-        let (list, icon, name, version, loader) = item;
+        let (list, resource_type, icon, name, version, loader) = item;
         let is_selected = open_list.clone().is_some_and(|l| l == *list);
         let should_scroll = pending_list_scroll.as_ref().is_some_and(|l| l == list);
 
@@ -339,6 +339,15 @@ impl SidebarPanel {
                             badge_bg.g().saturating_add(15),
                             badge_bg.b().saturating_add(15),
                         );
+
+                        egui::Frame::default()
+                            .fill(badge_fill)
+                            .stroke(egui::Stroke::new(1.0, Color32::from_rgb(100, 100, 0)))
+                            .corner_radius(3)
+                            .inner_margin(egui::Margin::symmetric(4, 1))
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new(resource_type.display_name()).small());
+                            });
 
                         egui::Frame::default()
                             .fill(badge_fill)

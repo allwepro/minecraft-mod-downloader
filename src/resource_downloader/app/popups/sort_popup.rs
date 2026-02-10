@@ -1,4 +1,5 @@
 use crate::common::prefabs::popup_window::Popup;
+use crate::get_list;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{FilterMode, OrderMode, SortMode};
 use egui::{Id, Ui};
@@ -26,7 +27,7 @@ impl Popup for SortPopup {
             return;
         };
 
-        let list_arc = crate::get_list!(self.state, &lnk);
+        let list_arc = get_list!(self.state, &lnk);
         let mut list = list_arc.write();
         let mut changed = false;
 
