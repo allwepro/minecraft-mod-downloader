@@ -1,13 +1,11 @@
 use crate::common::prefabs::popup_window::Popup;
+use crate::get_list;
 use crate::resource_downloader::business::SharedRDState;
-use crate::resource_downloader::domain::{
-    ListLnk, ProjectDependencyType, ProjectLnk, RTProjectVersion, ResourceType,
-};
-use crate::{get_list, get_project_versions};
+use crate::resource_downloader::business::project_actions::ProjectActions;
+use crate::resource_downloader::domain::{ListLnk, ProjectLnk};
 use eframe::egui;
 use egui::{Color32, Id, Ui};
 use std::collections::HashSet;
-use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct MultiSelectContextMenu {
@@ -22,50 +20,6 @@ impl MultiSelectContextMenu {
             state,
             list_lnk,
             selected,
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn trigger_download(
-        &self,
-        lnk: &ListLnk,
-        p_lnk: &ProjectLnk,
-        version: &RTProjectVersion,
-        dir: &String,
-        rt: &ResourceType,
-        found_hashes: &HashSet<String>,
-        triggered: &mut HashSet<ProjectLnk>,
-    ) {
-        if triggered.contains(p_lnk) {
-            return;
-        }
-        triggered.insert(p_lnk.clone());
-
-        let is_downloaded = found_hashes.contains(&version.artifact_hash);
-
-        if !is_downloaded {
-            let safe_name = {
-                let list_arc = get_list!(self.state, lnk);
-                let list = list_arc.read();
-                list.get_project(p_lnk).unwrap().get_safe_filename()
-            };
-
-            let dest = PathBuf::from(dir).join(safe_name);
-
-            self.state.write().download_artifact(
-                &self.state,
-                p_lnk.clone(),
-                *rt,
-                version.version_id.clone(),
-                version.artifact_id.clone(),
-                dest,
-            );
-        }
-
-        for dep in &version.depended_on {
-            if dep.dependency_type == ProjectDependencyType::Required {
-                self.trigger_download(lnk, &dep.project, version, dir, rt, found_hashes, triggered);
-            }
         }
     }
 
@@ -158,22 +112,6 @@ impl MultiSelectContextMenu {
                 egui::RichText::new("⬇  Download All Selected").color(Color32::LIGHT_BLUE),
             );
             if ui.add(download_btn).clicked() {
-                let (ver, loader, dir, content_type) = {
-                    let list = list_arc.read();
-                    let rt = list
-                        .get_resource_types()
-                        .first()
-                        .cloned()
-                        .unwrap_or(ResourceType::Mod);
-                    let config = list.get_resource_type_config(&rt).unwrap();
-                    (
-                        list.get_game_version().clone(),
-                        config.loader.clone(),
-                        config.download_dir.clone(),
-                        rt,
-                    )
-                };
-
                 let found_hashes: HashSet<String> = self
                     .state
                     .read()
@@ -182,31 +120,13 @@ impl MultiSelectContextMenu {
                     .flatten()
                     .map(|(_, h)| h.clone())
                     .collect();
-                let mut triggered = HashSet::new();
 
-                for p_lnk in &self.selected {
-                    let versions = get_project_versions!(
-                        self.state,
-                        p_lnk.clone(),
-                        content_type,
-                        ver.clone(),
-                        loader.clone()
-                    );
-
-                    if let Ok(Some(v_list)) = versions
-                        && let Some(latest) = v_list.first()
-                    {
-                        self.trigger_download(
-                            &self.list_lnk,
-                            p_lnk,
-                            latest,
-                            &dir,
-                            &content_type,
-                            &found_hashes,
-                            &mut triggered,
-                        );
-                    }
-                }
+                ProjectActions::download_projects_latest(
+                    self.state.clone(),
+                    self.list_lnk.clone(),
+                    self.selected.iter().cloned().collect(),
+                    &found_hashes,
+                );
                 *open = false;
             }
 
@@ -217,15 +137,12 @@ impl MultiSelectContextMenu {
                     egui::RichText::new("📁  Archive Selected").color(Color32::LIGHT_YELLOW),
                 );
                 if ui.add(archive_btn).clicked() {
-                    for p_lnk in &self.selected {
-                        let p_lnk_clone = p_lnk.clone();
-                        self.state
-                            .read()
-                            .list_pool
-                            .mutate(&self.list_lnk, move |list| {
-                                list.archive_project(&p_lnk_clone, true)
-                            });
-                    }
+                    ProjectActions::archive_projects(
+                        self.state.clone(),
+                        self.list_lnk.clone(),
+                        self.selected.iter().cloned().collect(),
+                        true,
+                    );
                     *open = false;
                 }
             }
@@ -235,15 +152,12 @@ impl MultiSelectContextMenu {
                     egui::RichText::new("📂  Unarchive Selected").color(Color32::LIGHT_YELLOW),
                 );
                 if ui.add(unarchive_btn).clicked() {
-                    for p_lnk in &self.selected {
-                        let p_lnk_clone = p_lnk.clone();
-                        self.state
-                            .read()
-                            .list_pool
-                            .mutate(&self.list_lnk, move |list| {
-                                list.archive_project(&p_lnk_clone, false)
-                            });
-                    }
+                    ProjectActions::archive_projects(
+                        self.state.clone(),
+                        self.list_lnk.clone(),
+                        self.selected.iter().cloned().collect(),
+                        false,
+                    );
                     *open = false;
                 }
             }
@@ -254,15 +168,11 @@ impl MultiSelectContextMenu {
                 egui::RichText::new("🗑  Delete Selected").color(Color32::LIGHT_RED),
             );
             if ui.add(delete_btn).clicked() {
-                for p_lnk in &self.selected {
-                    let p_lnk_clone = p_lnk.clone();
-                    self.state
-                        .read()
-                        .list_pool
-                        .mutate(&self.list_lnk, move |list| {
-                            list.remove_project(&p_lnk_clone)
-                        });
-                }
+                ProjectActions::delete_projects(
+                    self.state.clone(),
+                    self.list_lnk.clone(),
+                    self.selected.iter().cloned().collect(),
+                );
                 *open = false;
             }
         });
