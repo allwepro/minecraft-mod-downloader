@@ -268,11 +268,9 @@ impl ModalWindow for FolderImportModal {
                                                             ui.label(format!("- {}", name));
                                                         }
 
-                                                        if matches.len() > 1
-                                                            || !self.exact_matches.contains(&idx)
-                                                                && ui
-                                                                    .small_button("Change")
-                                                                    .clicked()
+                                                        if (matches.len() > 1
+                                                            || !self.exact_matches.contains(&idx))
+                                                            && ui.small_button("Change").clicked()
                                                         {
                                                             self.selected_matches.remove(&idx);
                                                             self.exact_matches.remove(&idx);
