@@ -808,19 +808,23 @@ impl MainPanel {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if !is_dependency {
                             let delete_tooltip = if has_dependents {
-                                format!("Cannot delete: required by {}", dependent_names.join(", "))
+                                format!(
+                                    "Project is required by: {}\nClick to demote to auto-managed (will remain in list)",
+                                    dependent_names.join(", ")
+                                )
                             } else {
                                 "Remove from list".to_string()
                             };
 
                             let del_btn_res = ui
-                                .add_enabled(
-                                    !has_dependents,
-                                    egui::Button::new(
-                                        egui::RichText::new("🗑").color(Color32::LIGHT_RED),
-                                    ),
-                                )
-                                .on_disabled_hover_text(&delete_tooltip)
+                                .add(egui::Button::new(
+                                    egui::RichText::new("🗑")
+                                        .color(if has_dependents {
+                                            Color32::ORANGE
+                                        } else {
+                                            Color32::LIGHT_RED
+                                        }),
+                                ))
                                 .on_hover_text(&delete_tooltip);
 
                             if del_btn_res.clicked() {
@@ -1252,12 +1256,25 @@ impl MainPanel {
                 .manual_projects_by_type(*rt)
                 .into_iter()
                 .map(|p| {
+                    let dep_names = p
+                        .get_version()
+                        .map(|v| {
+                            v.depended_on
+                                .iter()
+                                .filter_map(|d| {
+                                    list.get_project(&d.project).map(|dp| dp.get_name())
+                                })
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        })
+                        .unwrap_or_default();
                     (
                         p.get_lnk().clone(),
                         p.get_name().clone(),
                         p.get_author().clone(),
                         p.added_at,
                         p.get_version().map(|v| v.artifact_hash.clone()),
+                        dep_names,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -1265,11 +1282,20 @@ impl MainPanel {
         };
 
         let query = self.search_query.to_lowercase();
+        let (include_deps, actual_query) = if query.starts_with('&') {
+            (true, query.strip_prefix('&').unwrap_or("").to_string())
+        } else {
+            (false, query)
+        };
 
-        candidates.retain(|(lnk, name, author, _added_at, artifact_hash)| {
-            let matches_query = query.is_empty()
-                || name.to_lowercase().contains(&query)
-                || author.to_lowercase().contains(&query);
+        candidates.retain(|(lnk, name, author, _added_at, artifact_hash, dep_names)| {
+            let mut matches_query = actual_query.is_empty()
+                || name.to_lowercase().contains(&actual_query)
+                || author.to_lowercase().contains(&actual_query);
+
+            if include_deps {
+                matches_query = matches_query || dep_names.to_lowercase().contains(&actual_query);
+            }
 
             if !matches_query {
                 return false;
