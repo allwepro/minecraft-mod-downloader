@@ -1,14 +1,15 @@
-use crate::resource_downloader::business::InternalEvent;
 use crate::resource_downloader::business::cache::ArtifactRequest;
 use crate::resource_downloader::business::services::ApiService;
 use crate::resource_downloader::business::{Effect, Event};
+use crate::resource_downloader::business::{FolderImportCandidate, InternalEvent};
 use crate::resource_downloader::domain::{
-    GameVersion, ListLnk, Project, ProjectDependency, ProjectList, ProjectLnk, ProjectTypeConfig,
-    ProjectVersion, RESOURCE_TYPES, ResourceType,
+    GameLoader, GameVersion, ListLnk, Project, ProjectDependency, ProjectList, ProjectLnk,
+    ProjectTypeConfig, ProjectVersion, RESOURCE_TYPES, ResourceType,
 };
+use crate::resource_downloader::infra::cache::file_index;
 use crate::resource_downloader::infra::cache::file_index::{FileIndexCache, FileIndexEntry};
 use crate::resource_downloader::infra::{
-    ConfigManager, GameDetection, LegacyListService, ListFileManager,
+    ConfigManager, GameDetection, LegacyListService, ListFileManager, ResourceDetector,
 };
 use parking_lot::RwLock;
 use sha1::{Digest, Sha1};
@@ -503,7 +504,10 @@ impl RDRuntime {
                             let ext_list = file_extension.clone();
 
                             metadata_join_set.spawn(async move {
-                                let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or_default();
+                                let file_name = path
+                                    .file_name()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or_default();
                                 let mut matches = false;
                                 for target_ext in &ext_list {
                                     if file_name.ends_with(target_ext) {
@@ -522,7 +526,7 @@ impl RDRuntime {
                                 }
 
                                 let size = metadata.len();
-                                let modified = crate::resource_downloader::infra::cache::file_index::get_system_time_secs(
+                                let modified = file_index::get_system_time_secs(
                                     metadata.modified().unwrap_or(std::time::UNIX_EPOCH),
                                 );
 
@@ -596,17 +600,26 @@ impl RDRuntime {
                             }
                             {
                                 let mut cache = fic.write();
-                                cache.insert(p, FileIndexEntry { hash: h, size: s, modified: m });
+                                cache.insert(
+                                    p,
+                                    FileIndexEntry {
+                                        hash: h,
+                                        size: s,
+                                        modified: m,
+                                    },
+                                );
                             }
                             cache_changed = true;
                             files_updated += 1;
 
                             if files_updated % 10 == 0 {
-                                let _ = tx.send(InternalEvent::FilesFound {
-                                    directory: directory.clone(),
-                                    file_extension: file_extension.clone(),
-                                    files: files.clone(),
-                                }).await;
+                                let _ = tx
+                                    .send(InternalEvent::FilesFound {
+                                        directory: directory.clone(),
+                                        file_extension: file_extension.clone(),
+                                        files: files.clone(),
+                                    })
+                                    .await;
                             }
                         }
                     }
@@ -885,6 +898,233 @@ impl RDRuntime {
                                         error: e.to_string(),
                                     },
                                 ))
+                                .await;
+                        }
+                    }
+                });
+            }
+
+            Effect::ScanFolderImport {
+                path,
+                resource_type,
+            } => {
+                let api = api.clone();
+                let tx = self.event_tx.clone();
+
+                let _ = tx
+                    .send(InternalEvent::FolderImportProgress {
+                        total: 4,
+                        current: 1,
+                        message: "Scanning folder".to_string(),
+                    })
+                    .await;
+
+                self.rt_handle.spawn(async move {
+                    // 1. Fetch available versions and loaders
+                    let versions_res = api.game_version_pool.get_versions_blocking().await;
+                    let loaders_res = api
+                        .game_loader_pool
+                        .get_loaders_blocking(resource_type)
+                        .await;
+
+                    let (versions, loaders) = match (versions_res, loaders_res) {
+                        (Ok(Some(v)), Ok(Some(l))) => (v, l),
+                        _ => {
+                            let _ = tx
+                                .send(InternalEvent::FailedFolderScan {
+                                    path,
+                                    resource_type,
+                                    error: "Failed to fetch versions/loaders".into(),
+                                })
+                                .await;
+                            return;
+                        }
+                    };
+
+                    // 2. Detect resources
+                    let detector = ResourceDetector;
+                    let v_vec: Vec<GameVersion> = versions.to_vec();
+                    let l_vec: Vec<GameLoader> = loaders.to_vec();
+
+                    let _ = tx
+                        .send(InternalEvent::FolderImportProgress {
+                            total: 4,
+                            current: 2,
+                            message: "Parsing files".to_string(),
+                        })
+                        .await;
+                    let (results, best_ver, best_loader) = detector.detect_resources_from_dir(
+                        path.clone(),
+                        resource_type,
+                        l_vec,
+                        v_vec,
+                    );
+
+                    let _ = tx
+                        .send(InternalEvent::FolderImportProgress {
+                            total: 4,
+                            current: 3,
+                            message: "Converting data".to_string(),
+                        })
+                        .await;
+                    let mut candidates = Vec::new();
+                    for (filename, cleaned_name, ver, loader) in results {
+                        candidates.push(FolderImportCandidate {
+                            original_filename: filename,
+                            cleaned_name,
+                            detected_version: ver,
+                            detected_loader: loader,
+                            search_results: None,
+                        });
+                    }
+
+                    let _ = tx
+                        .send(InternalEvent::FolderImportProgress {
+                            total: 4,
+                            current: 4,
+                            message: "Finalizing data".to_string(),
+                        })
+                        .await;
+                    let _ = tx
+                        .send(InternalEvent::FolderImportScanned {
+                            path,
+                            resource_type,
+                            candidates,
+                            suggested_version: best_ver,
+                            suggested_loader: best_loader,
+                        })
+                        .await;
+                });
+            }
+
+            Effect::SearchFolderImportCandidates {
+                file_names,
+                resource_type,
+                version,
+                loader,
+            } => {
+                let api = api.clone();
+                let tx = self.event_tx.clone();
+
+                self.rt_handle.spawn(async move {
+                    let mut results_map = HashMap::new();
+
+                    for cleaned_name in file_names.into_iter() {
+                        let search_res = api
+                            .rt_project_pool
+                            .search_blocking(
+                                cleaned_name.clone(),
+                                resource_type,
+                                Some(version.clone()),
+                                Some(loader.clone()),
+                            )
+                            .await;
+
+                        let matches_with_names: Vec<(ProjectLnk, String)> = match search_res {
+                            Ok(Some(results)) => {
+                                let mut named_results = Vec::new();
+                                for proj_lnk in results {
+                                    if let Ok(Some(meta)) = api
+                                        .rt_project_pool
+                                        .get_metadata_blocking(proj_lnk.clone(), resource_type)
+                                        .await
+                                    {
+                                        named_results.push((proj_lnk, meta.name));
+                                    } else {
+                                        let name = proj_lnk
+                                            .to_context_id()
+                                            .unwrap_or("Unknown".to_string());
+                                        named_results.push((proj_lnk, name));
+                                    }
+                                }
+                                named_results
+                            }
+                            Ok(None) => Vec::new(),
+                            Err(_) => Vec::new(),
+                        };
+
+                        results_map.insert(cleaned_name, matches_with_names);
+                    }
+
+                    let _ = tx
+                        .send(InternalEvent::FolderImportCandidatesFound {
+                            results: results_map,
+                        })
+                        .await;
+                });
+            }
+
+            Effect::ImportFolderList {
+                name,
+                resource_type,
+                version,
+                loader,
+                download_dir,
+                projects,
+            } => {
+                let lm = self.list_manager.clone();
+                let api_clone = api.clone();
+                let tx = self.event_tx.clone();
+
+                self.rt_handle.spawn(async move {
+                    let project_strings: Vec<String> =
+                        projects.iter().filter_map(|p| p.to_context_id()).collect();
+
+                    let new_id = ProjectList::generate_id();
+                    let mut new_list =
+                        ProjectList::new(new_id.clone(), name.clone(), version.clone());
+                    new_list.set_resource_type(
+                        resource_type,
+                        ProjectTypeConfig::new(loader.clone(), download_dir.clone()),
+                    );
+
+                    for proj_lnk in &projects {
+                        if let Some(rtpm) = api_clone
+                            .rt_project_pool
+                            .get_metadata_blocking(proj_lnk.clone(), resource_type)
+                            .await
+                            .unwrap_or(None)
+                            && let Some(id) = proj_lnk.to_context_id()
+                        {
+                            new_list.add_project(Project::new(
+                                id,
+                                resource_type,
+                                true,
+                                rtpm.name,
+                                rtpm.description,
+                                rtpm.author,
+                            ));
+                        }
+                    }
+
+                    match lm.save(&new_list).await {
+                        Ok(_) => {
+                            let list_arc = Arc::new(RwLock::new(new_list));
+                            let lnk = list_arc.read().get_lnk();
+                            let _ = tx
+                                .send(InternalEvent::ListCreated {
+                                    name,
+                                    resource_type,
+                                    version,
+                                    loader,
+                                    download_dir,
+                                    projects: project_strings,
+                                    lnk,
+                                    list: list_arc,
+                                })
+                                .await;
+                        }
+                        Err(e) => {
+                            let _ = tx
+                                .send(InternalEvent::Standard(Event::FailedListCreation {
+                                    name,
+                                    resource_type,
+                                    version,
+                                    loader,
+                                    download_dir,
+                                    projects: project_strings,
+                                    error: e.to_string(),
+                                }))
                                 .await;
                         }
                     }

@@ -25,33 +25,28 @@ impl RTProjectPool {
         version: Option<GameVersion>,
         loader: Option<GameLoader>,
     ) -> anyhow::Result<Option<Vec<ProjectLnk>>> {
-        let search_ctx = CacheContext {
-            // Used a pseudo-project link to represent the query in the hash - not pretty but functional
-            id: Some(query.clone()),
-            resource_type: Some(resource_type),
-            version: version.clone(),
-            loader: loader.clone(),
-        };
+        let (ctx, fun) = Self::search_prepare_request(query, &resource_type, version, loader);
 
-        let res = self.cache.get::<Vec<ProjectLnk>>(
-            CacheType::Search,
-            search_ctx.clone(),
-            Box::new(move |p_ctx| {
-                Box::pin(async move {
-                    let results = p_ctx
-                        .provider
-                        .search_projects(
-                            &p_ctx,
-                            query,
-                            &resource_type,
-                            version.as_ref(),
-                            loader.as_ref(),
-                        )
-                        .await?;
-                    Ok(Arc::new(results) as AnyCacheData)
-                })
-            }),
-        )?;
+        let res = self
+            .cache
+            .get::<Vec<ProjectLnk>>(CacheType::Search, ctx, fun)?;
+
+        Ok(res.map(|links| links.into_iter().collect()))
+    }
+
+    pub async fn search_blocking(
+        &self,
+        query: String,
+        resource_type: ResourceType,
+        version: Option<GameVersion>,
+        loader: Option<GameLoader>,
+    ) -> anyhow::Result<Option<Vec<ProjectLnk>>> {
+        let (ctx, fun) = Self::search_prepare_request(query, &resource_type, version, loader);
+
+        let res = self
+            .cache
+            .get_blocking::<Vec<ProjectLnk>>(CacheType::Search, ctx, fun, Duration::from_secs(10))
+            .await?;
 
         Ok(res.map(|links| links.into_iter().collect()))
     }
@@ -283,6 +278,38 @@ impl RTProjectPool {
     }
 
     // ------- Helper to prepare requests -----
+    fn search_prepare_request(
+        query: String,
+        resource_type: &ResourceType,
+        version: Option<GameVersion>,
+        loader: Option<GameLoader>,
+    ) -> (CacheContext, FetchFn) {
+        let resource_type_owned = *resource_type;
+        (
+            CacheContext {
+                id: Some(query.clone()),
+                resource_type: Some(resource_type_owned),
+                version: version.clone(),
+                loader: loader.clone(),
+            },
+            Box::new(move |p_ctx| {
+                Box::pin(async move {
+                    let results = p_ctx
+                        .provider
+                        .search_projects(
+                            &p_ctx,
+                            query,
+                            &resource_type_owned,
+                            version.as_ref(),
+                            loader.as_ref(),
+                        )
+                        .await?;
+                    Ok(Arc::new(results) as AnyCacheData)
+                })
+            }),
+        )
+    }
+
     fn metadata_prepare_request(
         project: &ProjectLnk,
         resource_type: &ResourceType,

@@ -9,7 +9,8 @@ use crate::resource_downloader::business::list_pool::ListPool;
 use crate::resource_downloader::business::services::ApiService;
 use crate::resource_downloader::business::{Event, InternalEvent};
 use crate::resource_downloader::domain::{
-    AppConfig, ListLnk, MutationOutcome, MutationResult, Project, ProjectLnk, ResourceType,
+    AppConfig, GameLoader, GameVersion, ListLnk, MutationOutcome, MutationResult, Project,
+    ProjectLnk, ResourceType,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -27,6 +28,26 @@ pub enum DownloadStatus {
     Failed,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FolderImportCandidate {
+    pub original_filename: String,
+    pub cleaned_name: String,
+    pub detected_version: GameVersion,
+    pub detected_loader: GameLoader,
+    pub search_results: Option<Vec<(ProjectLnk, String)>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FolderImportSession {
+    pub path: PathBuf,
+    pub candidates: Vec<FolderImportCandidate>,
+    pub suggested_version: Option<GameVersion>,
+    pub suggested_loader: Option<GameLoader>,
+    pub is_scanning: bool,
+    pub scan_progress: Option<(usize, usize, String)>,
+    pub scan_error: Option<String>,
+}
+
 #[derive(Clone, Debug)]
 pub struct ClipboardContent {
     pub source_list: ListLnk,
@@ -41,7 +62,7 @@ pub struct RDState {
     event_rx: mpsc::Receiver<InternalEvent>,
     effect_sx: mpsc::Sender<Effect>,
 
-    api_service: Arc<ApiService>,
+    pub api_service: Arc<ApiService>,
 
     pub modal_manager: SharedModalManager,
     pub popup_manager: SharedPopupManager,
@@ -59,6 +80,7 @@ pub struct RDState {
     pub download_status: HashMap<ProjectLnk, (DownloadStatus, f32)>,
 
     pub clipboard: Option<ClipboardContent>,
+    pub folder_import_session: Option<FolderImportSession>,
 
     pub pending_scroll: Option<(ListLnk, ProjectLnk)>,
     pub pending_list_scroll: Option<ListLnk>,
@@ -98,6 +120,7 @@ impl RDState {
             active_scans: Default::default(),
             download_status: Default::default(),
             clipboard: None,
+            folder_import_session: None,
             pending_scroll: None,
             pending_list_scroll: None,
         }
@@ -423,6 +446,83 @@ impl RDState {
                     version_id,
                 })
             }
+            InternalEvent::FolderImportProgress {
+                total,
+                current,
+                message,
+            } => {
+                if let Some(session) = &mut self.folder_import_session {
+                    session.scan_progress = Some((current, total, message.clone()));
+                }
+                Some(Event::FolderImportProgress {
+                    total,
+                    current,
+                    message,
+                })
+            }
+            InternalEvent::FolderImportScanned {
+                path,
+                resource_type,
+                candidates,
+                suggested_version,
+                suggested_loader,
+            } => {
+                if let Some(session) = &mut self.folder_import_session
+                    && session.path == path
+                {
+                    session.is_scanning = false;
+                    session.scan_progress = None;
+                    session.candidates = candidates.clone();
+                    session.suggested_version = suggested_version.clone();
+                    session.suggested_loader = suggested_loader.clone();
+
+                    if let (Some(version), Some(loader)) =
+                        (suggested_version.clone(), suggested_loader.clone())
+                    {
+                        let file_names: Vec<String> =
+                            candidates.iter().map(|c| c.cleaned_name.clone()).collect();
+                        self.dispatch(Effect::SearchFolderImportCandidates {
+                            file_names,
+                            resource_type,
+                            version,
+                            loader,
+                        });
+                    }
+                }
+                Some(Event::FolderImportScanned {
+                    path,
+                    resource_type,
+                    candidates,
+                    suggested_version,
+                    suggested_loader,
+                })
+            }
+            InternalEvent::FailedFolderScan {
+                path,
+                resource_type,
+                error,
+            } => {
+                if let Some(session) = &mut self.folder_import_session {
+                    session.is_scanning = false;
+                    session.scan_error = Some(error.clone());
+                    session.scan_progress = None;
+                }
+                Some(Event::FailedFolderScan {
+                    path,
+                    resource_type,
+                    error,
+                })
+            }
+            InternalEvent::FolderImportCandidatesFound { results } => {
+                if let Some(session) = &mut self.folder_import_session {
+                    for candidate in &mut session.candidates {
+                        if let Some(res) = results.get(&candidate.cleaned_name) {
+                            candidate.search_results = Some(res.clone());
+                        }
+                    }
+                }
+                Some(Event::FolderImportCandidatesFound { results })
+            }
         }
     }
 
@@ -556,6 +656,47 @@ impl RDState {
                 }
             }
         }
+    }
+
+    pub fn start_folder_import(&mut self, path: PathBuf, resource_type: Option<ResourceType>) {
+        self.folder_import_session = Some(FolderImportSession {
+            path: path.clone(),
+            candidates: Vec::new(),
+            suggested_version: None,
+            suggested_loader: None,
+            is_scanning: resource_type.is_some(),
+            scan_progress: None,
+            scan_error: None,
+        });
+        if let Some(resource_type) = resource_type {
+            self.dispatch(Effect::ScanFolderImport {
+                path,
+                resource_type,
+            });
+        }
+    }
+
+    pub fn cancel_folder_import(&mut self) {
+        self.folder_import_session = None;
+    }
+
+    pub fn create_import_folder_list(
+        &self,
+        name: String,
+        resource_type: ResourceType,
+        version: GameVersion,
+        loader: GameLoader,
+        download_dir: String,
+        projects: Vec<ProjectLnk>,
+    ) {
+        self.dispatch(Effect::ImportFolderList {
+            name,
+            resource_type,
+            version,
+            loader,
+            download_dir,
+            projects,
+        });
     }
 
     fn normalize_path(path: PathBuf) -> PathBuf {

@@ -10,7 +10,7 @@ pub(crate) mod xcache;
 
 pub use effects::Effect;
 pub use events::{Event, InternalEvent};
-pub use rd_state::{DownloadStatus, RDState, SharedRDState};
+pub use rd_state::{DownloadStatus, FolderImportCandidate, RDState, SharedRDState};
 
 #[macro_export]
 macro_rules! get_versions {

@@ -109,4 +109,26 @@ pub enum Effect {
     ImportModrinthCollection {
         collection_id: String,
     },
+
+    // Folder Import effects
+    ScanFolderImport {
+        path: PathBuf,
+        resource_type: ResourceType,
+    },
+
+    SearchFolderImportCandidates {
+        file_names: Vec<String>,
+        resource_type: ResourceType,
+        version: GameVersion,
+        loader: GameLoader,
+    },
+
+    ImportFolderList {
+        name: String,
+        resource_type: ResourceType,
+        version: GameVersion,
+        loader: GameLoader,
+        download_dir: String,
+        projects: Vec<ProjectLnk>,
+    },
 }
