@@ -16,6 +16,7 @@ pub use game_detection::GameDetection;
 pub use legacy_list::LegacyListService;
 pub use lists_manager::ListFileManager;
 pub use rd_runtime::RDRuntime;
+pub use resource_detector::ResourceDetector;
 
 #[derive(Clone)]
 pub struct ConnectionLimiter {

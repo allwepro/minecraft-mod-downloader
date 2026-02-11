@@ -1,5 +1,6 @@
 use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::app::dialogs::Dialogs;
+use crate::resource_downloader::app::modals::folder_import_modal::FolderImportModal;
 use crate::resource_downloader::app::modals::legacy_import_modal::LegacyImportModal;
 use crate::resource_downloader::app::modals::modrinth_collection_import_modal::ModrinthCollectionImportModal;
 use crate::resource_downloader::app::notifications::fail_notification::FailedNotification;
@@ -63,6 +64,21 @@ impl Popup for ImportPopup {
             *open = false;
             let sm = ModrinthCollectionImportModal::new(self.state.clone());
             self.state.read().submit_modal(Box::new(sm));
+        }
+        if ui
+            .add(
+                egui::Button::new("📁 From Folder")
+                    .min_size(egui::vec2(150.0, 0.0))
+                    .fill(Color32::TRANSPARENT),
+            )
+            .clicked()
+        {
+            *open = false;
+            if let Some(path) = Dialogs::pick_folder() {
+                self.state.write().start_folder_import(path, None);
+                let sm = FolderImportModal::new(self.state.clone());
+                self.state.read().submit_modal(Box::new(sm));
+            }
         }
     }
 }
