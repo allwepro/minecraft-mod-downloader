@@ -259,4 +259,64 @@ impl ProjectActions {
             }
         }
     }
+
+    pub fn update_all_projects(state: SharedRDState, list_lnk: ListLnk) {
+        let projects: Vec<ProjectLnk> = {
+            let list_arc = get_list!(state, &list_lnk);
+            let list = list_arc.read();
+            list.get_target_projects()
+                .iter()
+                .filter(|p| !p.is_archived())
+                .map(|p| p.get_lnk())
+                .collect()
+        };
+
+        Self::update_selected_projects(state, list_lnk, projects);
+    }
+
+    pub fn update_selected_projects(
+        state: SharedRDState,
+        list_lnk: ListLnk,
+        projects: Vec<ProjectLnk>,
+    ) {
+        let (ver, loader, rt) = {
+            let list_arc = get_list!(state, &list_lnk);
+            let list = list_arc.read();
+            let rt = list
+                .get_resource_types()
+                .first()
+                .cloned()
+                .unwrap_or(ResourceType::Mod);
+            (
+                list.get_game_version().clone(),
+                list.get_resource_type_config(&rt).unwrap().loader.clone(),
+                rt,
+            )
+        };
+
+        for p_lnk in projects {
+            let versions =
+                get_project_versions!(state, p_lnk.clone(), rt, ver.clone(), loader.clone());
+
+            if let Ok(Some(v_list)) = versions
+                && let Some(latest) = v_list.first()
+            {
+                let current_hash = {
+                    let list_arc = get_list!(state, &list_lnk);
+                    let list = list_arc.read();
+                    list.get_project(&p_lnk)
+                        .and_then(|p| p.get_version())
+                        .map(|v| v.artifact_hash.clone())
+                };
+
+                if Some(latest.artifact_hash.clone()) != current_hash {
+                    state.read().list_pool.select_version(
+                        &list_lnk,
+                        p_lnk,
+                        latest.version_id.clone(),
+                    );
+                }
+            }
+        }
+    }
 }

@@ -203,7 +203,7 @@ impl ProjectList {
     }
 
     pub fn get_do_updates(&self) -> bool {
-        self.config.do_updates.unwrap_or(false)
+        self.config.do_updates.unwrap_or(true)
     }
 
     pub fn set_do_updates(&mut self, do_updates: Option<bool>) {
@@ -697,5 +697,35 @@ impl ProjectList {
         }
 
         mutation
+    }
+
+    pub fn recalculate_dependents(&mut self) -> MutationResult {
+        for project in &mut self.projects {
+            project.settings.dependents.clear();
+        }
+
+        let mut project_links: Vec<(ProjectLnk, Vec<ProjectLnk>)> = Vec::new();
+
+        for project in &self.projects {
+            if let Some(version) = project.get_version() {
+                let project_lnk = project.get_lnk();
+                let deps: Vec<ProjectLnk> = version
+                    .depended_on
+                    .iter()
+                    .map(|d| d.project.clone())
+                    .collect();
+                project_links.push((project_lnk, deps));
+            }
+        }
+
+        for (project_lnk, deps) in project_links {
+            for dep_lnk in deps {
+                if let Some(dep_project) = self.get_project_mut(&dep_lnk) {
+                    dep_project.add_dependent(project_lnk.clone());
+                }
+            }
+        }
+
+        MutationResult::new(MutationOutcome::Unchanged)
     }
 }

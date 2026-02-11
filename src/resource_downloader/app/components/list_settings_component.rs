@@ -17,6 +17,7 @@ pub struct ListSettingsComponent {
     pub new_game_loader: Option<GameLoader>,
     pub new_download_dir: String,
     pub new_download_dir_edited: bool,
+    pub new_do_updates: bool,
 }
 
 impl ListSettingsComponent {
@@ -31,6 +32,7 @@ impl ListSettingsComponent {
             new_game_loader: None,
             new_download_dir: String::new(),
             new_download_dir_edited: false,
+            new_do_updates: true,
         }
     }
 
@@ -48,6 +50,7 @@ impl ListSettingsComponent {
             new_game_loader: None,
             new_download_dir: String::new(),
             new_download_dir_edited: false,
+            new_do_updates: true,
         }
     }
 
@@ -66,6 +69,7 @@ impl ListSettingsComponent {
             new_game_loader: None,
             new_download_dir: String::new(),
             new_download_dir_edited: false,
+            new_do_updates: true,
         }
     }
 
@@ -85,6 +89,7 @@ impl ListSettingsComponent {
             .download_dir
             .clone();
         let ver = target_list.read().get_game_version().clone();
+        let do_updates = target_list.read().get_do_updates();
         Self {
             state,
             hide_rt_and_name: true,
@@ -95,6 +100,7 @@ impl ListSettingsComponent {
             new_game_loader: Some(loader),
             new_download_dir: dir,
             new_download_dir_edited: true,
+            new_do_updates: do_updates,
         }
     }
 
@@ -104,6 +110,7 @@ impl ListSettingsComponent {
         self.new_game_loader = None;
         self.new_download_dir = String::new();
         self.new_download_dir_edited = false;
+        self.new_do_updates = true;
     }
 
     pub fn render_contents(&mut self, ui: &mut Ui) {
@@ -215,5 +222,8 @@ impl ListSettingsComponent {
                         || self.new_download_dir_edited;
             }
         });
+
+        ui.add_space(10.0);
+        ui.checkbox(&mut self.new_do_updates, "Automatically check for updates");
     }
 }

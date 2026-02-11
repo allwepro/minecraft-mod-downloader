@@ -391,9 +391,6 @@ impl RDState {
         self.config.write().last_open_list_id = list;
         self.save_config();
 
-        self.found_files.clear();
-        self.active_scans.clear();
-        self.download_status.clear();
         self.request_full_refresh();
     }
 
@@ -406,9 +403,6 @@ impl RDState {
         self.config.write().last_open_list_id = list;
         self.save_config();
 
-        self.found_files.clear();
-        self.active_scans.clear();
-        self.download_status.clear();
         self.request_full_refresh();
     }
 
@@ -486,7 +480,9 @@ impl RDState {
         self.dispatch(Effect::ImportModrinthCollection { collection_id });
     }
 
-    fn request_full_refresh(&mut self) {
+    pub fn request_full_refresh(&mut self) {
+        self.found_files.clear();
+        self.active_scans.clear();
         if self.open_list.is_none() {
             return;
         }

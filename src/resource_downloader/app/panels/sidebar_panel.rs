@@ -80,7 +80,7 @@ impl SidebarPanel {
             (state.open_list.clone(), state.pending_list_scroll.take())
         };
 
-        let mut list_items: Vec<(ListLnk, ResourceType, String, String, String, String)> = {
+        let mut list_items: Vec<(ListLnk, ResourceType, String, String, String, String, usize)> = {
             let state = self.state.read();
             state.list_pool.map_filter(|list| {
                 let resource_type = list
@@ -102,6 +102,7 @@ impl SidebarPanel {
                     list.get_name(),
                     version_display,
                     loader_display,
+                    list.count_manual_projects_by_type(resource_type),
                 ))
             })
         };
@@ -194,6 +195,11 @@ impl SidebarPanel {
                     if response.clicked() {
                         self.handle_list_click(&item.0, &open_list);
                     }
+                    if let Some((target_lnk, _)) = &self.context_menu_target
+                        && target_lnk == &item.0
+                    {
+                        self.context_menu_target = Some((item.0.clone(), response.rect));
+                    }
                     if response.secondary_clicked() {
                         self.context_menu_target = Some((item.0.clone(), response.rect));
                         let menu_id = egui::Id::new("list_context_menu").with(&item.0);
@@ -226,6 +232,12 @@ impl SidebarPanel {
 
                     if drag_response.clicked() {
                         self.handle_list_click(&item.0, &open_list);
+                    }
+
+                    if let Some((target_lnk, _)) = &self.context_menu_target
+                        && target_lnk == &item.0
+                    {
+                        self.context_menu_target = Some((item.0.clone(), drag_response.rect));
                     }
 
                     if drag_response.secondary_clicked() {
@@ -291,11 +303,11 @@ impl SidebarPanel {
     fn render_row(
         &self,
         ui: &mut Ui,
-        item: &(ListLnk, ResourceType, String, String, String, String),
+        item: &(ListLnk, ResourceType, String, String, String, String, usize),
         open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
     ) -> egui::Response {
-        let (list, resource_type, icon, name, version, loader) = item;
+        let (list, resource_type, icon, name, version, loader, count) = item;
         let is_selected = open_list.clone().is_some_and(|l| l == *list);
         let should_scroll = pending_list_scroll.as_ref().is_some_and(|l| l == list);
 
@@ -357,6 +369,15 @@ impl SidebarPanel {
                             .inner_margin(egui::Margin::symmetric(4, 1))
                             .show(ui, |ui| {
                                 ui.label(egui::RichText::new(loader).small());
+                            });
+
+                        egui::Frame::default()
+                            .fill(badge_fill)
+                            .stroke(egui::Stroke::new(1.0, Color32::from_rgb(25, 25, 25)))
+                            .corner_radius(3)
+                            .inner_margin(egui::Margin::symmetric(4, 1))
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new(format!("{count}")).small());
                             });
                     });
                 });
