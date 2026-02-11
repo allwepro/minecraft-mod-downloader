@@ -1,6 +1,6 @@
 use crate::common::app_icon::show_app_icon;
 use crate::common::modal_manager::SharedModalManager;
-use crate::common::notification_manager::SharedNotificationManager;
+use crate::common::notification_manager::{BasicNotification, SharedNotificationManager};
 use crate::common::pop_up_manager::SharedPopupManager;
 use crate::common::prefabs::view_controller::ViewController;
 use crate::common::program_args::SharedArgRegistry;
@@ -14,8 +14,22 @@ pub enum Tab {
     ResourceDownloader,
 }
 
+const KONAMI_CODE: &[egui::Key] = &[
+    egui::Key::ArrowUp,
+    egui::Key::ArrowUp,
+    egui::Key::ArrowDown,
+    egui::Key::ArrowDown,
+    egui::Key::ArrowLeft,
+    egui::Key::ArrowRight,
+    egui::Key::ArrowLeft,
+    egui::Key::ArrowRight,
+    egui::Key::B,
+    egui::Key::A,
+];
+
 pub struct App {
     _tokio_runtime: tokio::runtime::Runtime,
+    konami_index: usize,
     last_focused: bool,
 
     loaded: bool,
@@ -27,7 +41,7 @@ pub struct App {
     pub(crate) notification_manager: SharedNotificationManager,
 
     pub(crate) rd_manager: RDHandler,
-    // launcher_manager: LauncherManager,
+    // launcher_manager: LauncherManage
 }
 
 impl App {
@@ -44,6 +58,7 @@ impl App {
 
         Self {
             _tokio_runtime: runtime,
+            konami_index: 0,
             last_focused: true,
             loaded: false,
             open_tab: Tab::ResourceDownloader,
@@ -61,10 +76,46 @@ impl App {
             // launcher_manager: LauncherManager::new(rt_handle),
         }
     }
+
+    fn handle_konami_code(&mut self, ctx: &egui::Context) {
+        let mut triggered = false;
+        ctx.input(|i| {
+            for event in &i.events {
+                if let egui::Event::Key {
+                    key,
+                    pressed: true,
+                    repeat: false,
+                    ..
+                } = event
+                {
+                    if *key == KONAMI_CODE[self.konami_index] {
+                        self.konami_index += 1;
+                        if self.konami_index == KONAMI_CODE.len() {
+                            triggered = true;
+                            self.konami_index = 0;
+                        }
+                    } else {
+                        self.konami_index = 0;
+                    }
+                }
+            }
+        });
+        if triggered {
+            self.notification_manager.notify(Box::new(BasicNotification::new(
+                "🎉 Konami Code Activated!",
+                "You found the easter egg!",
+            )));
+            ctx.open_url(egui::output::OpenUrl {
+                url: "https://www.dkhw.de/spenden/spendenformular-hauptsache-kinder/".to_string(),
+                new_tab: true,
+            });
+        }
+    }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.handle_konami_code(ctx);
         // 1. Update active state
         self.rd_manager.update_state(ctx);
         // self.launcher_manager.update_state(ctx);
