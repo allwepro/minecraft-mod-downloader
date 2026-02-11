@@ -5,6 +5,21 @@ use std::path::PathBuf;
 pub struct ListActions;
 
 impl ListActions {
+    pub fn get_list_resource_type(state: &SharedRDState, list_lnk: &ListLnk) -> ResourceType {
+        state
+            .read()
+            .list_pool
+            .get(list_lnk)
+            .map(|l| {
+                l.read()
+                    .get_resource_types()
+                    .first()
+                    .cloned()
+                    .unwrap_or(ResourceType::Mod)
+            })
+            .unwrap_or(ResourceType::Mod)
+    }
+
     pub fn create_list(
         state: SharedRDState,
         name: String,

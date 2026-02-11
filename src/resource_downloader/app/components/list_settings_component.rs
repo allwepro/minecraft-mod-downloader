@@ -10,7 +10,8 @@ use egui::Ui;
 pub struct ListSettingsComponent {
     state: SharedRDState,
     resource_types: Vec<ResourceType>,
-    hide_rt_and_name: bool,
+    hide_name: bool,
+    hide_rt: bool,
     pub new_list_name: String,
     pub new_resource_type: ResourceType,
     pub new_game_version: Option<GameVersion>,
@@ -24,7 +25,8 @@ impl ListSettingsComponent {
     pub fn new(state: SharedRDState) -> Self {
         Self {
             state: state.clone(),
-            hide_rt_and_name: false,
+            hide_name: false,
+            hide_rt: false,
             resource_types: RESOURCE_TYPES.to_vec(),
             new_list_name: state.read().config.read().default_list_name.clone(),
             new_resource_type: ResourceType::Mod,
@@ -39,7 +41,8 @@ impl ListSettingsComponent {
     pub fn new_with_rt(state: SharedRDState, resource_type: Vec<ResourceType>) -> Self {
         Self {
             state: state.clone(),
-            hide_rt_and_name: false,
+            hide_name: false,
+            hide_rt: false,
             new_resource_type: resource_type
                 .first()
                 .cloned()
@@ -61,7 +64,28 @@ impl ListSettingsComponent {
     ) -> Self {
         Self {
             state,
-            hide_rt_and_name: true,
+            hide_name: true,
+            hide_rt: true,
+            new_resource_type: resource_type,
+            resource_types: vec![resource_type],
+            new_list_name: default_name,
+            new_game_version: None,
+            new_game_loader: None,
+            new_download_dir: String::new(),
+            new_download_dir_edited: false,
+            new_do_updates: true,
+        }
+    }
+
+    pub fn new_wo_rt_with_default(
+        state: SharedRDState,
+        resource_type: ResourceType,
+        default_name: String,
+    ) -> Self {
+        Self {
+            state,
+            hide_name: false,
+            hide_rt: true,
             new_resource_type: resource_type,
             resource_types: vec![resource_type],
             new_list_name: default_name,
@@ -92,7 +116,8 @@ impl ListSettingsComponent {
         let do_updates = target_list.read().get_do_updates();
         Self {
             state,
-            hide_rt_and_name: true,
+            hide_name: true,
+            hide_rt: true,
             new_resource_type: resource_type,
             resource_types: vec![resource_type],
             new_list_name: String::new(),
@@ -114,12 +139,14 @@ impl ListSettingsComponent {
     }
 
     pub fn render_contents(&mut self, ui: &mut Ui) {
-        if !self.hide_rt_and_name {
+        if !self.hide_name {
             ui.label("List Name:");
             ui.text_edit_singleline(&mut self.new_list_name);
 
             ui.add_space(10.0);
+        }
 
+        if !self.hide_rt {
             ui.label("Content Type:");
             let rts = self.resource_types.clone();
             egui::ComboBox::from_id_salt("new_list_type_selector")
