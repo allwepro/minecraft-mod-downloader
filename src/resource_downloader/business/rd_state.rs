@@ -488,6 +488,29 @@ impl RDState {
                             loader,
                         });
                     }
+
+                    let file_names: Vec<String> =
+                        candidates.iter().map(|c| c.cleaned_name.clone()).collect();
+                    self.dispatch(Effect::SearchFolderImportCandidates {
+                        file_names,
+                        resource_type,
+                        version: suggested_version.clone().unwrap_or(
+                            self.api()
+                                .game_version_pool
+                                .get_versions()
+                                .unwrap()
+                                .unwrap()[0]
+                                .clone(),
+                        ),
+                        loader: suggested_loader.clone().unwrap_or(
+                            self.api()
+                                .game_loader_pool
+                                .get_loaders(resource_type)
+                                .unwrap()
+                                .unwrap()[0]
+                                .clone(),
+                        ),
+                    });
                 }
                 Some(Event::FolderImportScanned {
                     path,
