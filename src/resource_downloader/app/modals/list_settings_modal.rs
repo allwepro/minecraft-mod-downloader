@@ -46,6 +46,12 @@ impl ModalWindow for ListSettingsModal {
                 *open = false;
             }
         });
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new(format!("ID: {}", self.list))
+                .small()
+                .color(egui::Color32::GRAY),
+        );
     }
 
     fn on_open(&mut self) {
@@ -76,6 +82,12 @@ impl ModalWindow for ListSettingsModal {
                 self.list_settings_component.new_download_dir.clone(),
             ),
         );
-        self.state.read().list_pool.save(&target_list.get_lnk());
+        target_list.set_do_updates(Some(self.list_settings_component.new_do_updates));
+        let lnk = target_list.get_lnk();
+        drop(target_list);
+        self.state.read().list_pool.save(&lnk);
+
+        let mut state = self.state.write();
+        state.request_full_refresh();
     }
 }

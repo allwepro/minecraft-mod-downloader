@@ -34,9 +34,10 @@ pub struct MainPanel {
     selected_projects: HashSet<ProjectLnk>,
     last_selected: Option<ProjectLnk>,
     current_list: Option<ListLnk>,
-    context_menu_target: Option<egui::Rect>,
+    context_menu_target: Option<(ProjectLnk, egui::Rect)>,
     should_scroll_into_view: Option<ProjectLnk>,
     expanded_depended_on: Option<ProjectLnk>,
+    debug_overlays: bool,
 }
 
 impl MainPanel {
@@ -53,10 +54,16 @@ impl MainPanel {
             context_menu_target: None,
             should_scroll_into_view: None,
             expanded_depended_on: None,
+            debug_overlays: false,
         }
     }
 
     pub fn show(&mut self, ctx: &Context, _ui: &mut Ui) {
+        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.modifiers.alt && i.key_pressed
+        (egui::Key::D)) {
+            self.debug_overlays = !self.debug_overlays;
+        }
+
         let (open_list_lnk, found_files_map, active_scans, pending_scroll) = {
             let mut s = self.state.write();
             (
@@ -108,6 +115,7 @@ impl MainPanel {
                 manual_prj_count,
                 show_archived,
                 show_unknown_mods,
+                auto_update_enabled,
             ) = {
                 let list = list_arc.read();
                 let rt_config = list
@@ -123,6 +131,7 @@ impl MainPanel {
                     list.count_manual_projects_by_type(content_type),
                     list.is_show_archived(),
                     list.is_show_unknown_mods(),
+                    list.get_do_updates(),
                 )
             };
 
@@ -212,6 +221,39 @@ impl MainPanel {
                 .map(|(_, h)| h.clone())
                 .collect();
 
+            let filtered =
+                self.get_filtered_projects(&list_arc, &content_type, &found_hashes, &ver, &loader);
+
+            let mut any_updates_available = false;
+            if !auto_update_enabled {
+                for p_lnk in &filtered {
+                    let vers = get_project_versions!(
+                        self.state,
+                        p_lnk.clone(),
+                        content_type,
+                        ver.clone(),
+                        loader.clone()
+                    );
+                    if let Ok(Some(v_list)) = vers
+                        && !v_list.is_empty()
+                    {
+                        let latest = v_list.first().unwrap();
+                        let list_guard = list_arc.read();
+                        if let Some(proj) = list_guard.get_project(p_lnk) {
+                            if let Some(cur_v) = proj.get_version() {
+                                if cur_v.artifact_hash != latest.artifact_hash {
+                                    any_updates_available = true;
+                                    break;
+                                }
+                            } else {
+                                any_updates_available = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             let row_height = 32.0;
             let full_rect = ui.available_rect_before_wrap();
             let full_rect =
@@ -251,38 +293,33 @@ impl MainPanel {
                 .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let missing: Vec<ProjectLnk> = {
-                            self.get_filtered_projects(
-                                &list_arc,
-                                &content_type,
-                                &found_hashes,
-                                &ver,
-                                &loader,
-                            )
-                            .into_iter()
-                            .filter(|p| {
-                                let list = list_arc.read();
-                                if let Some(proj) = list.get_project(p) {
-                                    let is_downloaded = proj
-                                        .get_version()
-                                        .is_some_and(|v| found_hashes.contains(&v.artifact_hash));
-                                    !list.is_project_archived(p) && !is_downloaded
-                                } else {
-                                    false
-                                }
-                            })
-                            .collect()
+                            filtered
+                                .iter()
+                                .filter(|p| {
+                                    let list = list_arc.read();
+                                    if let Some(proj) = list.get_project(p) {
+                                        let is_downloaded = proj.get_version().is_some_and(|v| {
+                                            found_hashes.contains(&v.artifact_hash)
+                                        });
+                                        !list.is_project_archived(p) && !is_downloaded
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .cloned()
+                                .collect()
                         };
 
-                        if ui
-                            .add_enabled(
-                                !missing.is_empty(),
-                                egui::Button::new(
-                                    egui::RichText::new("⬇ Download All")
-                                        .color(Color32::LIGHT_BLUE),
-                                ),
-                            )
-                            .clicked()
-                        {
+                        let mut combined_res: Option<egui::Response>;
+
+                        let res1 = ui.add_enabled(
+                            !missing.is_empty(),
+                            egui::Button::new(
+                                egui::RichText::new("⬇ Download All").color(Color32::LIGHT_BLUE),
+                            ),
+                        );
+
+                        if res1.clicked() {
                             ProjectActions::download_projects_latest(
                                 self.state.clone(),
                                 lnk.clone(),
@@ -290,9 +327,33 @@ impl MainPanel {
                                 &found_hashes,
                             );
                         }
+                        combined_res = Some(res1);
+
+                        if !auto_update_enabled && any_updates_available {
+                            let res2 = ui
+                                .button(
+                                    egui::RichText::new("🔄 Update All")
+                                        .color(Color32::from_rgb(0, 150, 240)),
+                                )
+                                .on_hover_text("Update all projects to their latest versions");
+
+                            if res2.clicked() {
+                                ProjectActions::update_all_projects(
+                                    self.state.clone(),
+                                    lnk.clone(),
+                                );
+                            }
+
+                            if let Some(res) = combined_res {
+                                combined_res = Some(res.union(res2));
+                            } else {
+                                combined_res = Some(res2);
+                            }
+                        }
+
+                        combined_res.map(|r| r.rect).unwrap_or(egui::Rect::NOTHING)
                     })
-                    .response
-                    .rect
+                    .inner
                 })
                 .inner;
 
@@ -309,13 +370,25 @@ impl MainPanel {
             });
             let controls_width = measure_res.response.rect.width();
 
-            let left_boundary = left_rect.max.x + 8.0;
-            let right_boundary = right_rect.min.x - 8.0;
-            let available_width_between = (right_boundary - left_boundary).max(0.0);
+            let left_boundary = if left_rect.is_positive() {
+                left_rect.max.x + 12.0
+            } else {
+                full_rect.min.x
+            };
+            let right_boundary = if right_rect.is_positive() {
+                right_rect.min.x - 12.0
+            } else {
+                full_rect.max.x
+            };
 
-            let ideal_center_x = full_rect.center().x;
+            let available_center = (left_boundary + right_boundary) / 2.0;
+            let ideal_center_x = if (available_center - full_rect.center().x).abs() < 50.0 {
+                full_rect.center().x
+            } else {
+                available_center
+            };
+
             let ideal_left = ideal_center_x - (controls_width / 2.0);
-
             let mut final_left = ideal_left.max(left_boundary);
 
             if final_left + controls_width > right_boundary {
@@ -325,12 +398,40 @@ impl MainPanel {
                 }
             }
 
-            let final_width = controls_width.min(available_width_between);
+            let final_width = controls_width.min(available_center);
 
             let center_rect = egui::Rect::from_min_size(
                 egui::pos2(final_left, full_rect.min.y),
                 egui::vec2(final_width, full_rect.height()),
             );
+
+            if self.debug_overlays {
+                let painter = ui.ctx().debug_painter();
+                painter.rect_filled(
+                    full_rect,
+                    0.0,
+                    Color32::from_rgba_unmultiplied(0, 0, 255, 20),
+                ); // Blue overlay for header
+                if left_rect.is_positive() {
+                    painter.rect_filled(
+                        left_rect,
+                        0.0,
+                        Color32::from_rgba_unmultiplied(0, 255, 0, 40),
+                    ); // Green overlay for left buttons
+                }
+                if right_rect.is_positive() {
+                    painter.rect_filled(
+                        right_rect,
+                        0.0,
+                        Color32::from_rgba_unmultiplied(255, 0, 0, 40),
+                    ); // Red overlay for right buttons
+                }
+                painter.rect_filled(
+                    center_rect,
+                    0.0,
+                    Color32::from_rgba_unmultiplied(255, 255, 0, 40),
+                ); // Yellow overlay for center controls
+            }
 
             ui.scope_builder(egui::UiBuilder::new().max_rect(center_rect), |ui| {
                 ui.centered_and_justified(|ui| {
@@ -362,10 +463,10 @@ impl MainPanel {
                     if has_clipboard {
                         ui.add_space(10.0);
                         if ui
-                            .add(egui::Button::new(
-                                egui::RichText::new(format!("📋 Paste from {}", clip_list_name))
-                                    .color(Color32::LIGHT_BLUE),
-                            ))
+                            .add(egui::Button::new(egui::RichText::new(format!(
+                                "📋 Paste from {}",
+                                clip_list_name
+                            ))))
                             .clicked()
                         {
                             self.state.write().paste_clipboard(lnk.clone());
@@ -480,7 +581,7 @@ impl MainPanel {
             }
         });
 
-        if let Some(rect) = self.context_menu_target {
+        if let Some((_target_project, rect)) = &self.context_menu_target {
             let pm = self.state.read().popup_manager.clone();
             let menu_id = egui::Id::new("multi_select_context_menu");
 
@@ -491,8 +592,8 @@ impl MainPanel {
                         open_lnk.clone(),
                         self.selected_projects.clone(),
                     );
-                    pm.register_interaction_area(menu_id, rect);
-                    pm.request_show(Box::new(menu), rect);
+                    pm.register_interaction_area(menu_id, *rect);
+                    pm.request_show(Box::new(menu), *rect);
                 }
             } else {
                 self.context_menu_target = None;
@@ -525,6 +626,8 @@ impl MainPanel {
             (meta, vers)
         };
 
+        let auto_update_enabled = list_arc.read().get_do_updates();
+
         if let (Ok(Some(meta)), Ok(Some(vers))) = (&metadata, &versions)
             && !vers.is_empty()
         {
@@ -532,9 +635,14 @@ impl MainPanel {
             let mut list = list_arc.write();
             if let Some(project) = list.get_project_mut(p_lnk) {
                 project.update_cache(meta.clone());
-                if project.get_version().is_none()
-                    || project.get_version().unwrap().version_id != latest.version_id
-                {
+
+                let is_missing_version = project.get_version().is_none();
+                let is_new_version_available = project
+                    .get_version()
+                    .as_ref()
+                    .is_some_and(|v| v.version_id != latest.version_id);
+
+                if is_missing_version || (auto_update_enabled && is_new_version_available) {
                     drop(list);
                     self.state.read().list_pool.select_version(
                         &list_arc.read().get_lnk(),
@@ -548,7 +656,7 @@ impl MainPanel {
         let (
             name,
             author,
-            _version_id,
+            version_id,
             is_archived,
             is_overruled,
             cur_hash,
@@ -587,18 +695,40 @@ impl MainPanel {
         let is_downloaded = disk_hash.is_some() && disk_hash == cur_hash;
 
         let mut is_updatable = false;
-        let mut version_name = "⏳";
+        let mut is_version_outdated = false;
+        let mut latest_version_name = "⏳".to_string();
+        let mut current_version_name = None;
 
         if let Ok(Some(vers)) = &versions
             && !vers.is_empty()
         {
             let latest = vers.first().unwrap();
-            version_name = &latest.version_name;
+            latest_version_name = latest.version_name.clone();
+
+            if let Some(vid) = &version_id {
+                current_version_name = vers
+                    .iter()
+                    .find(|v| &v.version_id == vid)
+                    .map(|v| v.version_name.clone());
+
+                is_version_outdated = vid != &latest.version_id;
+            }
+
             is_updatable = is_file_present && disk_hash.as_ref() != Some(&latest.artifact_hash);
         }
 
-        if version_name.starts_with("v") {
-            version_name = &version_name[1..];
+        let mut display_version = if let Some(cur) = current_version_name {
+            if is_version_outdated {
+                format!("v{} -> v{}", cur, latest_version_name)
+            } else {
+                format!("v{}", cur)
+            }
+        } else {
+            format!("v{}", latest_version_name)
+        };
+
+        if display_version.contains("vv") {
+            display_version = display_version.replace("vv", "v");
         }
 
         let compatibility = if let Ok(Some(vers)) = &versions {
@@ -707,15 +837,10 @@ impl MainPanel {
                                     );
                                 }
                                 _ => {
-                                    let btn_label = if is_updatable {
-                                        "🔄 Update"
-                                    } else {
-                                        "Download"
-                                    };
+                                    let btn_label = "Download";
                                     let can_dl =
                                         matches!(compatibility, Some(true)) || is_overruled;
-                                    let ui_enabled = is_updatable
-                                        || can_dl && !is_downloaded && has_loaded_files;
+                                    let ui_enabled = can_dl && !is_downloaded && has_loaded_files;
 
                                     let latest_version = if let Ok(Some(v_list)) = &versions {
                                         v_list.first()
@@ -724,7 +849,7 @@ impl MainPanel {
                                     };
 
                                     let btn = ui.add_enabled(
-                                        ui_enabled && (latest_version.is_some() || is_updatable),
+                                        ui_enabled && latest_version.is_some(),
                                         egui::Button::new(
                                             egui::RichText::new(btn_label)
                                                 .color(Color32::LIGHT_BLUE),
@@ -743,7 +868,7 @@ impl MainPanel {
                                         );
                                     }
 
-                                    if is_downloaded && !is_updatable {
+                                    if is_downloaded {
                                         ui.label("✅");
                                     }
                                 }
@@ -775,9 +900,11 @@ impl MainPanel {
                                     }
                                 } else {
                                     ui.label(
-                                        egui::RichText::new(format!("v{version_name} by {author}"))
-                                            .small()
-                                            .weak(),
+                                        egui::RichText::new(format!(
+                                            "{display_version} by {author}"
+                                        ))
+                                        .small()
+                                        .weak(),
                                     );
                                 }
 
@@ -831,7 +958,7 @@ impl MainPanel {
 
                                         if is_updatable {
                                             ui.colored_label(
-                                                Color32::from_rgb(100, 200, 255),
+                                                Color32::from_rgb(0, 150, 240),
                                                 "🔄 Update Available",
                                             );
                                         }
@@ -928,9 +1055,15 @@ impl MainPanel {
                     self.selected_projects.insert(p_lnk.clone());
                     self.last_selected = Some(p_lnk.clone());
                 }
-                self.context_menu_target = Some(response.rect);
+                self.context_menu_target = Some((p_lnk.clone(), response.rect));
                 let menu_id = egui::Id::new("multi_select_context_menu");
                 self.state.read().popup_manager.toggle(menu_id);
+            }
+
+            if let Some((target_lnk, _)) = &self.context_menu_target
+                && target_lnk == p_lnk
+            {
+                self.context_menu_target = Some((p_lnk.clone(), response.rect));
             }
 
             if let Some(ref expanded_id) = self.expanded_depended_on.clone()
@@ -991,22 +1124,31 @@ impl MainPanel {
                     ui.add_sized([28.0, 24.0], egui::Spinner::new())
                         .on_hover_text("Loading files...")
                 } else {
-                    ui.button("🔄").on_hover_text("Refresh files from disk")
+                    ui.button("🔄").on_hover_text(
+                        "Refresh files from disk (Shift+Click to recalculate dependencies)",
+                    )
                 };
 
                 if button_res.clicked() && !is_measurement {
-                    {
-                        let mut state = self.state.write();
-                        state.found_files.clear();
-                        state.active_scans.clear();
-                    }
+                    if ui.input(|i| i.modifiers.shift) {
+                        ListActions::refresh_dependencies(
+                            self.state.clone(),
+                            list_arc.read().get_lnk(),
+                        );
+                    } else {
+                        {
+                            let mut state = self.state.write();
+                            state.request_full_refresh();
+                        }
 
-                    let list = list_arc.read();
-                    for rt in list.get_resource_types() {
-                        if let Some(tc) = list.get_resource_type_config(&rt) {
-                            self.state
-                                .write()
-                                .find_files(tc.download_dir.clone().into(), rt.file_extension());
+                        let list = list_arc.read();
+                        for rt in list.get_resource_types() {
+                            if let Some(tc) = list.get_resource_type_config(&rt) {
+                                self.state.write().find_files(
+                                    tc.download_dir.clone().into(),
+                                    rt.file_extension(),
+                                );
+                            }
                         }
                     }
                 }

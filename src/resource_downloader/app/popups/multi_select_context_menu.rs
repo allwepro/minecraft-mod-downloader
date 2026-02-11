@@ -1,8 +1,9 @@
 use crate::common::prefabs::popup_window::Popup;
 use crate::get_list;
+use crate::get_project_versions;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::project_actions::ProjectActions;
-use crate::resource_downloader::domain::{ListLnk, ProjectLnk};
+use crate::resource_downloader::domain::{ListLnk, ProjectLnk, ResourceType};
 use eframe::egui;
 use egui::{Color32, Id, Ui};
 use std::collections::HashSet;
@@ -25,6 +26,52 @@ impl MultiSelectContextMenu {
 
     fn show_content(&self, ui: &mut Ui, open: &mut bool) {
         let has_selection = !self.selected.is_empty();
+        let list_arc = get_list!(self.state, &self.list_lnk);
+
+        let (auto_update_enabled, game_ver, loader, content_type) = {
+            let list = list_arc.read();
+            let content_type = list
+                .get_resource_types()
+                .first()
+                .cloned()
+                .unwrap_or(ResourceType::Mod);
+            let config = list.get_resource_type_config(&content_type).unwrap();
+            (
+                list.get_do_updates(),
+                list.get_game_version(),
+                config.loader.clone(),
+                content_type,
+            )
+        };
+
+        let mut updates_available = Vec::new();
+        if !auto_update_enabled {
+            for p_lnk in &self.selected {
+                let vers = get_project_versions!(
+                    self.state,
+                    p_lnk.clone(),
+                    content_type,
+                    game_ver.clone(),
+                    loader.clone()
+                );
+                if let Ok(Some(v_list)) = vers
+                    && !v_list.is_empty()
+                {
+                    let latest = v_list.first().unwrap();
+                    let list_guard = list_arc.read();
+                    if let Some(proj) = list_guard.get_project(p_lnk) {
+                        if let Some(cur_v) = proj.get_version() {
+                            if cur_v.artifact_hash != latest.artifact_hash {
+                                updates_available.push(p_lnk.clone());
+                            }
+                        } else {
+                            updates_available.push(p_lnk.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         let (has_clipboard, clip_is_cut, clip_list_name) = {
             let s = self.state.read();
             if let Some(c) = &s.clipboard {
@@ -41,8 +88,7 @@ impl MultiSelectContextMenu {
 
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
             if has_selection {
-                let copy_btn =
-                    egui::Button::new(egui::RichText::new("📋  Copy").color(Color32::LIGHT_GREEN));
+                let copy_btn = egui::Button::new(egui::RichText::new("📋  Copy"));
                 if ui.add(copy_btn).clicked() {
                     let items: Vec<_> = self.selected.iter().cloned().collect();
                     self.state
@@ -51,8 +97,7 @@ impl MultiSelectContextMenu {
                     *open = false;
                 }
 
-                let cut_btn =
-                    egui::Button::new(egui::RichText::new("✂  Cut").color(Color32::LIGHT_RED));
+                let cut_btn = egui::Button::new(egui::RichText::new("✂  Cut"));
                 if ui.add(cut_btn).clicked() {
                     let items: Vec<_> = self.selected.iter().cloned().collect();
                     self.state
@@ -71,8 +116,7 @@ impl MultiSelectContextMenu {
                     format!("📋  Paste (Copy from {})", clip_list_name)
                 };
 
-                let paste_btn =
-                    egui::Button::new(egui::RichText::new(label).color(Color32::LIGHT_BLUE));
+                let paste_btn = egui::Button::new(egui::RichText::new(label));
 
                 if ui.add(paste_btn).clicked() {
                     self.state.write().paste_clipboard(self.list_lnk.clone());
@@ -82,7 +126,6 @@ impl MultiSelectContextMenu {
             }
         });
 
-        let list_arc = get_list!(self.state, &self.list_lnk);
         let (num_archived, num_not_archived) = {
             let list = list_arc.read();
             let mut archived = 0;
@@ -108,8 +151,24 @@ impl MultiSelectContextMenu {
         }
 
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+            if !updates_available.is_empty() {
+                let update_btn = egui::Button::new(
+                    egui::RichText::new(format!("🔄  Update {} Selected", updates_available.len()))
+                        .color(Color32::from_rgb(0, 150, 240)),
+                );
+                if ui.add(update_btn).clicked() {
+                    ProjectActions::update_selected_projects(
+                        self.state.clone(),
+                        self.list_lnk.clone(),
+                        updates_available,
+                    );
+                    *open = false;
+                }
+                ui.separator();
+            }
+
             let download_btn = egui::Button::new(
-                egui::RichText::new("⬇  Download All Selected").color(Color32::LIGHT_BLUE),
+                egui::RichText::new("⬇  Download Selected").color(Color32::LIGHT_BLUE),
             );
             if ui.add(download_btn).clicked() {
                 let found_hashes: HashSet<String> = self
