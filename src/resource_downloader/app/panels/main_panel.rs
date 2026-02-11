@@ -695,10 +695,6 @@ impl MainPanel {
                 return;
             };
 
-            println!("Checking id for project: {}", proj.get_id());
-            if proj.get_id() == "BVzZfTc1" {
-                println!("Dependents: {:?}", proj.has_dependents());
-            }
             (
                 proj.get_name(),
                 proj.get_author(),
