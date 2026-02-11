@@ -2,6 +2,7 @@ use crate::common::prefabs::popup_window::Popup;
 use crate::get_list;
 use crate::get_project_versions;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::business::project_actions::ProjectActions;
 use crate::resource_downloader::domain::{ListLnk, ProjectLnk, ResourceType};
 use eframe::egui;
@@ -72,7 +73,7 @@ impl MultiSelectContextMenu {
             }
         }
 
-        let (has_clipboard, clip_is_cut, clip_list_name) = {
+        let (has_clipboard, clip_is_cut, clip_list_name, clip_resource_type) = {
             let s = self.state.read();
             if let Some(c) = &s.clipboard {
                 let name = s
@@ -80,9 +81,10 @@ impl MultiSelectContextMenu {
                     .get(&c.source_list)
                     .map(|l| l.read().get_name())
                     .unwrap_or_default();
-                (true, c.is_cut, name)
+                let rt = ListActions::get_list_resource_type(&self.state, &c.source_list);
+                (true, c.is_cut, name, Some(rt))
             } else {
-                (false, false, String::new())
+                (false, false, String::new(), None)
             }
         };
 
@@ -116,9 +118,17 @@ impl MultiSelectContextMenu {
                     format!("📋  Paste (Copy from {})", clip_list_name)
                 };
 
-                let paste_btn = egui::Button::new(egui::RichText::new(label));
+                let target_rt = ListActions::get_list_resource_type(&self.state, &self.list_lnk);
+                let types_match = clip_resource_type.map(|rt| rt == target_rt).unwrap_or(true);
 
-                if ui.add(paste_btn).clicked() {
+                let paste_btn = egui::Button::new(egui::RichText::new(label));
+                let mut response = ui.add_enabled(types_match, paste_btn);
+
+                if !types_match {
+                    response = response.on_disabled_hover_text("Cannot paste: wrong resource type");
+                }
+
+                if response.clicked() {
                     self.state.write().paste_clipboard(self.list_lnk.clone());
                     *open = false;
                 }

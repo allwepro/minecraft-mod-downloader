@@ -157,6 +157,10 @@ impl RDState {
                 .cloned()
                 .unwrap_or(ResourceType::Mod);
 
+            if s_list_resource_type != t_list_resource_type {
+                return;
+            }
+
             let versions_match = s_list.get_game_version() == t_list.get_game_version()
                 && s_list
                     .get_resource_type_config(&s_list_resource_type)
