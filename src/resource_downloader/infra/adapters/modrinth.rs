@@ -34,6 +34,7 @@ struct ModrinthSearchedProject {
 
 #[derive(Deserialize)]
 struct ModrinthProjectDetails {
+    id: String,
     slug: String,
     title: String,
     description: String,
@@ -615,7 +616,7 @@ impl ModrinthProvider {
         }
 
         Ok((
-            ProjectLnk::from(&id_or_slug),
+            ProjectLnk::from(&project_details.id),
             RTProjectData {
                 slug: project_details.slug,
                 name: project_details.title,
