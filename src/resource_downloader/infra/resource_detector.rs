@@ -285,6 +285,11 @@ impl ResourceDetector {
             ("Notenoughanimations", "Not Enough Animations"),
             ("Skinlayers3d", "3D Skin Layers"),
             ("Yet Another Config Lib", "YetAnotherConfigLib (YACL)"),
+            ("SoundPhysicsRemastered", "Sound Physics Remastered"),
+            ("Fullbrightnesstoggle", "Full Brightness Toggle"),
+            ("Xaerominimap", "Xaero's Minimap"),
+            ("Xaerominimap", "Xaero's Minimap"),
+            ("ClothConfigAPI", "Cloth Config API"),
             // Doing a space insertion at uppercase boundaries to catch more cases,
             // but this causes some false positives that need to be remapped back
             // like "TweakerMore" cant be found with a space
