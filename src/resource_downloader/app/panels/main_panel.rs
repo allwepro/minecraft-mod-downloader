@@ -1369,7 +1369,7 @@ impl MainPanel {
             .map(|p| p.get_safe_filename())
             .collect();
 
-        combined_found_files
+        let mut list = combined_found_files
             .iter()
             .filter(|(path, _hash)| {
                 let name = path
@@ -1385,7 +1385,9 @@ impl MainPanel {
                 !is_known_name && matches_query
             })
             .cloned()
-            .collect()
+            .collect::<Vec<(PathBuf, String)>>();
+        list.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+        list
     }
 
     fn render_unknown_entry(&self, ui: &mut Ui, path: PathBuf, filename: &str) {

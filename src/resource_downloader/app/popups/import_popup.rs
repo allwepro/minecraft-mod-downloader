@@ -1,4 +1,5 @@
 use crate::common::prefabs::popup_window::Popup;
+use crate::get_default_dir;
 use crate::resource_downloader::app::dialogs::Dialogs;
 use crate::resource_downloader::app::modals::folder_import_modal::FolderImportModal;
 use crate::resource_downloader::app::modals::legacy_import_modal::LegacyImportModal;
@@ -6,6 +7,7 @@ use crate::resource_downloader::app::modals::modrinth_collection_import_modal::M
 use crate::resource_downloader::app::notifications::fail_notification::FailedNotification;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::list_actions::ListActions;
+use crate::resource_downloader::domain::ResourceType::Mod;
 use egui::{Color32, Id, Ui};
 
 #[derive(Clone)]
@@ -74,7 +76,8 @@ impl Popup for ImportPopup {
             .clicked()
         {
             *open = false;
-            if let Some(path) = Dialogs::pick_folder() {
+            let mut folder = get_default_dir!(self.state, &Mod);
+            if let Some(path) = Dialogs::pick_folder(&mut folder) {
                 self.state.write().start_folder_import(path, None);
                 let sm = FolderImportModal::new(self.state.clone());
                 self.state.read().submit_modal(Box::new(sm));

@@ -252,7 +252,7 @@ impl RTProjectPool {
         self.cache.warm(
             CacheType::ProjectSlug,
             ctx,
-            Arc::new(project.to_context_id()) as AnyCacheData,
+            Arc::new(project) as AnyCacheData,
         );
     }
 

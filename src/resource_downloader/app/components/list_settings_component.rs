@@ -205,8 +205,7 @@ impl ListSettingsComponent {
 
         ui.horizontal(|ui| {
             if self.new_download_dir.is_empty() {
-                self.new_download_dir =
-                    get_default_dir!(self.state, &self.new_resource_type).clone();
+                self.new_download_dir = get_default_dir!(self.state, &self.new_resource_type);
             }
 
             if ui
@@ -217,9 +216,9 @@ impl ListSettingsComponent {
             }
 
             if ui.button("Browse...").clicked() {
-                self.new_download_dir_edited =
-                    Dialogs::pick_minecraft_mods_folder(&mut self.new_download_dir).is_some()
-                        || self.new_download_dir_edited;
+                self.new_download_dir_edited = Dialogs::pick_folder(&mut self.new_download_dir)
+                    .is_some()
+                    || self.new_download_dir_edited;
             }
         });
 
