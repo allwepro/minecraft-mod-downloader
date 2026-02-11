@@ -310,4 +310,3 @@ impl Notification for BasicNotification {
         None
     }
 }
-

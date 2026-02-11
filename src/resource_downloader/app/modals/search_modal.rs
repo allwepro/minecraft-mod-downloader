@@ -147,22 +147,20 @@ impl ModalWindow for SearchModal {
                             match metadata {
                                 Ok(Some(data)) => {
                                     ui.horizontal(|ui| {
-                                        let icon_tex =
-                                            get_project_icon_texture!(self.state, &project);
-                                        if !data.icon_url.is_empty() {
-                                            if let Some(handle) = icon_tex {
-                                                ui.add(
-                                                    egui::Image::from_texture(&handle)
-                                                        .fit_to_exact_size(egui::vec2(32.0, 32.0)),
-                                                );
-                                            } else {
-                                                ui.add_sized(
-                                                    egui::vec2(32.0, 32.0),
-                                                    egui::Spinner::new(),
-                                                );
-                                            }
+                                        let icon_tex = get_project_icon_texture!(
+                                            self.state, &project, &data.name
+                                        );
+
+                                        if let Some(handle) = icon_tex {
+                                            ui.add(
+                                                egui::Image::from_texture(&handle)
+                                                    .fit_to_exact_size(egui::vec2(32.0, 32.0)),
+                                            );
                                         } else {
-                                            ui.add_space(32.0);
+                                            ui.add_sized(
+                                                egui::vec2(32.0, 32.0),
+                                                egui::Spinner::new(),
+                                            );
                                         }
                                         ui.add_space(4.0);
 

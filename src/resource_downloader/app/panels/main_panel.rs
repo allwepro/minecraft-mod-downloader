@@ -840,7 +840,7 @@ impl MainPanel {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
                     let icon_size = if is_dependency { 24.0 } else { 32.0 };
-                    if let Some(tex) = get_project_icon_texture!(self.state, p_lnk) {
+                    if let Some(tex) = get_project_icon_texture!(self.state, p_lnk, &name) {
                         ui.add(
                             egui::Image::from_texture(&tex)
                                 .fit_to_exact_size(egui::vec2(icon_size, icon_size)),
