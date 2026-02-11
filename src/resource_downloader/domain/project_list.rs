@@ -419,6 +419,8 @@ impl ProjectList {
         let mut mutation =
             MutationResult::new(MutationOutcome::VersionAdded).with_target(project.clone());
 
+        mutation.accumulate(self.clear_dependencies_internal(project));
+
         for dep in version.depended_on.as_slice() {
             if let Some(depended_on_project_target) = self.get_project_mut(&dep.project) {
                 depended_on_project_target.add_dependent(project.clone());
@@ -569,6 +571,23 @@ impl ProjectList {
     ) -> MutationResult {
         if !self.has_project(project) {
             return MutationResult::not_found();
+        }
+
+        if new_archived_state
+            && self
+                .get_project(project)
+                .is_some_and(|p| p.has_dependents())
+        {
+            let has_active_dependents = self
+                .get_project(project)
+                .unwrap()
+                .get_dependents()
+                .iter()
+                .any(|d| !self.is_project_archived(d));
+
+            if has_active_dependents {
+                return MutationResult::unchanged();
+            }
         }
 
         let mut dependencies_before = Vec::new();
