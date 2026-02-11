@@ -1,4 +1,5 @@
 use crate::resource_downloader::business::cache::ArtifactCallback;
+use crate::resource_downloader::business::rd_state::FolderImportCandidate;
 use crate::resource_downloader::domain::{
     AppConfig, GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ProjectVersion,
     RTProjectData, ResourceType,
@@ -198,6 +199,28 @@ pub enum Event {
         collection_id: String,
         error: String,
     },
+
+    // Folder Import
+    FolderImportScanned {
+        path: PathBuf,
+        resource_type: ResourceType,
+        candidates: Vec<FolderImportCandidate>,
+        suggested_version: Option<GameVersion>,
+        suggested_loader: Option<GameLoader>,
+    },
+    FailedFolderScan {
+        path: PathBuf,
+        resource_type: ResourceType,
+        error: String,
+    },
+    FolderImportProgress {
+        total: usize,
+        current: usize,
+        message: String,
+    },
+    FolderImportCandidatesFound {
+        results: HashMap<String, Vec<(ProjectLnk, String)>>,
+    },
 }
 
 pub enum InternalEvent {
@@ -249,5 +272,25 @@ pub enum InternalEvent {
         project: ProjectLnk,
         version: ProjectVersion,
         dependency_data: Vec<(ProjectLnk, ResourceType, RTProjectData)>,
+    },
+    FolderImportScanned {
+        path: PathBuf,
+        resource_type: ResourceType,
+        candidates: Vec<FolderImportCandidate>,
+        suggested_version: Option<GameVersion>,
+        suggested_loader: Option<GameLoader>,
+    },
+    FailedFolderScan {
+        path: PathBuf,
+        resource_type: ResourceType,
+        error: String,
+    },
+    FolderImportProgress {
+        total: usize,
+        current: usize,
+        message: String,
+    },
+    FolderImportCandidatesFound {
+        results: HashMap<String, Vec<(ProjectLnk, String)>>,
     },
 }
