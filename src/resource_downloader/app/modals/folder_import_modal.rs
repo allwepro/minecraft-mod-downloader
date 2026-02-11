@@ -1,12 +1,14 @@
 use crate::common::prefabs::modal_window::ModalWindow;
-use crate::get_default_dir;
 use crate::resource_downloader::app::components::list_settings_component::ListSettingsComponent;
 use crate::resource_downloader::app::dialogs::Dialogs;
+use crate::resource_downloader::app::modals::search_modal::{
+    SearchCloseCallback, SearchModal, SearchSelectionCallback,
+};
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::rd_state::FolderImportSession;
 use crate::resource_downloader::domain::{RESOURCE_TYPES, ResourceType};
+use crate::{get_default_dir, get_project_metadata};
 use egui::{Color32, Id, ScrollArea, Ui};
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 enum ImportStep {
@@ -22,29 +24,34 @@ pub struct FolderImportModal {
     step: ImportStep,
     selected_resource_type: ResourceType,
     selected_folder: String,
-    selected_matches: HashMap<usize, usize>,
-    skipped_items: HashSet<usize>,
-    exact_matches: HashSet<usize>,
-    manually_cleared: HashSet<usize>,
-    show_only_unresolved: bool,
+    transitioning_to_search: bool,
 }
 
 impl FolderImportModal {
     pub fn new(state: SharedRDState) -> Self {
-        let selected_resource_type = ResourceType::Mod;
-        let selected_folder = get_default_dir!(state, &selected_resource_type);
+        let (selected_resource_type, selected_folder, step) = {
+            let s = state.read();
+            if let Some(sess) = &s.folder_import_session {
+                let step = if sess.is_scanning {
+                    ImportStep::Scanning
+                } else {
+                    ImportStep::Review
+                };
+                (sess.resource_type, sess.path.display().to_string(), step)
+            } else {
+                let rt = ResourceType::Mod;
+                let folder = get_default_dir!(state, &rt);
+                (rt, folder, ImportStep::SelectFolder)
+            }
+        };
 
         Self {
             state,
             list_settings: None,
-            step: ImportStep::SelectFolder,
+            step,
             selected_resource_type,
             selected_folder,
-            selected_matches: HashMap::new(),
-            skipped_items: HashSet::new(),
-            exact_matches: HashSet::new(),
-            manually_cleared: HashSet::new(),
-            show_only_unresolved: false,
+            transitioning_to_search: false,
         }
     }
 
@@ -150,24 +157,24 @@ impl ModalWindow for FolderImportModal {
             }
 
             ImportStep::Review => {
-                let session = self.state.read().folder_import_session.clone();
+                let session_opt = self.state.read().folder_import_session.clone();
 
-                if let Some(sess) = session {
-                    self.auto_select_exact_matches(&sess);
+                if let Some(mut sess) = session_opt {
+                    self.auto_select_exact_matches(&mut sess);
 
                     let unresolved_count = sess
                         .candidates
                         .iter()
                         .enumerate()
                         .filter(|(idx, _)| {
-                            let is_skipped = self.skipped_items.contains(idx);
-                            let has_selection = self.selected_matches.contains_key(idx);
+                            let is_skipped = sess.skipped_items.contains(idx);
+                            let has_selection = sess.selected_matches.contains_key(idx);
                             !is_skipped && !has_selection
                         })
                         .count();
 
                     if unresolved_count == 0 {
-                        self.show_only_unresolved = false;
+                        sess.show_only_unresolved = false;
                     }
 
                     ui.horizontal(|ui| {
@@ -177,14 +184,14 @@ impl ModalWindow for FolderImportModal {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    let filter_text = if self.show_only_unresolved {
+                                    let filter_text = if sess.show_only_unresolved {
                                         "Show All".to_string()
                                     } else {
                                         format!("Show Unresolved ({})", unresolved_count)
                                     };
 
                                     if ui.button(filter_text).clicked() {
-                                        self.show_only_unresolved = !self.show_only_unresolved;
+                                        sess.show_only_unresolved = !sess.show_only_unresolved;
                                     }
                                 },
                             );
@@ -198,11 +205,11 @@ impl ModalWindow for FolderImportModal {
 
                     ScrollArea::vertical().max_height(400.0).show(ui, |ui| {
                         for (idx, candidate) in sess.candidates.iter().enumerate() {
-                            let is_skipped = self.skipped_items.contains(&idx);
-                            let has_selection = self.selected_matches.contains_key(&idx);
+                            let is_skipped = sess.skipped_items.contains(&idx);
+                            let has_selection = sess.selected_matches.contains_key(&idx);
                             let is_resolved = is_skipped || has_selection;
 
-                            if self.show_only_unresolved && is_resolved {
+                            if sess.show_only_unresolved && is_resolved {
                                 continue;
                             }
 
@@ -234,18 +241,18 @@ impl ModalWindow for FolderImportModal {
                                                     .color(Color32::GRAY),
                                             );
                                             if ui.small_button("Undo").clicked() {
-                                                self.skipped_items.remove(&idx);
+                                                sess.skipped_items.remove(&idx);
                                             }
                                         });
                                     } else {
                                         match &candidate.search_results {
                                             Some(matches) if !matches.is_empty() => {
                                                 let selected_idx =
-                                                    self.selected_matches.get(&idx).copied();
+                                                    sess.selected_matches.get(&idx).copied();
 
                                                 if let Some(sel_idx) = selected_idx {
                                                     ui.horizontal(|ui| {
-                                                        if self.exact_matches.contains(&idx) {
+                                                        if sess.exact_matches.contains(&idx) {
                                                             ui.label(
                                                                 egui::RichText::new("Exact Match")
                                                                     .color(Color32::GREEN),
@@ -265,13 +272,24 @@ impl ModalWindow for FolderImportModal {
                                                             ui.label(format!("- {}", name));
                                                         }
 
-                                                        if (matches.len() > 1
-                                                            || !self.exact_matches.contains(&idx))
-                                                            && ui.small_button("Change").clicked()
+                                                        if matches.len() > 1
+                                                            || !sess.exact_matches.contains(&idx)
                                                         {
-                                                            self.selected_matches.remove(&idx);
-                                                            self.exact_matches.remove(&idx);
-                                                            self.manually_cleared.insert(idx);
+                                                            if ui.small_button("Change").clicked() {
+                                                                sess.selected_matches.remove(&idx);
+                                                                sess.exact_matches.remove(&idx);
+                                                                sess.manually_cleared.insert(idx);
+                                                            }
+
+                                                            if ui
+                                                                .selectable_label(
+                                                                    false,
+                                                                    "🔍 Search",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                self.open_search_for_candidate(idx);
+                                                            }
                                                         }
                                                     });
                                                 } else {
@@ -290,12 +308,23 @@ impl ModalWindow for FolderImportModal {
                                                                     .selectable_label(false, name)
                                                                     .clicked()
                                                                 {
-                                                                    self.selected_matches
+                                                                    sess.selected_matches
                                                                         .insert(idx, m_idx);
-                                                                    self.manually_cleared
+                                                                    sess.manually_cleared
                                                                         .remove(&idx);
                                                                 }
                                                             }
+
+                                                            if ui
+                                                                .selectable_label(
+                                                                    false,
+                                                                    "🔍 Search Manually...",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                self.open_search_for_candidate(idx);
+                                                            }
+
                                                             if ui
                                                                 .selectable_label(
                                                                     false,
@@ -303,8 +332,8 @@ impl ModalWindow for FolderImportModal {
                                                                 )
                                                                 .clicked()
                                                             {
-                                                                self.skipped_items.insert(idx);
-                                                                self.manually_cleared.remove(&idx);
+                                                                sess.skipped_items.insert(idx);
+                                                                sess.manually_cleared.remove(&idx);
                                                             }
                                                         });
                                                     });
@@ -318,8 +347,13 @@ impl ModalWindow for FolderImportModal {
                                                         egui::RichText::new("No matches found")
                                                             .color(Color32::RED),
                                                     );
+
+                                                    if ui.small_button("🔍 Search").clicked() {
+                                                        self.open_search_for_candidate(idx);
+                                                    }
+
                                                     if ui.small_button("Skip").clicked() {
-                                                        self.skipped_items.insert(idx);
+                                                        sess.skipped_items.insert(idx);
                                                     }
                                                 });
                                                 if !is_skipped {
@@ -340,6 +374,8 @@ impl ModalWindow for FolderImportModal {
                             });
                         }
                     });
+
+                    self.state.write().folder_import_session = Some(sess.clone());
 
                     ui.add_space(10.0);
 
@@ -394,7 +430,7 @@ impl ModalWindow for FolderImportModal {
                             let projects: Vec<_> = {
                                 let session = self.state.read().folder_import_session.clone();
                                 if let Some(sess) = session {
-                                    self.selected_matches
+                                    sess.selected_matches
                                         .iter()
                                         .filter_map(|(idx, match_idx)| {
                                             sess.candidates
@@ -431,14 +467,70 @@ impl ModalWindow for FolderImportModal {
     }
 
     fn on_close(&mut self) {
-        self.state.write().cancel_folder_import();
+        if !self.transitioning_to_search {
+            self.state.write().cancel_folder_import();
+        }
     }
 }
 
 impl FolderImportModal {
-    fn auto_select_exact_matches(&mut self, session: &FolderImportSession) {
+    fn open_search_for_candidate(&mut self, candidate_idx: usize) {
+        let (query, rt, ver, loader) = {
+            let s = self.state.read();
+            let sess = s.folder_import_session.as_ref().unwrap();
+            let cand = &sess.candidates[candidate_idx];
+            (
+                cand.cleaned_name.clone(),
+                sess.resource_type,
+                cand.detected_version.clone(),
+                cand.detected_loader.clone(),
+            )
+        };
+
+        self.transitioning_to_search = true;
+
+        let callback: SearchSelectionCallback = Box::new(move |state, project_lnk| {
+            let metadata = get_project_metadata!(state, project_lnk.clone(), rt);
+            if let Ok(Some(data)) = metadata {
+                let mut s = state.write();
+                if let Some(sess) = &mut s.folder_import_session {
+                    let cand = &mut sess.candidates[candidate_idx];
+                    let results = cand.search_results.get_or_insert_with(Vec::new);
+                    let match_idx = results.len();
+                    results.push((project_lnk, data.name));
+                    sess.selected_matches.insert(candidate_idx, match_idx);
+                    sess.manually_cleared.remove(&candidate_idx);
+                }
+            }
+            state
+                .read()
+                .submit_modal(Box::new(FolderImportModal::new(state.clone())));
+        });
+
+        let close_callback: SearchCloseCallback = Box::new(move |state| {
+            state
+                .read()
+                .submit_modal(Box::new(FolderImportModal::new(state.clone())));
+        });
+
+        let search_modal = SearchModal::new_with_callback(
+            self.state.clone(),
+            rt,
+            ver,
+            loader,
+            query,
+            callback,
+            close_callback,
+        );
+
+        self.state.read().submit_modal(Box::new(search_modal));
+    }
+
+    fn auto_select_exact_matches(&mut self, session: &mut FolderImportSession) {
         for (idx, candidate) in session.candidates.iter().enumerate() {
-            if self.selected_matches.contains_key(&idx) || self.manually_cleared.contains(&idx) {
+            if session.selected_matches.contains_key(&idx)
+                || session.manually_cleared.contains(&idx)
+            {
                 continue;
             }
 
@@ -452,10 +544,10 @@ impl FolderImportModal {
                             - normalized_project_name.len() as i32)
                             .abs();
 
-                        self.selected_matches.insert(idx, 0);
+                        session.selected_matches.insert(idx, 0);
 
                         if normalized_file_name == normalized_project_name && length_diff <= 2 {
-                            self.exact_matches.insert(idx);
+                            session.exact_matches.insert(idx);
                         }
                     }
                 } else if matches.len() > 1 {
@@ -466,8 +558,8 @@ impl FolderImportModal {
                             .abs();
 
                         if normalized_file_name == normalized_project_name && length_diff <= 2 {
-                            self.selected_matches.insert(idx, match_idx);
-                            self.exact_matches.insert(idx);
+                            session.selected_matches.insert(idx, match_idx);
+                            session.exact_matches.insert(idx);
                             break;
                         }
                     }
