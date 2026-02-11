@@ -389,7 +389,8 @@ impl Project {
             .cache
             .name
             .chars()
-            .filter(|c| c.is_alphanumeric() || *c == '-')
+            .map(|c| if c == ' ' { '_' } else { c })
+            .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
             .collect();
         format!("{}.{}", safe_name, self.resource_type.file_extension())
     }

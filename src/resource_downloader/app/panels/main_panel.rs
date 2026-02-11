@@ -555,17 +555,44 @@ impl MainPanel {
                     if unknown_count > 0 {
                         ui.add_space(8.0);
                         ui.separator();
-                        if ui
-                            .button(format!(
-                                "{} Unknown Projects ({})",
-                                if show_unknown_mods { "🔽" } else { "▶" },
-                                unknown_count
-                            ))
-                            .clicked()
-                        {
-                            list_arc.write().set_show_unknown_mods(!show_unknown_mods);
-                            self.state.read().list_pool.save(&lnk);
-                        }
+                        ui.horizontal(|ui| {
+                            if ui
+                                .button(format!(
+                                    "{} Unknown Projects ({})",
+                                    if show_unknown_mods { "🔽" } else { "▶" },
+                                    unknown_count
+                                ))
+                                .clicked()
+                            {
+                                list_arc.write().set_show_unknown_mods(!show_unknown_mods);
+                                self.state.read().list_pool.save(&lnk);
+                            }
+
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .button(
+                                            egui::RichText::new("🗑 Delete All")
+                                                .color(Color32::LIGHT_RED),
+                                        )
+                                        .clicked()
+                                    {
+                                        let mut state = self.state.write();
+                                        for (path, _hash) in &unknown_files {
+                                            if let (Some(parent), Some(filename)) =
+                                                (path.parent(), path.file_name())
+                                            {
+                                                state.delete_artifact(
+                                                    parent.to_path_buf(),
+                                                    filename.to_string_lossy().to_string(),
+                                                );
+                                            }
+                                        }
+                                    }
+                                },
+                            );
+                        });
 
                         if show_unknown_mods {
                             for (path, _hash) in unknown_files {
