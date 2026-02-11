@@ -687,6 +687,7 @@ impl MainPanel {
             is_archived,
             cur_hash,
             has_dependents,
+            dependent_names,
             depended_on,
             filename,
         ) = {
@@ -702,6 +703,10 @@ impl MainPanel {
                 p.is_project_archived(p_lnk),
                 proj.get_version().map(|v| v.artifact_hash.clone()),
                 proj.has_dependents(),
+                proj.get_dependents()
+                    .iter()
+                    .filter_map(|d| p.get_project(d).map(|dp| dp.get_name()))
+                    .collect::<Vec<String>>(),
                 proj.get_version().map(|v| v.get_depended_ons().to_vec()),
                 proj.get_safe_filename(),
             )
@@ -802,16 +807,23 @@ impl MainPanel {
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if !is_dependency {
-                            if ui
+                            let delete_tooltip = if has_dependents {
+                                format!("Cannot delete: required by {}", dependent_names.join(", "))
+                            } else {
+                                "Remove from list".to_string()
+                            };
+
+                            let del_btn_res = ui
                                 .add_enabled(
                                     !has_dependents,
                                     egui::Button::new(
                                         egui::RichText::new("🗑").color(Color32::LIGHT_RED),
                                     ),
                                 )
-                                .on_hover_text("Remove from list")
-                                .clicked()
-                            {
+                                .on_disabled_hover_text(&delete_tooltip)
+                                .on_hover_text(&delete_tooltip);
+
+                            if del_btn_res.clicked() {
                                 ProjectActions::delete_projects(
                                     self.state.clone(),
                                     lnk.clone(),
@@ -824,7 +836,19 @@ impl MainPanel {
                             } else {
                                 "📁 Archive"
                             };
-                            if ui
+
+                            let archive_tooltip = if has_dependents {
+                                format!(
+                                    "Cannot archive: required by {}",
+                                    dependent_names.join(", ")
+                                )
+                            } else if is_archived {
+                                "Restore to list".to_string()
+                            } else {
+                                "Move to archive".to_string()
+                            };
+
+                            let arc_btn_res = ui
                                 .add_enabled(
                                     !has_dependents,
                                     egui::Button::new(
@@ -832,8 +856,10 @@ impl MainPanel {
                                             .color(Color32::LIGHT_YELLOW),
                                     ),
                                 )
-                                .clicked()
-                            {
+                                .on_disabled_hover_text(&archive_tooltip)
+                                .on_hover_text(&archive_tooltip);
+
+                            if arc_btn_res.clicked() {
                                 ProjectActions::archive_projects(
                                     self.state.clone(),
                                     lnk.clone(),
