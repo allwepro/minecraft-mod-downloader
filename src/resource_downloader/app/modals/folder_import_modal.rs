@@ -7,6 +7,7 @@ use crate::resource_downloader::business::rd_state::FolderImportSession;
 use crate::resource_downloader::domain::{RESOURCE_TYPES, ResourceType};
 use egui::{Color32, Id, ScrollArea, Ui};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 enum ImportStep {
     SelectFolder,
@@ -109,15 +110,11 @@ impl ModalWindow for FolderImportModal {
                 ui.add_space(20.0);
                 ui.horizontal(|ui| {
                     if ui.button("Import").clicked() {
-                        let path = std::path::PathBuf::from(&self.selected_folder);
+                        let path = PathBuf::from(&self.selected_folder);
                         self.state
                             .write()
                             .start_folder_import(path, Some(self.selected_resource_type));
                         self.step = ImportStep::Scanning;
-                    }
-
-                    if ui.button("Cancel").clicked() {
-                        *open = false;
                     }
                 });
             }
