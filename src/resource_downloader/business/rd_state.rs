@@ -331,7 +331,11 @@ impl RDState {
 
                 self.default_dirs = default_download_dir_by_type.clone();
 
-                self.set_open_list_no_save(config.last_open_list_id.clone());
+                if let Some(last_open) = &config.last_open_list_id
+                    && list_lnks.contains(last_open)
+                {
+                    self.set_open_list_no_save(Some(last_open.clone()));
+                }
 
                 Some(Event::Initialized {
                     config,
