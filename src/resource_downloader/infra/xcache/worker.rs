@@ -74,7 +74,9 @@ impl CoreCacheWorker {
 
                     self.rt_handle.spawn(async move {
                         let path = w_ctx.get_fragment_path(ty, &key);
-                        let _ = w_ctx.write_fragment(ty, &path, data).await;
+                        if let Err(e) = w_ctx.write_fragment(ty, &path, data).await {
+                            log::error!("Failed to inject fragment into disk cache: {e}");
+                        }
                     });
                 }
                 CacheCommand::Discard { ty, ctx } => {
