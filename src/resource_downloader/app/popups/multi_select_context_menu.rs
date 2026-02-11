@@ -140,6 +140,25 @@ impl MultiSelectContextMenu {
             (archived, not_archived)
         };
 
+        let blocking_dependents: Vec<(String, Vec<String>)> = self
+            .selected
+            .iter()
+            .filter_map(|p_lnk| {
+                let list = list_arc.read();
+                let proj = list.get_project(p_lnk)?;
+                if proj.has_dependents() {
+                    let deps = proj
+                        .get_dependents()
+                        .iter()
+                        .filter_map(|d| list.get_project(d).map(|dp| dp.get_name()))
+                        .collect();
+                    Some((proj.get_name(), deps))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         if has_selection {
             let count = self.selected.len();
             ui.label(
@@ -191,11 +210,33 @@ impl MultiSelectContextMenu {
 
             ui.separator();
 
+            let mut blocking_tooltip = String::new();
+            if !blocking_dependents.is_empty() {
+                blocking_tooltip =
+                    "Following projects have dependents and cannot be moved/removed:\n".to_string();
+                for (name, deps) in &blocking_dependents {
+                    blocking_tooltip.push_str(&format!(
+                        "• {}: required by {}\n",
+                        name,
+                        deps.join(", ")
+                    ));
+                }
+            }
+
             if num_not_archived > 0 {
-                let archive_btn = egui::Button::new(
-                    egui::RichText::new("📁  Archive Selected").color(Color32::LIGHT_YELLOW),
-                );
-                if ui.add(archive_btn).clicked() {
+                let enabled = blocking_dependents.len() < self.selected.len();
+                let btn_res = ui
+                    .add_enabled(
+                        enabled,
+                        egui::Button::new(
+                            egui::RichText::new("📁  Archive Selected")
+                                .color(Color32::LIGHT_YELLOW),
+                        ),
+                    )
+                    .on_disabled_hover_text(&blocking_tooltip)
+                    .on_hover_text(&blocking_tooltip);
+
+                if btn_res.clicked() {
                     ProjectActions::archive_projects(
                         self.state.clone(),
                         self.list_lnk.clone(),
@@ -207,10 +248,19 @@ impl MultiSelectContextMenu {
             }
 
             if num_archived > 0 {
-                let unarchive_btn = egui::Button::new(
-                    egui::RichText::new("📂  Unarchive Selected").color(Color32::LIGHT_YELLOW),
-                );
-                if ui.add(unarchive_btn).clicked() {
+                let enabled = blocking_dependents.len() < self.selected.len();
+                let btn_res = ui
+                    .add_enabled(
+                        enabled,
+                        egui::Button::new(
+                            egui::RichText::new("📂  Unarchive Selected")
+                                .color(Color32::LIGHT_YELLOW),
+                        ),
+                    )
+                    .on_disabled_hover_text(&blocking_tooltip)
+                    .on_hover_text(&blocking_tooltip);
+
+                if btn_res.clicked() {
                     ProjectActions::archive_projects(
                         self.state.clone(),
                         self.list_lnk.clone(),
@@ -223,10 +273,18 @@ impl MultiSelectContextMenu {
 
             ui.separator();
 
-            let delete_btn = egui::Button::new(
-                egui::RichText::new("🗑  Delete Selected").color(Color32::LIGHT_RED),
-            );
-            if ui.add(delete_btn).clicked() {
+            let enabled = blocking_dependents.len() < self.selected.len();
+            let btn_res = ui
+                .add_enabled(
+                    enabled,
+                    egui::Button::new(
+                        egui::RichText::new("🗑  Delete Selected").color(Color32::LIGHT_RED),
+                    ),
+                )
+                .on_disabled_hover_text(&blocking_tooltip)
+                .on_hover_text(&blocking_tooltip);
+
+            if btn_res.clicked() {
                 ProjectActions::delete_projects(
                     self.state.clone(),
                     self.list_lnk.clone(),

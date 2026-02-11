@@ -8,8 +8,8 @@ mod game_detection;
 mod legacy_list;
 mod lists_manager;
 mod rd_runtime;
-pub(crate) mod xcache;
 mod resource_detector;
+pub(crate) mod xcache;
 
 pub use config_manager::ConfigManager;
 pub use game_detection::GameDetection;
