@@ -39,7 +39,12 @@ macro_rules! get_loaders {
 #[macro_export]
 macro_rules! get_default_dir {
     ($state:expr, $resource_type:expr) => {
-        $state.read().default_dirs.get($resource_type).unwrap()
+        $state
+            .read()
+            .default_dirs
+            .get($resource_type)
+            .unwrap()
+            .clone()
     };
 }
 

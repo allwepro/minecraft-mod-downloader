@@ -4,11 +4,7 @@ use std::path::PathBuf;
 pub struct Dialogs;
 
 impl Dialogs {
-    pub fn pick_folder() -> Option<PathBuf> {
-        FileDialog::new().set_title("Select Folder").pick_folder()
-    }
-
-    pub fn pick_minecraft_mods_folder(default_path: &mut String) -> Option<PathBuf> {
+    pub fn pick_folder(default_path: &mut String) -> Option<PathBuf> {
         let result = FileDialog::new()
             .set_title("Select Folder")
             .set_directory(default_path.clone())
