@@ -95,4 +95,11 @@ impl ListActions {
             .list_pool
             .export_legacy(&list_lnk, path, version, loader);
     }
+
+    pub fn refresh_dependencies(state: SharedRDState, list_lnk: ListLnk) {
+        state
+            .read()
+            .list_pool
+            .mutate(&list_lnk, |list| list.recalculate_dependents());
+    }
 }
