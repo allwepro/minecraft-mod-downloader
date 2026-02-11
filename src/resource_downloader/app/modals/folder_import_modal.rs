@@ -359,11 +359,11 @@ impl ModalWindow for FolderImportModal {
                                     .to_string();
 
                                 let mut settings =
-                                    ListSettingsComponent::new_wo_name_rt_with_default(
+                                    ListSettingsComponent::new_with_rt(
                                         self.state.clone(),
-                                        self.selected_resource_type,
-                                        default_name,
+                                        vec![self.selected_resource_type],
                                     );
+                                settings.new_list_name = default_name;
 
                                 if let Some(v) = sess.suggested_version {
                                     settings.new_game_version = Some(v);
