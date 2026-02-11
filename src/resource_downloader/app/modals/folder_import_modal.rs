@@ -1,5 +1,7 @@
 use crate::common::prefabs::modal_window::ModalWindow;
+use crate::get_default_dir;
 use crate::resource_downloader::app::components::list_settings_component::ListSettingsComponent;
+use crate::resource_downloader::app::dialogs::Dialogs;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::rd_state::FolderImportSession;
 use crate::resource_downloader::domain::{RESOURCE_TYPES, ResourceType};
@@ -7,7 +9,7 @@ use egui::{Color32, Id, ScrollArea, Ui};
 use std::collections::{HashMap, HashSet};
 
 enum ImportStep {
-    SelectResourceType,
+    SelectFolder,
     Scanning,
     Review,
     Settings,
@@ -18,6 +20,7 @@ pub struct FolderImportModal {
     list_settings: Option<ListSettingsComponent>,
     step: ImportStep,
     selected_resource_type: ResourceType,
+    selected_folder: String,
     selected_matches: HashMap<usize, usize>,
     skipped_items: HashSet<usize>,
     exact_matches: HashSet<usize>,
@@ -27,11 +30,15 @@ pub struct FolderImportModal {
 
 impl FolderImportModal {
     pub fn new(state: SharedRDState) -> Self {
+        let selected_resource_type = ResourceType::Mod;
+        let selected_folder = get_default_dir!(state, &selected_resource_type);
+
         Self {
             state,
             list_settings: None,
-            step: ImportStep::SelectResourceType,
-            selected_resource_type: ResourceType::Mod,
+            step: ImportStep::SelectFolder,
+            selected_resource_type,
+            selected_folder,
             selected_matches: HashMap::new(),
             skipped_items: HashSet::new(),
             exact_matches: HashSet::new(),
@@ -59,49 +66,58 @@ impl ModalWindow for FolderImportModal {
 
     fn render_contents(&mut self, ui: &mut Ui, open: &mut bool) {
         match &self.step {
-            ImportStep::SelectResourceType => {
-                ui.heading("Select Resource Type");
+            ImportStep::SelectFolder => {
+                ui.heading("Select Folder to Import");
                 ui.add_space(10.0);
 
-                ui.horizontal(|ui| {
-                    ui.label("Resource Type:");
-                    egui::ComboBox::from_id_salt("resource_type_selector")
-                        .selected_text(format!(
-                            "{} {}",
-                            self.selected_resource_type.emoji(),
-                            self.selected_resource_type.display_name()
-                        ))
-                        .show_ui(ui, |ui| {
-                            for rt in RESOURCE_TYPES {
-                                if ui
-                                    .selectable_label(
-                                        self.selected_resource_type == rt,
-                                        format!("{} {}", rt.emoji(), rt.display_name()),
-                                    )
-                                    .clicked()
-                                {
-                                    self.selected_resource_type = rt;
-                                }
+                ui.label("Resource Type:");
+                egui::ComboBox::from_id_salt("resource_type_selector")
+                    .selected_text(format!(
+                        "{} {}",
+                        self.selected_resource_type.emoji(),
+                        self.selected_resource_type.display_name()
+                    ))
+                    .show_ui(ui, |ui| {
+                        for rt in RESOURCE_TYPES {
+                            if ui
+                                .selectable_label(
+                                    self.selected_resource_type == rt,
+                                    format!("{} {}", rt.emoji(), rt.display_name()),
+                                )
+                                .clicked()
+                            {
+                                self.selected_resource_type = rt;
+                                self.selected_folder =
+                                    get_default_dir!(self.state, &self.selected_resource_type);
                             }
-                        });
+                        }
+                    });
+
+                ui.add_space(10.0);
+
+                ui.label("Folder:");
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.selected_folder);
+
+                    if ui.button("Browse...").clicked()
+                        && let Some(path) = Dialogs::pick_folder(&mut self.selected_folder)
+                    {
+                        self.selected_folder = path.display().to_string();
+                    }
                 });
 
                 ui.add_space(20.0);
                 ui.horizontal(|ui| {
                     if ui.button("Import").clicked() {
-                        let path_opt = self
-                            .state
-                            .read()
-                            .folder_import_session
-                            .as_ref()
-                            .map(|s| s.path.clone());
+                        let path = std::path::PathBuf::from(&self.selected_folder);
+                        self.state
+                            .write()
+                            .start_folder_import(path, Some(self.selected_resource_type));
+                        self.step = ImportStep::Scanning;
+                    }
 
-                        if let Some(path) = path_opt {
-                            self.state
-                                .write()
-                                .start_folder_import(path, Some(self.selected_resource_type));
-                            self.step = ImportStep::Scanning;
-                        }
+                    if ui.button("Cancel").clicked() {
+                        *open = false;
                     }
                 });
             }
