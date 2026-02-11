@@ -120,13 +120,22 @@ impl MainPanel {
             ) = {
                 let list = list_arc.read();
                 let rt_config = list
-                    .get_resource_type_config(&content_type)
-                    .expect("List without type");
+                    .get_resource_type_config(&content_type);
+
+                if rt_config.is_none() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(100.0);
+                        ui.heading("Invalid list configuration");
+                        ui.label("The resource type for this list is not properly configured.");
+                    });
+                    return;
+                }
+                
                 (
                     list.get_name(),
                     list.get_game_version().clone(),
-                    rt_config.loader.clone(),
-                    rt_config.download_dir.clone(),
+                    rt_config.unwrap().loader.clone(),
+                    rt_config.unwrap().download_dir.clone(),
                     list.manual_projects_by_type(content_type).is_empty(),
                     list.count_projects_by_type(content_type),
                     list.count_manual_projects_by_type(content_type),
