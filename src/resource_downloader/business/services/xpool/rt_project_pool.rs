@@ -163,6 +163,88 @@ impl RTProjectPool {
             .await
     }
 
+    /// Fetches the list of versions/files, falling back to the closest game version if the target version has none.
+    pub fn get_versions_best(
+        &self,
+        project: ProjectLnk,
+        resource_type: ResourceType,
+        version: GameVersion,
+        loader: GameLoader,
+    ) -> anyhow::Result<Option<Vec<RTProjectVersion>>> {
+        let versions = self.get_versions(
+            project.clone(),
+            resource_type,
+            version.clone(),
+            loader.clone(),
+        )?;
+
+        if let Some(v) = &versions
+            && !v.is_empty()
+        {
+            return Ok(versions);
+        }
+
+        // Fallback: Find closest version
+        if let Ok(Some(data)) = self.get_metadata(project.clone(), resource_type) {
+            let best_v = data
+                .supported_versions
+                .iter()
+                .min_by_key(|v| v.distance_int(&version).abs());
+
+            if let Some(bv) = best_v
+                && bv != &version
+            {
+                return self.get_versions(project, resource_type, bv.clone(), loader);
+            }
+        }
+
+        Ok(versions)
+    }
+
+    pub async fn get_versions_best_blocking(
+        &self,
+        project: ProjectLnk,
+        resource_type: ResourceType,
+        version: GameVersion,
+        loader: GameLoader,
+    ) -> anyhow::Result<Option<Vec<RTProjectVersion>>> {
+        let versions = self
+            .get_versions_blocking(
+                project.clone(),
+                resource_type,
+                version.clone(),
+                loader.clone(),
+            )
+            .await?;
+
+        if let Some(v) = &versions
+            && !v.is_empty()
+        {
+            return Ok(versions);
+        }
+
+        // Fallback: Find closest version
+        if let Ok(Some(data)) = self
+            .get_metadata_blocking(project.clone(), resource_type)
+            .await
+        {
+            let best_v = data
+                .supported_versions
+                .iter()
+                .min_by_key(|v| v.distance_int(&version).abs());
+
+            if let Some(bv) = best_v
+                && bv != &version
+            {
+                return self
+                    .get_versions_blocking(project, resource_type, bv.clone(), loader)
+                    .await;
+            }
+        }
+
+        Ok(versions)
+    }
+
     /// Warms the slug cache for a specific project
     pub fn warm_slug(&self, slug: String, _resource_type: ResourceType, project: ProjectLnk) {
         let ctx = CacheContext {

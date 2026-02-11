@@ -1,10 +1,9 @@
-use crate::get_list;
-use crate::get_project_versions;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{
     ListLnk, MutationResult, Project, ProjectDependencyType, ProjectLnk, RTProjectData,
     RTProjectVersion, ResourceType,
 };
+use crate::{get_list, get_project_versions_best};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -88,7 +87,7 @@ impl ProjectActions {
                     .map(|v| v.artifact_hash.clone())
             };
 
-            let versions = get_project_versions!(
+            let versions = get_project_versions_best!(
                 state,
                 p_lnk.clone(),
                 content_type,
@@ -296,7 +295,7 @@ impl ProjectActions {
 
         for p_lnk in projects {
             let versions =
-                get_project_versions!(state, p_lnk.clone(), rt, ver.clone(), loader.clone());
+                get_project_versions_best!(state, p_lnk.clone(), rt, ver.clone(), loader.clone());
 
             if let Ok(Some(v_list)) = versions
                 && let Some(latest) = v_list.first()

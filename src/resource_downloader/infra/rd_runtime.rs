@@ -416,7 +416,7 @@ impl RDRuntime {
 
                     match api
                         .rt_project_pool
-                        .get_versions_blocking(project.clone(), rt, gv, loader)
+                        .get_versions_best_blocking(project.clone(), rt, gv, loader)
                         .await
                     {
                         Ok(Some(rt_versions)) => {
