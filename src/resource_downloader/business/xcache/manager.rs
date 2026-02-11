@@ -188,21 +188,39 @@ impl CoreCacheManager {
         ty: CacheType,
         key: &str,
     ) -> Option<anyhow::Result<T>> {
-        let reg = self.registry.read();
-        if let Some(entry_res) = reg.get(&(ty, key.to_string())) {
-            match entry_res {
-                Ok(entry) => {
-                    if time_now().saturating_sub(entry.updated_at) < ty.config().ttl.as_secs() {
-                        return Some(Ok(entry
-                            .data
-                            .downcast_ref::<T>()
-                            .cloned()
-                            .expect("Cache type mismatch")));
+        let needs_discard = {
+            let reg = self.registry.read();
+            if let Some(entry_res) = reg.get(&(ty, key.to_string())) {
+                match entry_res {
+                    Ok(entry) => {
+                        if time_now().saturating_sub(entry.updated_at) < ty.config().ttl.as_secs() {
+                            match entry.data.downcast_ref::<T>() {
+                                Some(val) => return Some(Ok(val.clone())),
+                                None => {
+                                    log::error!(
+                                        "Cache type mismatch for key: {}. Could not downcast to {}. Discarding entry.",
+                                        key,
+                                        std::any::type_name::<T>()
+                                    );
+                                    true
+                                }
+                            }
+                        } else {
+                            false
+                        }
                     }
+                    Err(e) => return Some(Err(anyhow::anyhow!(e.clone()))),
                 }
-                Err(e) => return Some(Err(anyhow::anyhow!(e.clone()))),
+            } else {
+                false
             }
+        };
+
+        if needs_discard {
+            let mut reg = self.registry.write();
+            reg.remove(&(ty, key.to_string()));
         }
+
         None
     }
 }
