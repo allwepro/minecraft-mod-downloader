@@ -3,8 +3,12 @@ use crate::resource_downloader::business::xcache::{
 };
 use crate::resource_downloader::domain::ProjectLnk;
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
+use image::{ImageBuffer, Rgba, RgbaImage};
 use parking_lot::RwLock;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+use std::io::Cursor;
 use std::sync::Arc;
 
 pub struct ProjectIconPool {
@@ -24,7 +28,7 @@ impl ProjectIconPool {
     }
 
     /// Returns the TextureHandle if already loaded, otherwise triggers an async fetch and returns None.
-    pub fn get_icon(&self, project: &ProjectLnk) -> Option<TextureHandle> {
+    pub fn get_icon(&self, project: &ProjectLnk, name: &str) -> Option<TextureHandle> {
         if let Some(handle) = self.textures.read().get(project) {
             return Some(handle.clone());
         }
@@ -32,7 +36,7 @@ impl ProjectIconPool {
         let project_clone = project.clone();
         let pool_self = self.clone_handle();
 
-        pool_self.internal_fetch(project_clone);
+        pool_self.internal_fetch(project_clone, name.to_string());
 
         None
     }
@@ -85,7 +89,7 @@ impl ProjectIconPool {
         self.loading.write().clear();
     }
 
-    fn internal_fetch(&self, project: ProjectLnk) {
+    fn internal_fetch(&self, project: ProjectLnk, name: String) {
         let mut loading = self.loading.write();
         if self.textures.read().contains_key(&project) || !loading.insert(project.clone()) {
             return;
@@ -98,13 +102,25 @@ impl ProjectIconPool {
             loader: None,
         };
 
+        let name_clone = name.clone();
         let _ = self.cache.get::<Vec<u8>>(
             CacheType::ProjectIcons,
             cache_ctx,
             Box::new(move |p_ctx| {
+                let project_clone = project.clone();
+                let name = name_clone.clone();
                 Box::pin(async move {
-                    let bytes = p_ctx.provider.load_project_icon(&p_ctx, project).await?;
-                    Ok(Arc::new(bytes.to_vec()) as AnyCacheData)
+                    match p_ctx
+                        .provider
+                        .load_project_icon(&p_ctx, project_clone)
+                        .await
+                    {
+                        Ok(bytes) => Ok(Arc::new(bytes.to_vec()) as AnyCacheData),
+                        Err(_) => {
+                            let fallback = generate_procedural_icon(&name);
+                            Ok(Arc::new(fallback) as AnyCacheData)
+                        }
+                    }
                 })
             }),
         );
@@ -133,4 +149,78 @@ impl ProjectIconPool {
             loading: self.loading.clone(),
         }
     }
+}
+
+fn generate_procedural_icon(name: &str) -> Vec<u8> {
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    let size = 128;
+    let mut img: RgbaImage = ImageBuffer::new(size, size);
+
+    let r1 = (hash & 0xFF) as u8;
+    let g1 = ((hash >> 8) & 0xFF) as u8;
+    let b1 = ((hash >> 16) & 0xFF) as u8;
+
+    let r2 = ((hash >> 24) & 0xFF) as u8;
+    let g2 = ((hash >> 32) & 0xFF) as u8;
+    let b2 = ((hash >> 40) & 0xFF) as u8;
+
+    let bg = Rgba([(r1 % 60) + 30, (g1 % 60) + 30, (b1 % 60) + 30, 255]);
+    let fg = Rgba([r2.max(160), g2.max(160), b2.max(160), 255]);
+
+    for p in img.pixels_mut() {
+        *p = bg;
+    }
+
+    let center = size as f32 / 2.0;
+    let shape_size = size as f32 * 0.3;
+    let shape_type = hash % 4;
+
+    for y in 0..size {
+        for x in 0..size {
+            let mut hits = 0;
+            for sy in 0..2 {
+                for sx in 0..2 {
+                    let px = x as f32 + (sx as f32 + 0.5) / 2.0;
+                    let py = y as f32 + (sy as f32 + 0.5) / 2.0;
+
+                    let dx = px - center;
+                    let dy = py - center;
+
+                    let inside = match shape_type {
+                        0 => (dx * dx + dy * dy) < shape_size * shape_size,
+                        1 => dx.abs() < shape_size && dy.abs() < shape_size,
+                        2 => {
+                            let h = shape_size * 1.5;
+                            dy < h / 3.0 && dy > -2.0 * h / 3.0 && dx.abs() < (h / 3.0 - dy) * 0.8
+                        }
+                        _ => dx.abs() + dy.abs() < shape_size * 1.3,
+                    };
+
+                    if inside {
+                        hits += 1;
+                    }
+                }
+            }
+
+            if hits > 0 {
+                let alpha = hits as f32 / 4.0;
+                let current = img.get_pixel(x, y);
+                let blended = Rgba([
+                    (fg[0] as f32 * alpha + current[0] as f32 * (1.0 - alpha)) as u8,
+                    (fg[1] as f32 * alpha + current[1] as f32 * (1.0 - alpha)) as u8,
+                    (fg[2] as f32 * alpha + current[2] as f32 * (1.0 - alpha)) as u8,
+                    255,
+                ]);
+                img.put_pixel(x, y, blended);
+            }
+        }
+    }
+
+    let mut bytes = Vec::new();
+    let mut cursor = Cursor::new(&mut bytes);
+    img.write_to(&mut cursor, image::ImageFormat::Png).unwrap();
+    bytes
 }

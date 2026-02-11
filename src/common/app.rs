@@ -101,10 +101,11 @@ impl App {
             }
         });
         if triggered {
-            self.notification_manager.notify(Box::new(BasicNotification::new(
-                "🎉 Konami Code Activated!",
-                "You found the easter egg!",
-            )));
+            self.notification_manager
+                .notify(Box::new(BasicNotification::new(
+                    "🎉 Konami Code Activated!",
+                    "You found the easter egg!",
+                )));
             ctx.open_url(egui::output::OpenUrl {
                 url: "https://www.dkhw.de/spenden/spendenformular-hauptsache-kinder/".to_string(),
                 new_tab: true,
