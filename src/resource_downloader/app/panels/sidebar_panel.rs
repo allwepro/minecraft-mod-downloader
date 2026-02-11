@@ -1,4 +1,5 @@
 use crate::common::prefabs::popup_window::Popup;
+use crate::resource_downloader::app::components::import_options_component::ImportOptionsComponent;
 use crate::resource_downloader::app::modals::create_modal::CreateModal;
 use crate::resource_downloader::app::popups::import_popup::ImportPopup;
 use crate::resource_downloader::app::popups::list_context_menu::ListContextMenu;
@@ -15,6 +16,7 @@ pub struct SidebarPanel {
     new_list_modal: CreateModal,
     import_popup: ImportPopup,
     context_menu_target: Option<(ListLnk, egui::Rect)>,
+    import_options: ImportOptionsComponent,
 }
 
 impl SidebarPanel {
@@ -25,6 +27,7 @@ impl SidebarPanel {
             new_list_modal: CreateModal::new(state.clone()),
             import_popup: ImportPopup::new(state.clone()),
             context_menu_target: None,
+            import_options: ImportOptionsComponent::new(state.clone()),
         }
     }
 
@@ -107,6 +110,7 @@ impl SidebarPanel {
             })
         };
 
+        let total_lists = list_items.len();
         let is_searching = !self.list_search_query.is_empty();
 
         if is_searching {
@@ -161,6 +165,25 @@ impl SidebarPanel {
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.set_width(ui.available_width());
+
+            if total_lists == 0 {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(80.0);
+                    ui.label(egui::RichText::new("No lists yet!").weak());
+                    ui.label(egui::RichText::new("You can easily import one:").weak());
+                    ui.add_space(10.0);
+                    self.import_options.render_contents(ui);
+                });
+                return;
+            }
+
+            if is_searching && list_items.is_empty() {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(20.0);
+                    ui.label(egui::RichText::new("No matching lists").weak());
+                });
+                return;
+            }
 
             if ui.input(|i| i.pointer.is_decidedly_dragging()) {
                 let clip_rect = ui.clip_rect();
