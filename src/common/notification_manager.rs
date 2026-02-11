@@ -284,3 +284,30 @@ impl SharedNotificationManager {
         });
     }
 }
+
+pub struct BasicNotification {
+    pub title: String,
+    pub reason: String,
+}
+
+impl BasicNotification {
+    pub fn new(title: &str, reason: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            reason: reason.to_owned(),
+        }
+    }
+}
+
+impl Notification for BasicNotification {
+    fn get_title(&self) -> String {
+        self.title.clone()
+    }
+    fn get_desc(&self) -> String {
+        self.reason.clone()
+    }
+    fn button(&self) -> Option<String> {
+        None
+    }
+}
+
