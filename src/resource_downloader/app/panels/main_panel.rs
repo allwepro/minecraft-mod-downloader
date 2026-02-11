@@ -119,8 +119,7 @@ impl MainPanel {
                 auto_update_enabled,
             ) = {
                 let list = list_arc.read();
-                let rt_config = list
-                    .get_resource_type_config(&content_type);
+                let rt_config = list.get_resource_type_config(&content_type);
 
                 if rt_config.is_none() {
                     ui.vertical_centered(|ui| {
@@ -130,7 +129,7 @@ impl MainPanel {
                     });
                     return;
                 }
-                
+
                 (
                     list.get_name(),
                     list.get_game_version().clone(),
@@ -456,7 +455,7 @@ impl MainPanel {
                     ui.add_space(50.0);
                     ui.heading("No items in this list");
 
-                    let (has_clipboard, clip_list_name) = {
+                    let (has_clipboard, clip_list_name, clip_resource_type) = {
                         let s = self.state.read();
                         if let Some(c) = &s.clipboard {
                             let name = s
@@ -464,21 +463,32 @@ impl MainPanel {
                                 .get(&c.source_list)
                                 .map(|l| l.read().get_name())
                                 .unwrap_or_default();
-                            (true, name)
+                            let rt =
+                                ListActions::get_list_resource_type(&self.state, &c.source_list);
+                            (true, name, Some(rt))
                         } else {
-                            (false, String::new())
+                            (false, String::new(), None)
                         }
                     };
 
                     if has_clipboard {
                         ui.add_space(10.0);
-                        if ui
-                            .add(egui::Button::new(egui::RichText::new(format!(
-                                "📋 Paste from {}",
-                                clip_list_name
-                            ))))
-                            .clicked()
-                        {
+                        let target_rt = ListActions::get_list_resource_type(&self.state, &lnk);
+                        let types_match =
+                            clip_resource_type.map(|rt| rt == target_rt).unwrap_or(true);
+
+                        let paste_btn = egui::Button::new(egui::RichText::new(format!(
+                            "📋 Paste from {}",
+                            clip_list_name
+                        )));
+                        let mut response = ui.add_enabled(types_match, paste_btn);
+
+                        if !types_match {
+                            response = response
+                                .on_disabled_hover_text("Cannot paste: wrong resource type");
+                        }
+
+                        if response.clicked() {
                             self.state.write().paste_clipboard(lnk.clone());
                         }
                     }
