@@ -272,24 +272,13 @@ impl ModalWindow for FolderImportModal {
                                                             ui.label(format!("- {}", name));
                                                         }
 
-                                                        if matches.len() > 1
-                                                            || !sess.exact_matches.contains(&idx)
+                                                        if (matches.len() > 1
+                                                            || !sess.exact_matches.contains(&idx))
+                                                            && ui.small_button("Change").clicked()
                                                         {
-                                                            if ui.small_button("Change").clicked() {
-                                                                sess.selected_matches.remove(&idx);
-                                                                sess.exact_matches.remove(&idx);
-                                                                sess.manually_cleared.insert(idx);
-                                                            }
-
-                                                            if ui
-                                                                .selectable_label(
-                                                                    false,
-                                                                    "🔍 Search",
-                                                                )
-                                                                .clicked()
-                                                            {
-                                                                self.open_search_for_candidate(idx);
-                                                            }
+                                                            sess.selected_matches.remove(&idx);
+                                                            sess.exact_matches.remove(&idx);
+                                                            sess.manually_cleared.insert(idx);
                                                         }
                                                     });
                                                 } else {
