@@ -40,12 +40,18 @@ pub struct FolderImportCandidate {
 #[derive(Clone, Debug)]
 pub struct FolderImportSession {
     pub path: PathBuf,
+    pub resource_type: ResourceType,
     pub candidates: Vec<FolderImportCandidate>,
     pub suggested_version: Option<GameVersion>,
     pub suggested_loader: Option<GameLoader>,
     pub is_scanning: bool,
     pub scan_progress: Option<(usize, usize, String)>,
     pub scan_error: Option<String>,
+    pub selected_matches: HashMap<usize, usize>,
+    pub skipped_items: HashSet<usize>,
+    pub exact_matches: HashSet<usize>,
+    pub manually_cleared: HashSet<usize>,
+    pub show_only_unresolved: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -686,19 +692,26 @@ impl RDState {
     }
 
     pub fn start_folder_import(&mut self, path: PathBuf, resource_type: Option<ResourceType>) {
+        let rt = resource_type.unwrap_or(ResourceType::Mod);
         self.folder_import_session = Some(FolderImportSession {
             path: path.clone(),
+            resource_type: rt,
             candidates: Vec::new(),
             suggested_version: None,
             suggested_loader: None,
             is_scanning: resource_type.is_some(),
             scan_progress: None,
             scan_error: None,
+            selected_matches: HashMap::new(),
+            skipped_items: HashSet::new(),
+            exact_matches: HashSet::new(),
+            manually_cleared: HashSet::new(),
+            show_only_unresolved: false,
         });
-        if let Some(resource_type) = resource_type {
+        if resource_type.is_some() {
             self.dispatch(Effect::ScanFolderImport {
                 path,
-                resource_type,
+                resource_type: rt,
             });
         }
     }

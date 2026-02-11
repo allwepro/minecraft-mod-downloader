@@ -98,10 +98,18 @@ impl SharedModalManager {
                     state.instance.render_contents(ui, &mut is_open_internal);
                 });
 
-            if !is_open || !is_open_internal || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            let mut inner = self.0.write();
+            let should_close =
+                !is_open || !is_open_internal || ctx.input(|i| i.key_pressed(egui::Key::Escape));
+
+            if should_close {
+                drop(inner);
                 state.instance.on_close();
+            } else if inner.active_modal.is_none() {
+                inner.active_modal = Some(state);
             } else {
-                self.0.write().active_modal = Some(state);
+                drop(inner);
+                state.instance.on_close();
             }
         }
     }

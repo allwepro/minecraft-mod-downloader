@@ -15,7 +15,7 @@ struct PopupManagerInner {
     interaction_areas: HashMap<egui::Id, Vec<egui::Rect>>,
     body_rects: HashMap<egui::Id, egui::Rect>,
     requests: Vec<PopupRequest>,
-    debug_mode: bool,
+    pub debug_mode: bool,
 }
 
 #[derive(Clone)]
