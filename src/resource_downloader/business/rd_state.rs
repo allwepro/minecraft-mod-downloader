@@ -114,20 +114,71 @@ impl RDState {
     pub fn paste_clipboard(&mut self, target_list_lnk: ListLnk) {
         if let Some(content) = &self.clipboard {
             let source_list_arc = self.list_pool.get(&content.source_list);
-            if source_list_arc.is_none() {
+            let target_list_arc = self.list_pool.get(&target_list_lnk);
+            if source_list_arc.is_none() || target_list_arc.is_none() {
                 return;
             }
             let source_list = source_list_arc.unwrap();
+            let target_list = target_list_arc.unwrap();
+
+            let (s_list, t_list) = (source_list.read(), target_list.read());
+
+            let s_list_resource_type = s_list
+                .get_resource_types()
+                .first()
+                .cloned()
+                .unwrap_or(ResourceType::Mod);
+            let t_list_resource_type = t_list
+                .get_resource_types()
+                .first()
+                .cloned()
+                .unwrap_or(ResourceType::Mod);
+
+            let versions_match = s_list.get_game_version() == t_list.get_game_version()
+                && s_list
+                    .get_resource_type_config(&s_list_resource_type)
+                    .map(|c| &c.loader)
+                    == t_list
+                        .get_resource_type_config(&t_list_resource_type)
+                        .map(|c| &c.loader);
 
             let mut projects_to_add = Vec::new();
-            {
-                let s_list = source_list.read();
-                for p_lnk in &content.projects {
-                    if let Some(proj) = s_list.get_project(p_lnk) {
-                        projects_to_add.push(Project::new_from_existing(proj, false));
+            let mut projects_to_process: Vec<ProjectLnk> = content.projects.clone();
+            let mut processed = HashSet::new();
+            let explicitly_selected: HashSet<ProjectLnk> =
+                content.projects.iter().cloned().collect();
+
+            while let Some(p_lnk) = projects_to_process.pop() {
+                if processed.contains(&p_lnk) {
+                    continue;
+                }
+                processed.insert(p_lnk.clone());
+
+                if let Some(proj) = s_list.get_project(&p_lnk) {
+                    let is_manual = explicitly_selected.contains(&p_lnk);
+                    let mut new_proj = Project::new_from_existing(proj, true);
+
+                    new_proj.set_manual(is_manual);
+
+                    if !versions_match {
+                        new_proj.clear_project_version();
+                    }
+
+                    projects_to_add.push(new_proj);
+
+                    if let Some(ver) = proj.get_version() {
+                        for dep in &ver.depended_on {
+                            if !processed.contains(&dep.project) && s_list.has_project(&dep.project)
+                            {
+                                projects_to_process.push(dep.project.clone());
+                            }
+                        }
                     }
                 }
             }
+
+            drop(s_list);
+            drop(t_list);
 
             let is_same_list = content.source_list == target_list_lnk;
             let should_remove_from_source = content.is_cut && !is_same_list;
@@ -138,18 +189,25 @@ impl RDState {
                     let mut modified = false;
                     let mut versions_to_add = Vec::new();
 
-                    for mut proj in projects {
+                    for proj in projects {
                         let lnk = proj.get_lnk();
                         if !list.has_project(&lnk) {
-                            let version_opt = proj.clear_project_version();
-                            let p_lnk = proj.get_lnk();
+                            let mut p = proj;
+                            let version_opt = p.clear_project_version();
+                            let p_lnk = p.get_lnk();
 
-                            list.add_project(proj);
+                            list.add_project(p);
                             modified = true;
 
                             if let Some(ver) = version_opt {
                                 versions_to_add.push((p_lnk, ver));
                             }
+                        } else if let Some(existing_proj) = list.get_project_mut(&lnk)
+                            && proj.is_manual()
+                            && !existing_proj.is_manual()
+                        {
+                            existing_proj.set_manual(true);
+                            modified = true;
                         }
                     }
 
@@ -157,6 +215,8 @@ impl RDState {
                         ver.depended_on.retain(|dep| list.has_project(&dep.project));
                         list.add_version(&p_lnk, ver);
                     }
+
+                    list.recalculate_dependents();
 
                     if modified {
                         MutationResult::new(MutationOutcome::ProjectAdded)
