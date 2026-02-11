@@ -1,5 +1,4 @@
 use crate::common::prefabs::modal_window::ModalWindow;
-use crate::get_list;
 use crate::resource_downloader::app::components::list_settings_component::ListSettingsComponent;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::{ListLnk, ProjectTypeConfig};
@@ -62,32 +61,35 @@ impl ModalWindow for ListSettingsModal {
         if !self.save_on_close {
             return;
         }
-        let list_arc = get_list!(self.state, &self.list);
-        let mut target_list = list_arc.write();
-        target_list.set_game_version(
-            self.list_settings_component
-                .new_game_version
-                .as_ref()
-                .unwrap()
-                .clone(),
-        );
-        target_list.set_resource_type(
-            self.list_settings_component.new_resource_type,
-            ProjectTypeConfig::new(
+
+        let pool = self.state.read().list_pool.clone();
+        let lnk = self.list.clone();
+
+        if let Some(list_arc) = pool.get(&lnk) {
+            let mut target_list = list_arc.write();
+            target_list.set_game_version(
                 self.list_settings_component
-                    .new_game_loader
+                    .new_game_version
                     .as_ref()
                     .unwrap()
                     .clone(),
-                self.list_settings_component.new_download_dir.clone(),
-            ),
-        );
-        target_list.set_do_updates(Some(self.list_settings_component.new_do_updates));
-        let lnk = target_list.get_lnk();
-        drop(target_list);
-        self.state.read().list_pool.save(&lnk);
+            );
+            target_list.set_resource_type(
+                self.list_settings_component.new_resource_type,
+                ProjectTypeConfig::new(
+                    self.list_settings_component
+                        .new_game_loader
+                        .as_ref()
+                        .unwrap()
+                        .clone(),
+                    self.list_settings_component.new_download_dir.clone(),
+                ),
+            );
+            target_list.set_do_updates(Some(self.list_settings_component.new_do_updates));
+            drop(target_list);
+            pool.save(&lnk);
+        }
 
-        let mut state = self.state.write();
-        state.request_full_refresh();
+        self.state.write().request_full_refresh();
     }
 }

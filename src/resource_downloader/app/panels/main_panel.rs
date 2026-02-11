@@ -14,7 +14,7 @@ use crate::resource_downloader::domain::{
 };
 use crate::{
     clear_project_metadata, get_list, get_list_type, get_project_icon_texture, get_project_link,
-    get_project_metadata, get_project_versions,
+    get_project_metadata, get_project_versions, get_project_versions_best,
 };
 use eframe::egui;
 use egui::{Color32, Context, Ui};
@@ -59,8 +59,9 @@ impl MainPanel {
     }
 
     pub fn show(&mut self, ctx: &Context, _ui: &mut Ui) {
-        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.modifiers.alt && i.key_pressed
-        (egui::Key::D)) {
+        if ctx.input(|i| {
+            i.modifiers.ctrl && i.modifiers.shift && i.modifiers.alt && i.key_pressed(egui::Key::D)
+        }) {
             self.debug_overlays = !self.debug_overlays;
         }
 
@@ -619,12 +620,38 @@ impl MainPanel {
         ordered_list: &[ProjectLnk],
         current_idx: usize,
     ) {
-        let (metadata, versions) = {
+        let is_overruled = {
+            let list = list_arc.read();
+            list.get_project(p_lnk)
+                .map(|p| p.is_compatibility_overruled())
+                .unwrap_or(false)
+        };
+
+        let (metadata, mut versions) = {
             let meta = get_project_metadata!(self.state, p_lnk.clone(), *rt);
             let vers =
                 get_project_versions!(self.state, p_lnk.clone(), *rt, g_ver.clone(), g_ld.clone());
             (meta, vers)
         };
+
+        let compatibility = if let Ok(Some(vers)) = &versions {
+            Some(!vers.is_empty())
+        } else {
+            None
+        };
+
+        if matches!(compatibility, Some(false))
+            && is_overruled
+            && let Ok(Some(best_vers)) = get_project_versions_best!(
+                self.state,
+                p_lnk.clone(),
+                *rt,
+                g_ver.clone(),
+                g_ld.clone()
+            )
+        {
+            versions = Ok(Some(best_vers));
+        }
 
         let auto_update_enabled = list_arc.read().get_do_updates();
 
@@ -658,7 +685,6 @@ impl MainPanel {
             author,
             version_id,
             is_archived,
-            is_overruled,
             cur_hash,
             has_dependents,
             depended_on,
@@ -673,7 +699,6 @@ impl MainPanel {
                 proj.get_author(),
                 proj.get_version_id().map(|s| s.to_string()),
                 p.is_project_archived(p_lnk),
-                proj.is_compatibility_overruled(),
                 proj.get_version().map(|v| v.artifact_hash.clone()),
                 proj.has_dependents(),
                 proj.get_version().map(|v| v.get_depended_ons().to_vec()),
@@ -730,12 +755,6 @@ impl MainPanel {
         if display_version.contains("vv") {
             display_version = display_version.replace("vv", "v");
         }
-
-        let compatibility = if let Ok(Some(vers)) = &versions {
-            Some(!vers.is_empty())
-        } else {
-            None
-        };
 
         let dl_status = self
             .state
