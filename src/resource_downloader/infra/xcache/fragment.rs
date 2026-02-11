@@ -51,7 +51,7 @@ impl CacheType {
             Self::GameLoaders => FragmentEncoder::json::<Vec<GameLoader>>(),
             Self::GameVersions => FragmentEncoder::json::<Vec<GameVersion>>(),
             Self::Search => FragmentEncoder::json::<Vec<ProjectLnk>>(),
-            Self::ProjectSlug => FragmentEncoder::json::<String>(),
+            Self::ProjectSlug => FragmentEncoder::json::<ProjectLnk>(),
             Self::ProjectMetadata => FragmentEncoder::json::<RTProjectData>(),
             Self::ProjectVersions => FragmentEncoder::json::<Vec<RTProjectVersion>>(),
             Self::ProjectIcons => FragmentEncoder::binary(),
