@@ -72,8 +72,11 @@ macro_rules! clear_project_metadata {
 
 #[macro_export]
 macro_rules! get_project_icon_texture {
+    ($state:expr, $project:expr, $name:expr) => {
+        $state.read().api().icon_pool.get_icon($project, $name)
+    };
     ($state:expr, $project:expr) => {
-        $state.read().api().icon_pool.get_icon($project)
+        $state.read().api().icon_pool.get_icon($project, "")
     };
 }
 
