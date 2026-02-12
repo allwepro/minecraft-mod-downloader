@@ -32,6 +32,9 @@ It provides a sleek, responsive, cross-platform **GUI** for browsing and install
 - ⚡ Built in Rust for speed, safety, and reliability
 - 💻 Cross-platform support for Windows, MacOS, and Linux
 
+Launcher compatibility policy and Java/Minecraft support matrix:
+`docs/launcher-compatibility-matrix.md`
+
 ---
 
 ## 🧑💻 Usage
