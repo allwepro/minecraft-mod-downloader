@@ -1,6 +1,14 @@
 name: Launcher Tests
 
 on:
+  push:
+    branches:
+      - feature/launcher
+    paths:
+      - 'src/launcher/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/launcher-tests.yml'
   pull_request:
     branches:
       - main
