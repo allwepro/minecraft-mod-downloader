@@ -9,8 +9,8 @@ use crate::resource_downloader::business::list_pool::ListPool;
 use crate::resource_downloader::business::services::ApiService;
 use crate::resource_downloader::business::{Event, InternalEvent};
 use crate::resource_downloader::domain::{
-    AppConfig, GameLoader, GameVersion, ListLnk, MutationOutcome, MutationResult, Project,
-    ProjectLnk, ResourceType,
+    AppConfig, FolderLnk, GameLoader, GameVersion, ListLnk, MutationOutcome, MutationResult,
+    Project, ProjectLnk, ResourceType,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -82,6 +82,7 @@ pub struct RDState {
     pub list_pool: Arc<ListPool>,
 
     pub open_list: Option<ListLnk>,
+    pub open_folder: Option<FolderLnk>,
     pub found_files: HashMap<PathBuf, Vec<(PathBuf, String)>>,
     pub active_scans: HashSet<PathBuf>,
     pub download_status: HashMap<ProjectLnk, (DownloadStatus, f32)>,
@@ -124,6 +125,7 @@ impl RDState {
             list_pool,
 
             open_list: None,
+            open_folder: None,
             found_files: Default::default(),
             active_scans: Default::default(),
             download_status: Default::default(),
@@ -608,6 +610,24 @@ impl RDState {
         self.config.write().last_open_list_id = list;
         self.save_config();
 
+        self.request_full_refresh();
+    }
+
+    pub fn set_open_folder(&mut self, folder: Option<FolderLnk>) {
+        if self.open_folder == folder {
+            return;
+        }
+
+        if folder.is_some() {
+            if let Some(old_list) = self.open_list.clone() {
+                self.list_pool.save(&old_list);
+            }
+            self.open_list = None;
+            self.config.write().last_open_list_id = None;
+        }
+
+        self.open_folder = folder;
+        self.save_config();
         self.request_full_refresh();
     }
 

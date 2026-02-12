@@ -51,6 +51,12 @@ impl ListActions {
         if current.as_ref() == Some(list) {
             state.write().set_open_list(None);
         } else {
+            {
+                let mut s = state.write();
+                if s.open_folder.is_some() {
+                    s.open_folder = None;
+                }
+            }
             state.write().set_open_list(Some(list.clone()));
         }
     }
