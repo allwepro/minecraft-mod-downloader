@@ -44,6 +44,15 @@ struct CompatibilityStatus {
     recommended_java_major: Option<u32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LaunchPreflightOutcome {
+    Blocked(String),
+    Ready {
+        launch_version: String,
+        loader: String,
+    },
+}
+
 pub struct LauncherPanel {
     java_installations: Vec<JavaInstallation>,
     selected_java_index: Option<usize>,
@@ -513,67 +522,8 @@ impl LauncherPanel {
         ui.add_space(15.0);
 
         // Launch button
-        let has_valid_mc_version = self
-            .minecraft_installation
-            .as_ref()
-            .map(|mc| mc.available_versions.contains(&self.selected_mc_version))
-            .unwrap_or(false);
-
-        let fabric_ready = if selected_loader == "fabric" {
-            self.fabric_version_id.is_some()
-                && self.fabric_for_mc_version.as_deref() == Some(&self.selected_mc_version)
-                && !self.fabric_installing
-                && self.fabric_error.is_none()
-                && self.fabric_supported != Some(false)
-        } else {
-            true
-        };
-
-        let mut disabled_reasons: Vec<String> = Vec::new();
-        if self.java_installations.is_empty() {
-            disabled_reasons.push("No Java installation found".to_string());
-        }
-        if self.selected_java_index.is_none() {
-            disabled_reasons.push("Select a Java installation".to_string());
-        }
-        if self.minecraft_installation.is_none() {
-            disabled_reasons.push("Minecraft not found".to_string());
-        }
-        if !has_valid_mc_version {
-            disabled_reasons.push("Selected Minecraft version is not installed".to_string());
-        }
-        if self.launcher_username.is_empty() {
-            disabled_reasons.push("Username is required".to_string());
-        }
-        if self.launcher_min_memory > self.launcher_max_memory {
-            disabled_reasons.push("Min memory cannot exceed max memory".to_string());
-        }
-        if let Some(status) = &compatibility_status {
-            if !status.is_known_good && !self.allow_experimental_launch {
-                disabled_reasons.push(
-                    "Unsupported Java/Minecraft combination (enable experimental launch)"
-                        .to_string(),
-                );
-            }
-        }
-        if selected_loader == "fabric" {
-            if self.fabric_support_checking {
-                disabled_reasons.push("Checking Fabric support".to_string());
-            } else if self.fabric_supported == Some(false) {
-                disabled_reasons.push("Fabric not available for this version".to_string());
-            } else if self.fabric_installing {
-                disabled_reasons.push("Installing Fabric".to_string());
-            } else if self.fabric_error.is_some() {
-                disabled_reasons.push("Fabric install failed".to_string());
-            } else if self.fabric_version_id.is_none() {
-                disabled_reasons.push("Fabric not ready yet".to_string());
-            }
-        }
-        if self.launch_in_progress {
-            disabled_reasons.push("Launch already in progress".to_string());
-        }
-
-        let can_launch = disabled_reasons.is_empty() && fabric_ready;
+        let disabled_reasons = self.launch_disabled_reasons(selected_loader);
+        let can_launch = disabled_reasons.is_empty();
 
         ui.horizontal(|ui| {
             let launch_button =
@@ -746,24 +696,30 @@ impl LauncherPanel {
         download_dir: &str,
         selected_loader: &str,
     ) {
-        if self.launch_in_progress {
-            return;
-        }
+        let (launch_version, loader_name_for_config) =
+            match self.evaluate_launch_preflight(selected_loader) {
+                LaunchPreflightOutcome::Blocked(reason) => {
+                    if reason == "Launch already in progress" {
+                        return;
+                    }
+                    self.launch_status = Some(format!("❌ {}", reason));
+                    return;
+                }
+                LaunchPreflightOutcome::Ready {
+                    launch_version,
+                    loader,
+                } => (launch_version, loader),
+            };
 
         self.launch_status = Some("Preparing to launch...".to_string());
 
-        let java_idx = match self.selected_java_index {
-            Some(idx) => idx,
-            None => {
-                self.launch_status = Some("❌ No Java selected".to_string());
-                return;
-            }
-        };
-
-        let java = match self.java_installations.get(java_idx) {
+        let java = match self
+            .selected_java_index
+            .and_then(|idx| self.java_installations.get(idx))
+        {
             Some(j) => j,
             None => {
-                self.launch_status = Some("❌ Invalid Java selection".to_string());
+                self.launch_status = Some("❌ Selected Java installation is invalid".to_string());
                 return;
             }
         };
@@ -776,45 +732,11 @@ impl LauncherPanel {
             }
         };
 
-        if let Some(status) = self.evaluate_compatibility(selected_loader) {
-            if !status.is_known_good && !self.allow_experimental_launch {
-                self.launch_status = Some(format!(
-                    "❌ {} Enable experimental launch to continue.",
-                    status.message
-                ));
-                return;
-            }
-        }
-
-        let launch_version = if selected_loader == "fabric" {
-            if self.fabric_supported == Some(false) {
-                self.launch_status = Some(
-                    "❌ Fabric is not available for this Minecraft version. Launch vanilla instead."
-                        .to_string(),
-                );
-                return;
-            }
-            match &self.fabric_version_id {
-                Some(id)
-                    if self.fabric_for_mc_version.as_deref() == Some(&self.selected_mc_version) =>
-                {
-                    id.clone()
-                }
-                _ => {
-                    self.launch_status =
-                        Some("❌ Fabric is not ready yet. Please wait.".to_string());
-                    return;
-                }
-            }
-        } else {
-            self.selected_mc_version.clone()
-        };
-
         // Build launch config
         let config = LaunchConfig {
             profile: LaunchProfile {
                 minecraft_version: launch_version,
-                mod_loader: selected_loader.to_string(),
+                mod_loader: loader_name_for_config.clone(),
                 mod_loader_version: None,
                 java_path: java.path.clone(),
                 game_directory: mc_install.root_dir.clone(),
@@ -832,7 +754,7 @@ impl LauncherPanel {
         let download_dir = download_dir.to_string();
         let mods_dir = mc_install.mods_dir.clone();
         let config_manager = Arc::clone(config_manager);
-        let loader_name = selected_loader.to_string();
+        let loader_name = loader_name_for_config;
         let mc_version = self.selected_mc_version.clone();
         let fabric_version_id = self.fabric_version_id.clone();
 
@@ -855,13 +777,8 @@ impl LauncherPanel {
                     let status_msg = format!("Copying {} mods...", mod_names.len());
                     let _ = tx.send(PanelMessage::Status(status_msg)).await;
 
-                    let same_dir = match (
-                        std::fs::canonicalize(&source_dir),
-                        std::fs::canonicalize(&mods_dir),
-                    ) {
-                        (Ok(a), Ok(b)) => a == b,
-                        _ => source_dir == mods_dir,
-                    };
+                    let same_dir =
+                        LauncherPanel::paths_refer_to_same_directory(&source_dir, &mods_dir);
 
                     if !same_dir {
                         // Clean old mods first
@@ -979,6 +896,103 @@ impl LauncherPanel {
 
             let _ = tx.send(PanelMessage::LaunchFinished(result)).await;
         });
+    }
+
+    fn launch_disabled_reasons(&self, selected_loader: &str) -> Vec<String> {
+        let mut disabled_reasons: Vec<String> = Vec::new();
+
+        if self.java_installations.is_empty() {
+            disabled_reasons.push("No Java installation found".to_string());
+        }
+        if self.selected_java_index.is_none() {
+            disabled_reasons.push("Select a Java installation".to_string());
+        } else if self
+            .selected_java_index
+            .and_then(|idx| self.java_installations.get(idx))
+            .is_none()
+        {
+            disabled_reasons.push("Selected Java installation is invalid".to_string());
+        }
+
+        if self.minecraft_installation.is_none() {
+            disabled_reasons.push("Minecraft not found".to_string());
+        } else {
+            let has_valid_mc_version = self
+                .minecraft_installation
+                .as_ref()
+                .map(|mc| mc.available_versions.contains(&self.selected_mc_version))
+                .unwrap_or(false);
+            if !has_valid_mc_version {
+                disabled_reasons.push("Selected Minecraft version is not installed".to_string());
+            }
+        }
+
+        if self.launcher_username.is_empty() {
+            disabled_reasons.push("Username is required".to_string());
+        }
+        if self.launcher_min_memory > self.launcher_max_memory {
+            disabled_reasons.push("Min memory cannot exceed max memory".to_string());
+        }
+
+        if let Some(status) = self.evaluate_compatibility(selected_loader) {
+            if !status.is_known_good && !self.allow_experimental_launch {
+                disabled_reasons.push(
+                    "Unsupported Java/Minecraft combination (enable experimental launch)"
+                        .to_string(),
+                );
+            }
+        }
+
+        if selected_loader == "fabric" {
+            if self.fabric_support_checking {
+                disabled_reasons.push("Checking Fabric support".to_string());
+            } else if self.fabric_supported == Some(false) {
+                disabled_reasons.push("Fabric not available for this version".to_string());
+            } else if self.fabric_installing {
+                disabled_reasons.push("Installing Fabric".to_string());
+            } else if self.fabric_error.is_some() {
+                disabled_reasons.push("Fabric install failed".to_string());
+            } else if self.fabric_for_mc_version.as_deref() != Some(&self.selected_mc_version)
+                || self.fabric_version_id.is_none()
+            {
+                disabled_reasons.push("Fabric not ready yet".to_string());
+            }
+        }
+
+        if self.launch_in_progress {
+            disabled_reasons.push("Launch already in progress".to_string());
+        }
+
+        disabled_reasons
+    }
+
+    fn evaluate_launch_preflight(&self, selected_loader: &str) -> LaunchPreflightOutcome {
+        let disabled_reasons = self.launch_disabled_reasons(selected_loader);
+        if let Some(reason) = disabled_reasons.first() {
+            return LaunchPreflightOutcome::Blocked(reason.clone());
+        }
+
+        if selected_loader == "fabric" {
+            if let Some(launch_version) = self.fabric_version_id.clone() {
+                return LaunchPreflightOutcome::Ready {
+                    launch_version,
+                    loader: selected_loader.to_string(),
+                };
+            }
+            return LaunchPreflightOutcome::Blocked("Fabric not ready yet".to_string());
+        }
+
+        LaunchPreflightOutcome::Ready {
+            launch_version: self.selected_mc_version.clone(),
+            loader: selected_loader.to_string(),
+        }
+    }
+
+    fn paths_refer_to_same_directory(source: &std::path::Path, dest: &std::path::Path) -> bool {
+        match (std::fs::canonicalize(source), std::fs::canonicalize(dest)) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => source == dest,
+        }
     }
 
     fn maybe_auto_select_java_for_mc_version(&mut self) {
@@ -1125,7 +1139,72 @@ impl LauncherPanel {
 
 #[cfg(test)]
 mod tests {
-    use super::LauncherPanel;
+    use super::{LaunchPreflightOutcome, LauncherPanel};
+    use crate::infra::ConfigManager;
+    use crate::launcher::{JavaInstallation, MinecraftInstallation};
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use tokio::sync::mpsc;
+
+    fn test_temp_dir(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "mmd_launcher_panel_{}_{}_{}",
+            name,
+            std::process::id(),
+            nonce
+        ));
+        std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+        dir
+    }
+
+    fn base_panel() -> LauncherPanel {
+        let (panel_sender, panel_receiver) = mpsc::channel(20);
+        let game_root = test_temp_dir("game_root");
+        let mods_dir = game_root.join("mods");
+        let _ = std::fs::create_dir_all(&mods_dir);
+
+        LauncherPanel {
+            java_installations: vec![JavaInstallation {
+                path: PathBuf::from("/tmp/jdk-21/bin/java"),
+                version: "21.0.10".to_string(),
+                is_valid: true,
+            }],
+            selected_java_index: Some(0),
+            minecraft_installation: Some(MinecraftInstallation {
+                root_dir: game_root,
+                mods_dir,
+                available_versions: vec!["1.21.1".to_string()],
+            }),
+            launcher_username: "test-user".to_string(),
+            launcher_min_memory: 1024,
+            launcher_max_memory: 4096,
+            launch_status: None,
+            mod_copy_progress: None,
+            mod_copy_done_at: None,
+            launch_in_progress: false,
+            selected_mc_version: "1.21.1".to_string(),
+            java_download_window: crate::launcher::ui::JavaDownloadWindow::new(),
+            minecraft_download_window: crate::launcher::ui::MinecraftDownloadWindow::new(),
+            panel_sender,
+            panel_receiver,
+            fabric_installing: false,
+            fabric_progress: Arc::new(Mutex::new((0.0, String::new()))),
+            fabric_version_id: None,
+            fabric_for_mc_version: None,
+            fabric_error: None,
+            fabric_support_checking: false,
+            fabric_supported: None,
+            fabric_support_for_mc_version: None,
+            fabric_support_error: None,
+            allow_experimental_launch: false,
+            last_java_autoselect_for_mc: None,
+        }
+    }
 
     #[test]
     fn parse_java_major_supports_legacy_and_modern_versions() {
@@ -1185,6 +1264,159 @@ mod tests {
             LauncherPanel::recommended_java_major_for_mc_version("23w12a"),
             None
         );
+    }
+
+    #[test]
+    fn launch_preflight_blocks_when_java_not_selected() {
+        let mut panel = base_panel();
+        panel.java_installations.clear();
+        panel.selected_java_index = None;
+
+        assert_eq!(
+            panel.evaluate_launch_preflight("vanilla"),
+            LaunchPreflightOutcome::Blocked("No Java installation found".to_string())
+        );
+    }
+
+    #[test]
+    fn launch_preflight_blocks_when_minecraft_missing() {
+        let mut panel = base_panel();
+        panel.minecraft_installation = None;
+
+        assert_eq!(
+            panel.evaluate_launch_preflight("vanilla"),
+            LaunchPreflightOutcome::Blocked("Minecraft not found".to_string())
+        );
+    }
+
+    #[test]
+    fn launch_preflight_blocks_for_incompatible_matrix_without_override() {
+        let mut panel = base_panel();
+        panel.java_installations[0].version = "17.0.10".to_string();
+        panel.selected_mc_version = "1.21.1".to_string();
+
+        assert_eq!(
+            panel.evaluate_launch_preflight("vanilla"),
+            LaunchPreflightOutcome::Blocked(
+                "Unsupported Java/Minecraft combination (enable experimental launch)".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn launch_preflight_allows_incompatible_matrix_with_override() {
+        let mut panel = base_panel();
+        panel.java_installations[0].version = "17.0.10".to_string();
+        panel.selected_mc_version = "1.21.1".to_string();
+        panel.allow_experimental_launch = true;
+
+        assert_eq!(
+            panel.evaluate_launch_preflight("vanilla"),
+            LaunchPreflightOutcome::Ready {
+                launch_version: "1.21.1".to_string(),
+                loader: "vanilla".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn launch_preflight_blocks_fabric_when_not_supported() {
+        let mut panel = base_panel();
+        panel.fabric_supported = Some(false);
+        panel.fabric_support_for_mc_version = Some(panel.selected_mc_version.clone());
+
+        assert_eq!(
+            panel.evaluate_launch_preflight("fabric"),
+            LaunchPreflightOutcome::Blocked("Fabric not available for this version".to_string())
+        );
+    }
+
+    #[test]
+    fn launch_preflight_blocks_fabric_when_profile_not_ready() {
+        let mut panel = base_panel();
+        panel.fabric_supported = Some(true);
+        panel.fabric_support_for_mc_version = Some(panel.selected_mc_version.clone());
+        panel.fabric_for_mc_version = Some(panel.selected_mc_version.clone());
+        panel.fabric_version_id = None;
+
+        assert_eq!(
+            panel.evaluate_launch_preflight("fabric"),
+            LaunchPreflightOutcome::Blocked("Fabric not ready yet".to_string())
+        );
+    }
+
+    #[test]
+    fn launch_preflight_uses_fabric_profile_version_when_ready() {
+        let mut panel = base_panel();
+        panel.fabric_supported = Some(true);
+        panel.fabric_support_for_mc_version = Some(panel.selected_mc_version.clone());
+        panel.fabric_for_mc_version = Some(panel.selected_mc_version.clone());
+        panel.fabric_version_id = Some("fabric-loader-0.18.4-1.21.1".to_string());
+
+        assert_eq!(
+            panel.evaluate_launch_preflight("fabric"),
+            LaunchPreflightOutcome::Ready {
+                launch_version: "fabric-loader-0.18.4-1.21.1".to_string(),
+                loader: "fabric".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn launch_minecraft_keeps_status_when_launch_already_in_progress() {
+        let mut panel = base_panel();
+        panel.launch_in_progress = true;
+        panel.launch_status = Some("Launching Minecraft...".to_string());
+
+        let config_manager = Arc::new(ConfigManager::new().expect("config manager"));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+
+        panel.launch_minecraft(&config_manager, runtime.handle(), &None, "/tmp", "vanilla");
+
+        assert_eq!(
+            panel.launch_status.as_deref(),
+            Some("Launching Minecraft...")
+        );
+    }
+
+    #[test]
+    fn launch_minecraft_uses_preflight_reason_for_runtime_blocking() {
+        let mut panel = base_panel();
+        panel.java_installations.clear();
+        panel.selected_java_index = None;
+        let first_reason = panel
+            .launch_disabled_reasons("vanilla")
+            .first()
+            .cloned()
+            .expect("expected disabled reason");
+
+        let config_manager = Arc::new(ConfigManager::new().expect("config manager"));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+
+        panel.launch_minecraft(&config_manager, runtime.handle(), &None, "/tmp", "vanilla");
+
+        assert_eq!(panel.launch_status, Some(format!("❌ {}", first_reason)));
+    }
+
+    #[test]
+    fn paths_refer_to_same_directory_detects_equivalent_paths() {
+        let dir = test_temp_dir("same_dir");
+        let alt = dir.join(".");
+
+        assert!(LauncherPanel::paths_refer_to_same_directory(&dir, &alt));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn paths_refer_to_same_directory_detects_different_paths() {
+        let a = test_temp_dir("dir_a");
+        let b = test_temp_dir("dir_b");
+
+        assert!(!LauncherPanel::paths_refer_to_same_directory(&a, &b));
+
+        let _ = std::fs::remove_dir_all(&a);
+        let _ = std::fs::remove_dir_all(&b);
     }
 }
 
