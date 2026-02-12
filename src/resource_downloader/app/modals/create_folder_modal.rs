@@ -10,6 +10,7 @@ pub struct CreateFolderModal {
     folder_name: String,
     save_on_close: bool,
     edit_mode: Option<FolderLnk>,
+    parent_id: Option<String>,
 }
 
 impl CreateFolderModal {
@@ -19,6 +20,17 @@ impl CreateFolderModal {
             folder_name: String::new(),
             save_on_close: false,
             edit_mode: None,
+            parent_id: None,
+        }
+    }
+
+    pub fn with_parent(state: SharedRDState, parent_id: String) -> Self {
+        Self {
+            state,
+            folder_name: String::new(),
+            save_on_close: false,
+            edit_mode: None,
+            parent_id: Some(parent_id),
         }
     }
 
@@ -28,6 +40,7 @@ impl CreateFolderModal {
             folder_name: current_name,
             save_on_close: false,
             edit_mode: Some(folder_lnk),
+            parent_id: None,
         }
     }
 }
@@ -44,6 +57,8 @@ impl ModalWindow for CreateFolderModal {
     fn title(&self) -> String {
         if self.edit_mode.is_some() {
             "Rename Folder".to_string()
+        } else if self.parent_id.is_some() {
+            "Create Subfolder".to_string()
         } else {
             "Create Folder".to_string()
         }
@@ -96,7 +111,11 @@ impl ModalWindow for CreateFolderModal {
         if let Some(folder_lnk) = &self.edit_mode {
             FolderActions::rename_folder(self.state.clone(), folder_lnk.clone(), name);
         } else {
-            FolderActions::create_folder(self.state.clone(), name);
+            FolderActions::create_folder_with_parent(
+                self.state.clone(),
+                name,
+                self.parent_id.clone(),
+            );
         }
     }
 }

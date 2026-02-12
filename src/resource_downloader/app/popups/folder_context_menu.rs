@@ -35,6 +35,15 @@ impl Popup for FolderContextMenu {
         let folder_lnk = self.folder_lnk.clone();
 
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+            if ui.button("📁  Create Subfolder").clicked() {
+                let modal =
+                    CreateFolderModal::with_parent(self.state.clone(), folder_lnk.id().to_string());
+                self.state.read().modal_manager.open(Box::new(modal));
+                *open = false;
+            }
+
+            ui.separator();
+
             if ui.button("✏  Rename").clicked() {
                 let modal = CreateFolderModal::with_edit(
                     self.state.clone(),
