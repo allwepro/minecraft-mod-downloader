@@ -171,14 +171,21 @@ impl ListSettingsComponent {
 
         ui.label("Minecraft Version:");
         let version_opt = get_versions!(self.state);
+        let offline_mode = self.state.read().offline_mode;
+
         match version_opt {
             Some(versions) => {
-                if self.new_game_version.is_none() {
+                if !versions.is_empty() && self.new_game_version.is_none() {
                     self.new_game_version = Some(versions[0].clone());
                 }
 
                 egui::ComboBox::from_id_salt("new_list_version_selector")
-                    .selected_text(self.new_game_version.clone().unwrap().name)
+                    .selected_text(
+                        self.new_game_version
+                            .as_ref()
+                            .map(|v| v.name.clone())
+                            .unwrap_or("Select...".to_string()),
+                    )
                     .show_ui(ui, |ui| {
                         for version in versions {
                             ui.selectable_value(
@@ -191,7 +198,11 @@ impl ListSettingsComponent {
             }
             None => {
                 egui::ComboBox::from_id_salt("new_list_version_selector")
-                    .selected_text("Loading...")
+                    .selected_text(if offline_mode {
+                        "Offline (Unavailable)"
+                    } else {
+                        "Loading..."
+                    })
                     .show_ui(ui, |_ui| {});
             }
         }
@@ -203,12 +214,17 @@ impl ListSettingsComponent {
         let loaders_opt = get_loaders!(self.state, self.new_resource_type);
         match loaders_opt {
             Some(loaders) => {
-                if self.new_game_loader.is_none() {
+                if !loaders.is_empty() && self.new_game_loader.is_none() {
                     self.new_game_loader = Some(loaders[0].clone());
                 }
 
                 egui::ComboBox::from_id_salt("new_list_loader_selector")
-                    .selected_text(self.new_game_loader.clone().unwrap().name)
+                    .selected_text(
+                        self.new_game_loader
+                            .as_ref()
+                            .map(|l| l.name.clone())
+                            .unwrap_or("Select...".to_string()),
+                    )
                     .show_ui(ui, |ui| {
                         for loader in &loaders {
                             ui.selectable_value(
@@ -221,7 +237,11 @@ impl ListSettingsComponent {
             }
             None => {
                 egui::ComboBox::from_id_salt("new_list_loader_selector")
-                    .selected_text("Loading...")
+                    .selected_text(if offline_mode {
+                        "Offline (Unavailable)"
+                    } else {
+                        "Loading..."
+                    })
                     .show_ui(ui, |_ui| {});
             }
         }

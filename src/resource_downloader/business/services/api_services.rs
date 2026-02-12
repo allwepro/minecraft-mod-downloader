@@ -109,6 +109,10 @@ impl ApiService {
         )
     }
 
+    pub async fn ping(&self) -> anyhow::Result<()> {
+        self.provider.ping().await
+    }
+
     pub fn get_project_link(&self, project: &ProjectLnk, resource_type: &ResourceType) -> String {
         self.provider
             .get_project_link(resource_type, project.clone())

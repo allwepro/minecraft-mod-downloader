@@ -179,13 +179,25 @@ impl MultiSelectContextMenu {
             ui.separator();
         }
 
+        let offline_mode = self.state.read().offline_mode;
+
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
             if !updates_available.is_empty() {
                 let update_btn = egui::Button::new(
                     egui::RichText::new(format!("🔄  Update {} Selected", updates_available.len()))
-                        .color(Color32::from_rgb(0, 150, 240)),
+                        .color(if offline_mode {
+                            Color32::GRAY
+                        } else {
+                            Color32::from_rgb(0, 150, 240)
+                        }),
                 );
-                if ui.add(update_btn).clicked() {
+
+                let mut res = ui.add_enabled(!offline_mode, update_btn);
+                if offline_mode {
+                    res = res.on_disabled_hover_text("Disabled in offline mode");
+                }
+
+                if res.clicked() {
                     ProjectActions::update_selected_projects(
                         self.state.clone(),
                         self.list_lnk.clone(),
@@ -197,9 +209,19 @@ impl MultiSelectContextMenu {
             }
 
             let download_btn = egui::Button::new(
-                egui::RichText::new("⬇  Download Selected").color(Color32::LIGHT_BLUE),
+                egui::RichText::new("⬇  Download Selected").color(if offline_mode {
+                    Color32::GRAY
+                } else {
+                    Color32::LIGHT_BLUE
+                }),
             );
-            if ui.add(download_btn).clicked() {
+
+            let mut res = ui.add_enabled(!offline_mode, download_btn);
+            if offline_mode {
+                res = res.on_disabled_hover_text("Disabled in offline mode");
+            }
+
+            if res.clicked() {
                 let found_hashes: HashSet<String> = self
                     .state
                     .read()

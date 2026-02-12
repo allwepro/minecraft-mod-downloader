@@ -35,7 +35,13 @@ impl ModalWindow for CreateModal {
 
         ui.add_space(12.0);
         ui.horizontal(|ui| {
-            if ui.button("Create").clicked() {
+            let can_create = self.list_settings_component.new_game_version.is_some()
+                && self.list_settings_component.new_game_loader.is_some();
+
+            if ui
+                .add_enabled(can_create, egui::Button::new("Create"))
+                .clicked()
+            {
                 self.save_on_close = true;
                 *open = false;
             }
@@ -51,18 +57,21 @@ impl ModalWindow for CreateModal {
         if !self.save_on_close {
             return;
         }
+
+        let (ver, loader) = match (
+            self.list_settings_component.new_game_version.clone(),
+            self.list_settings_component.new_game_loader.clone(),
+        ) {
+            (Some(v), Some(l)) => (v, l),
+            _ => return,
+        };
+
         ListActions::create_list(
             self.state.clone(),
             self.list_settings_component.new_list_name.clone(),
             self.list_settings_component.new_resource_type,
-            self.list_settings_component
-                .new_game_version
-                .clone()
-                .unwrap(),
-            self.list_settings_component
-                .new_game_loader
-                .clone()
-                .unwrap(),
+            ver,
+            loader,
             self.list_settings_component.new_download_dir.clone(),
         );
     }
