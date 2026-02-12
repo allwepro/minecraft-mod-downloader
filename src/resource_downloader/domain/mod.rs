@@ -211,6 +211,8 @@ pub struct Folder {
     pub id: String,
     pub name: String,
     pub collapsed: bool,
+    #[serde(default)]
+    pub parent_id: Option<String>, // For subfolder hierarchy
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

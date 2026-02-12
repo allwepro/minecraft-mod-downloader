@@ -30,6 +30,9 @@ pub struct MainPanel {
     rename_input_open: bool,
     rename_input: String,
 
+    folder_rename_input: String,
+    current_folder_id: Option<String>,
+
     search_query: String,
     selected_projects: HashSet<ProjectLnk>,
     last_selected: Option<ProjectLnk>,
@@ -47,6 +50,8 @@ impl MainPanel {
             sort_popup: SortPopup::new(state.clone()),
             rename_input_open: false,
             rename_input: String::new(),
+            folder_rename_input: String::new(),
+            current_folder_id: None,
             search_query: String::new(),
             selected_projects: HashSet::new(),
             last_selected: None,
@@ -1522,6 +1527,12 @@ impl MainPanel {
             (name, count)
         };
 
+        let current_folder_id = folder_lnk.id().to_string();
+        if self.current_folder_id.as_ref() != Some(&current_folder_id) {
+            self.folder_rename_input = folder_name.clone();
+            self.current_folder_id = Some(current_folder_id);
+        }
+
         ui.horizontal(|ui| {
             ui.heading(format!("📁 {}", folder_name));
 
@@ -1591,23 +1602,23 @@ impl MainPanel {
                     ui.add_space(12.0);
 
                     ui.horizontal(|ui| {
-                        let mut new_name = folder_name.clone();
                         let text_width = ui.available_width() - 120.0;
-                        let _response = ui.add(
-                            egui::TextEdit::singleline(&mut new_name)
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut self.folder_rename_input)
                                 .desired_width(text_width)
                                 .hint_text("Enter folder name..."),
                         );
 
                         if ui.button("💾 Rename").clicked()
-                            && !new_name.trim().is_empty()
-                            && new_name != folder_name
+                            && !self.folder_rename_input.trim().is_empty()
+                            && self.folder_rename_input != folder_name
                         {
                             FolderActions::rename_folder(
                                 self.state.clone(),
                                 folder_lnk.clone(),
-                                new_name.trim().to_string(),
+                                self.folder_rename_input.trim().to_string(),
                             );
+                            self.folder_rename_input = self.folder_rename_input.trim().to_string();
                         }
                     });
                 });
