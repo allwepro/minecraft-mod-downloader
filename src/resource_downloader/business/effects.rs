@@ -11,6 +11,8 @@ pub enum Effect {
     // Load-in effects
     Initialize,
 
+    PingConnectivity,
+
     // Program effects
     SaveConfig {
         config: AppConfig,
