@@ -888,3 +888,140 @@ impl AdvancedLauncher {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::AdvancedLauncher;
+    use crate::launcher::domain::version_manifest::{OsRule, Rule};
+
+    fn current_os_name() -> &'static str {
+        if cfg!(target_os = "windows") {
+            "windows"
+        } else if cfg!(target_os = "macos") {
+            "osx"
+        } else {
+            "linux"
+        }
+    }
+
+    #[test]
+    fn normalize_argument_trims_system_property_value() {
+        let arg = "   -Djava.library.path= /tmp/natives   ";
+        assert_eq!(
+            AdvancedLauncher::normalize_argument(arg),
+            "-Djava.library.path=/tmp/natives"
+        );
+    }
+
+    #[test]
+    fn normalize_argument_keeps_non_property_args() {
+        let arg = "  --username  ";
+        assert_eq!(AdvancedLauncher::normalize_argument(arg), "--username");
+    }
+
+    #[test]
+    fn strip_quickplay_args_removes_all_quickplay_flags() {
+        let args = vec![
+            "--username".to_string(),
+            "alex".to_string(),
+            "--quickPlaySingleplayer".to_string(),
+            "MyWorld".to_string(),
+            "--quickPlayPath".to_string(),
+            "/tmp/worlds".to_string(),
+            "--quickPlayMultiplayer".to_string(),
+            "--version".to_string(),
+            "1.21.1".to_string(),
+        ];
+
+        let stripped = AdvancedLauncher::strip_quickplay_args(args);
+
+        assert_eq!(
+            stripped,
+            vec![
+                "--username".to_string(),
+                "alex".to_string(),
+                "--version".to_string(),
+                "1.21.1".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn check_rules_allows_current_os() {
+        let rules = vec![Rule {
+            action: "allow".to_string(),
+            os: Some(OsRule {
+                name: Some(current_os_name().to_string()),
+                version: None,
+                arch: None,
+            }),
+        }];
+
+        assert!(AdvancedLauncher::check_rules(&rules));
+    }
+
+    #[test]
+    fn check_rules_applies_last_matching_rule() {
+        let rules = vec![
+            Rule {
+                action: "allow".to_string(),
+                os: Some(OsRule {
+                    name: Some(current_os_name().to_string()),
+                    version: None,
+                    arch: None,
+                }),
+            },
+            Rule {
+                action: "disallow".to_string(),
+                os: Some(OsRule {
+                    name: Some(current_os_name().to_string()),
+                    version: None,
+                    arch: None,
+                }),
+            },
+        ];
+
+        assert!(!AdvancedLauncher::check_rules(&rules));
+    }
+
+    #[test]
+    fn replace_or_push_arg_replaces_existing_value() {
+        let mut args = vec![
+            "-Xmx2G".to_string(),
+            "-Dorg.lwjgl.librarypath=/tmp/old".to_string(),
+        ];
+
+        AdvancedLauncher::replace_or_push_arg(
+            &mut args,
+            "-Dorg.lwjgl.librarypath=",
+            "-Dorg.lwjgl.librarypath=/tmp/new".to_string(),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "-Xmx2G".to_string(),
+                "-Dorg.lwjgl.librarypath=/tmp/new".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn replace_or_push_arg_pushes_when_missing() {
+        let mut args = vec!["-Xmx2G".to_string()];
+
+        AdvancedLauncher::replace_or_push_arg(
+            &mut args,
+            "-Djna.library.path=",
+            "-Djna.library.path=/tmp/jna".to_string(),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "-Xmx2G".to_string(),
+                "-Djna.library.path=/tmp/jna".to_string(),
+            ]
+        );
+    }
+}

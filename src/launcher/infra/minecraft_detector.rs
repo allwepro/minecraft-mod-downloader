@@ -109,3 +109,65 @@ impl MinecraftDetector {
         Some(minecraft_dir)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::MinecraftDetector;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "mmd_mc_detector_{}_{}_{}",
+            name,
+            std::process::id(),
+            nonce
+        ));
+        std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+        dir
+    }
+
+    fn create_version(versions_dir: &PathBuf, version: &str, with_json: bool, with_jar: bool) {
+        let dir = versions_dir.join(version);
+        std::fs::create_dir_all(&dir).expect("failed to create version dir");
+        if with_json {
+            let json = dir.join(format!("{}.json", version));
+            std::fs::write(&json, b"{}").expect("failed to create json");
+        }
+        if with_jar {
+            let jar = dir.join(format!("{}.jar", version));
+            std::fs::write(&jar, b"jar").expect("failed to create jar");
+        }
+    }
+
+    #[test]
+    fn is_loader_profile_detects_known_loaders() {
+        assert!(MinecraftDetector::is_loader_profile("fabric-loader-0.16.0-1.20.1"));
+        assert!(MinecraftDetector::is_loader_profile("forge-47.2.0"));
+        assert!(MinecraftDetector::is_loader_profile("neoforge-20.6.1"));
+        assert!(MinecraftDetector::is_loader_profile("quilt-loader-0.26.1"));
+        assert!(!MinecraftDetector::is_loader_profile("1.20.1"));
+    }
+
+    #[test]
+    fn detect_installed_versions_filters_incomplete_and_loader_profiles() {
+        let root = temp_dir("detect_versions");
+        let versions_dir = root.join("versions");
+        std::fs::create_dir_all(&versions_dir).expect("failed to create versions dir");
+
+        create_version(&versions_dir, "1.20.1", true, true);
+        create_version(&versions_dir, "1.21.1", true, true);
+        create_version(&versions_dir, "1.19.4", true, false);
+        create_version(&versions_dir, "fabric-loader-0.16.0-1.20.1", true, true);
+
+        let versions = MinecraftDetector::detect_installed_versions(&versions_dir);
+
+        assert_eq!(versions, vec!["1.21.1".to_string(), "1.20.1".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

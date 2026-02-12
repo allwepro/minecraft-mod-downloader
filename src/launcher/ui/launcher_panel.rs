@@ -1123,6 +1123,71 @@ impl LauncherPanel {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::LauncherPanel;
+
+    #[test]
+    fn parse_java_major_supports_legacy_and_modern_versions() {
+        assert_eq!(LauncherPanel::parse_java_major("1.8.0_402"), Some(8));
+        assert_eq!(LauncherPanel::parse_java_major("17.0.10"), Some(17));
+        assert_eq!(LauncherPanel::parse_java_major("21"), Some(21));
+    }
+
+    #[test]
+    fn parse_java_major_rejects_invalid_values() {
+        assert_eq!(LauncherPanel::parse_java_major("java-17"), None);
+        assert_eq!(LauncherPanel::parse_java_major(""), None);
+    }
+
+    #[test]
+    fn parse_release_mc_version_parses_release_only() {
+        assert_eq!(
+            LauncherPanel::parse_release_mc_version("1.20.5"),
+            Some((1, 20, 5))
+        );
+        assert_eq!(
+            LauncherPanel::parse_release_mc_version("1.21"),
+            Some((1, 21, 0))
+        );
+    }
+
+    #[test]
+    fn parse_release_mc_version_rejects_non_release_values() {
+        assert_eq!(LauncherPanel::parse_release_mc_version("23w12a"), None);
+        assert_eq!(LauncherPanel::parse_release_mc_version("1.20-pre1"), None);
+        assert_eq!(LauncherPanel::parse_release_mc_version("1.20.1.4"), None);
+    }
+
+    #[test]
+    fn recommended_java_major_follows_matrix_rules() {
+        assert_eq!(
+            LauncherPanel::recommended_java_major_for_mc_version("1.16.5"),
+            Some(8)
+        );
+        assert_eq!(
+            LauncherPanel::recommended_java_major_for_mc_version("1.19.4"),
+            Some(17)
+        );
+        assert_eq!(
+            LauncherPanel::recommended_java_major_for_mc_version("1.20.4"),
+            Some(17)
+        );
+        assert_eq!(
+            LauncherPanel::recommended_java_major_for_mc_version("1.20.5"),
+            Some(21)
+        );
+        assert_eq!(
+            LauncherPanel::recommended_java_major_for_mc_version("1.21.1"),
+            Some(21)
+        );
+        assert_eq!(
+            LauncherPanel::recommended_java_major_for_mc_version("23w12a"),
+            None
+        );
+    }
+}
+
 impl Default for LauncherPanel {
     fn default() -> Self {
         Self::new()
