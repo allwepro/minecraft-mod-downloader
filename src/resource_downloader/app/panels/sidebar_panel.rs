@@ -14,6 +14,26 @@ use eframe::egui;
 use egui::{Color32, StrokeKind, Ui};
 use std::collections::{HashMap, HashSet};
 
+// Type aliases to reduce complexity
+type ListItem = (ListLnk, ResourceType, String, String, String, String, usize);
+type ListsByFolder = HashMap<Option<String>, Vec<ListItem>>;
+type FolderMap = HashMap<String, crate::resource_downloader::domain::Folder>;
+
+// Helper struct to reduce argument count in recursive functions
+struct RenderContext<'a> {
+    open_list: &'a Option<ListLnk>,
+    pending_list_scroll: &'a Option<ListLnk>,
+}
+
+impl<'a> RenderContext<'a> {
+    fn new(open_list: &'a Option<ListLnk>, pending_list_scroll: &'a Option<ListLnk>) -> Self {
+        Self {
+            open_list,
+            pending_list_scroll,
+        }
+    }
+}
+
 pub struct SidebarPanel {
     state: SharedRDState,
     list_search_query: String,
@@ -132,7 +152,7 @@ impl SidebarPanel {
             (state.open_list.clone(), state.pending_list_scroll.take())
         };
 
-        let list_items: Vec<(ListLnk, ResourceType, String, String, String, String, usize)> = {
+        let list_items: Vec<ListItem> = {
             let state = self.state.read();
             state.list_pool.map_filter(|list| {
                 let resource_type = list
@@ -269,7 +289,7 @@ impl SidebarPanel {
     fn render_folder_structure(
         &mut self,
         ui: &mut Ui,
-        list_items: Vec<(ListLnk, ResourceType, String, String, String, String, usize)>,
+        list_items: Vec<ListItem>,
         open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
     ) {
@@ -358,21 +378,22 @@ impl SidebarPanel {
         let mut folder_map: HashMap<String, _> =
             folders.into_iter().map(|f| (f.id.clone(), f)).collect();
 
+        let render_ctx = RenderContext::new(open_list, pending_list_scroll);
+
         for folder_id in folder_order.clone() {
             if let Some(folder) = folder_map.get(&folder_id) {
                 // Only render root-level folders (no parent)
-                if folder.parent_id.is_none() {
-                    if let Some(folder) = folder_map.remove(&folder_id) {
-                        self.render_folder_recursive(
-                            ui,
-                            folder,
-                            &mut folder_map,
-                            &lists_by_folder,
-                            open_list,
-                            pending_list_scroll,
-                            0, // depth level
-                        );
-                    }
+                if folder.parent_id.is_none()
+                    && let Some(folder) = folder_map.remove(&folder_id)
+                {
+                    self.render_folder_recursive(
+                        ui,
+                        folder,
+                        &mut folder_map,
+                        &lists_by_folder,
+                        &render_ctx,
+                        0, // depth level
+                    );
                 }
             }
         }
@@ -447,7 +468,7 @@ impl SidebarPanel {
         &mut self,
         ui: &mut Ui,
         folder: crate::resource_downloader::domain::Folder,
-        lists: Vec<(ListLnk, ResourceType, String, String, String, String, usize)>,
+        lists: Vec<ListItem>,
         open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
     ) {
@@ -516,18 +537,19 @@ impl SidebarPanel {
 
                     let icon = if !folder.collapsed { "📂" } else { "📁" };
 
-                    let drag_handle = ui.dnd_drag_source(dnd_id, folder_id_payload.clone(), |ui| {
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new("≡")
-                                    .size(14.0)
-                                    .color(Color32::from_gray(120)),
+                    let _drag_handle =
+                        ui.dnd_drag_source(dnd_id, folder_id_payload.clone(), |ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new("≡")
+                                        .size(14.0)
+                                        .color(Color32::from_gray(120)),
+                                )
+                                .sense(egui::Sense::hover()),
                             )
-                            .sense(egui::Sense::hover()),
-                        )
-                        .on_hover_cursor(egui::CursorIcon::Grab)
-                        .on_hover_text("Drag to move folder")
-                    });
+                            .on_hover_cursor(egui::CursorIcon::Grab)
+                            .on_hover_text("Drag to move folder")
+                        });
 
                     ui.add_space(4.0);
 
@@ -577,42 +599,40 @@ impl SidebarPanel {
         if is_drag_target {
             let folder_rect = outer_response.rect;
 
-            if let Some(hover_pos) = ui.ctx().pointer_hover_pos() {
-                if folder_rect.contains(hover_pos) {
-                    if let Some(payload) =
-                        ui.memory(|mem| mem.data.get_temp::<String>(egui::Id::new("dnd_payload")))
-                    {
-                        let (stroke_color, fill_color, text) = if payload.starts_with("folder:") {
-                            (
-                                Color32::from_rgba_unmultiplied(100, 200, 100, 200),
-                                Color32::from_rgba_unmultiplied(100, 200, 100, 40),
-                                "📁 Move folder here",
-                            )
-                        } else {
-                            (
-                                Color32::from_rgba_unmultiplied(100, 150, 255, 200),
-                                Color32::from_rgba_unmultiplied(100, 150, 255, 40),
-                                "📋 Move list to folder",
-                            )
-                        };
+            if let Some(hover_pos) = ui.ctx().pointer_hover_pos()
+                && folder_rect.contains(hover_pos)
+                && let Some(payload) =
+                    ui.memory(|mem| mem.data.get_temp::<String>(egui::Id::new("dnd_payload")))
+            {
+                let (stroke_color, fill_color, text) = if payload.starts_with("folder:") {
+                    (
+                        Color32::from_rgba_unmultiplied(100, 200, 100, 200),
+                        Color32::from_rgba_unmultiplied(100, 200, 100, 40),
+                        "📁 Move folder here",
+                    )
+                } else {
+                    (
+                        Color32::from_rgba_unmultiplied(100, 150, 255, 200),
+                        Color32::from_rgba_unmultiplied(100, 150, 255, 40),
+                        "📋 Move list to folder",
+                    )
+                };
 
-                        ui.painter().rect_stroke(
-                            folder_rect,
-                            4.0,
-                            egui::Stroke::new(3.0, stroke_color),
-                            StrokeKind::Middle,
-                        );
-                        ui.painter().rect_filled(folder_rect, 4.0, fill_color);
+                ui.painter().rect_stroke(
+                    folder_rect,
+                    4.0,
+                    egui::Stroke::new(3.0, stroke_color),
+                    StrokeKind::Middle,
+                );
+                ui.painter().rect_filled(folder_rect, 4.0, fill_color);
 
-                        ui.painter().text(
-                            folder_rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            text,
-                            egui::FontId::proportional(10.0),
-                            stroke_color,
-                        );
-                    }
-                }
+                ui.painter().text(
+                    folder_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    egui::FontId::proportional(10.0),
+                    stroke_color,
+                );
             }
 
             let folder_sense = ui.interact(
@@ -651,13 +671,9 @@ impl SidebarPanel {
         &mut self,
         ui: &mut Ui,
         folder: crate::resource_downloader::domain::Folder,
-        folder_map: &mut HashMap<String, crate::resource_downloader::domain::Folder>,
-        lists_by_folder: &HashMap<
-            Option<String>,
-            Vec<(ListLnk, ResourceType, String, String, String, String, usize)>,
-        >,
-        open_list: &Option<ListLnk>,
-        pending_list_scroll: &Option<ListLnk>,
+        folder_map: &mut FolderMap,
+        lists_by_folder: &ListsByFolder,
+        ctx: &RenderContext,
         depth: usize,
     ) {
         let folder_lnk = FolderLnk::new(folder.id.clone());
@@ -667,7 +683,13 @@ impl SidebarPanel {
             .cloned()
             .unwrap_or_default();
 
-        self.render_folder(ui, folder.clone(), lists, open_list, pending_list_scroll);
+        self.render_folder(
+            ui,
+            folder.clone(),
+            lists,
+            ctx.open_list,
+            ctx.pending_list_scroll,
+        );
 
         if !folder.collapsed {
             let subfolders: Vec<String> = folder_map
@@ -684,8 +706,7 @@ impl SidebarPanel {
                             subfolder,
                             folder_map,
                             lists_by_folder,
-                            open_list,
-                            pending_list_scroll,
+                            ctx,
                             depth + 1,
                         );
                     });
@@ -697,7 +718,7 @@ impl SidebarPanel {
     fn render_list_with_dnd(
         &mut self,
         ui: &mut Ui,
-        item: &(ListLnk, ResourceType, String, String, String, String, usize),
+        item: &ListItem,
         open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
     ) {
@@ -746,7 +767,7 @@ impl SidebarPanel {
     fn render_row(
         &self,
         ui: &mut Ui,
-        item: &(ListLnk, ResourceType, String, String, String, String, usize),
+        item: &ListItem,
         open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
     ) -> egui::Response {

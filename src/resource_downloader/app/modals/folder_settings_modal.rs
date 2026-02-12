@@ -4,6 +4,7 @@ use crate::resource_downloader::business::folder_actions::FolderActions;
 use crate::resource_downloader::domain::FolderLnk;
 use egui::{Color32, Id, Ui};
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct FolderSettingsModal {
     state: SharedRDState,
@@ -13,6 +14,7 @@ pub struct FolderSettingsModal {
     save_on_close: bool,
 }
 
+#[allow(dead_code)]
 impl FolderSettingsModal {
     pub fn new(state: SharedRDState, folder_lnk: FolderLnk, folder_name: String) -> Self {
         Self {
