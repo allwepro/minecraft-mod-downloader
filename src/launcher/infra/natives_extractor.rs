@@ -13,16 +13,16 @@ impl NativesExtractor {
     ) -> Result<()> {
         // Remove old natives directory to ensure clean extraction
         if natives_dir.exists() {
-            println!("Removing old natives directory: {}", natives_dir.display());
+            log::debug!("Removing old natives directory: {}", natives_dir.display());
             fs::remove_dir_all(natives_dir)
                 .context("Failed to remove old natives directory")?;
         }
 
         // Create natives directory
-        println!("Creating natives directory: {}", natives_dir.display());
+        log::debug!("Creating natives directory: {}", natives_dir.display());
         fs::create_dir_all(natives_dir)
             .context("Failed to create natives directory")?;
-        println!("Natives directory created successfully");
+        log::debug!("Natives directory created successfully");
 
         log::info!("Extracting natives to: {}", natives_dir.display());
 
@@ -32,12 +32,12 @@ impl NativesExtractor {
                 continue;
             }
 
-            println!("Processing JAR: {}", jar_path.display());
+            log::debug!("Processing JAR: {}", jar_path.display());
             Self::extract_jar_natives(jar_path, natives_dir)?;
         }
 
         log::info!("Native extraction complete");
-        println!("All natives extracted successfully");
+        log::debug!("All natives extracted successfully");
         Ok(())
     }
 
@@ -64,7 +64,7 @@ impl NativesExtractor {
 
                 // Skip if already exists
                 if target_path.exists() {
-                    println!("  Skipping (already exists): {}", target_path.display());
+                    log::debug!("  Skipping (already exists): {}", target_path.display());
                     continue;
                 }
 
@@ -73,13 +73,21 @@ impl NativesExtractor {
                 file.read_to_end(&mut contents)?;
                 fs::write(&target_path, contents)?;
 
-                println!("  Extracted: {}", target_path.display());
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mode = file.unix_mode().unwrap_or(0o755);
+                    let perms = fs::Permissions::from_mode(mode);
+                    let _ = fs::set_permissions(&target_path, perms);
+                }
+
+                log::debug!("  Extracted: {}", target_path.display());
                 log::debug!("Extracted native: {}", target_path.display());
                 extracted_count += 1;
             }
         }
 
-        println!("  Extracted {} files from this JAR", extracted_count);
+        log::debug!("  Extracted {} files from this JAR", extracted_count);
         Ok(())
     }
 
@@ -109,10 +117,29 @@ impl NativesExtractor {
         let mut native_jars = Vec::new();
         let libraries_dir = game_dir.join("libraries");
         let classifier_suffix = Self::get_natives_classifier_suffix();
+        let arm64 = cfg!(target_os = "macos") && cfg!(target_arch = "aarch64");
+        let mut arm64_coords = std::collections::HashSet::new();
 
-        println!("=== Searching for native JARs ===");
-        println!("Looking for classifier: {}", classifier_suffix);
-        println!("Total libraries in manifest: {}", manifest.libraries.len());
+        if arm64 {
+            for library in &manifest.libraries {
+                if !manifest.should_include_library(library) {
+                    continue;
+                }
+                if library.name.ends_with(":natives-macos-arm64") {
+                    let parts: Vec<&str> = library.name.split(':').collect();
+                    if parts.len() == 4 {
+                        arm64_coords.insert(format!("{}:{}:{}", parts[0], parts[1], parts[2]));
+                    }
+                }
+            }
+        }
+
+        log::debug!("=== Searching for native JARs ===");
+        log::debug!("Looking for classifier: {}", classifier_suffix);
+        if arm64 {
+            log::debug!("Will prefer macOS ARM64 natives when available");
+        }
+        log::debug!("Total libraries in manifest: {}", manifest.libraries.len());
 
         for library in &manifest.libraries {
             // Skip if library shouldn't be included
@@ -128,13 +155,13 @@ impl NativesExtractor {
                         if let Some(classifiers) = &downloads.classifiers {
                             if let Some(artifact) = classifiers.get(&classifier) {
                                 let native_jar = libraries_dir.join(&artifact.path);
-                                println!("Found native library: {}", library.name);
-                                println!("  Checking path: {}", native_jar.display());
+                                log::debug!("Found native library: {}", library.name);
+                                log::debug!("  Checking path: {}", native_jar.display());
                                 if native_jar.exists() {
-                                    println!("  ✓ Exists!");
+                                    log::debug!("  ✓ Exists!");
                                     native_jars.push(native_jar);
                                 } else {
-                                    println!("  ✗ Not found!");
+                                    log::debug!("  ✗ Not found!");
                                     log::warn!("Native JAR not found: {}", native_jar.display());
                                 }
                                 continue;
@@ -146,7 +173,7 @@ impl NativesExtractor {
 
             // Fallback: classifier embedded in name (non-standard)
             if library.name.contains(classifier_suffix) {
-                println!("Found native library (fallback): {}", library.name);
+                log::debug!("Found native library (fallback): {}", library.name);
                 // Parse library name with classifier
                 // Format: "group:artifact:version:classifier"
                 let parts: Vec<&str> = library.name.split(':').collect();
@@ -158,6 +185,12 @@ impl NativesExtractor {
                 let artifact = parts[1];
                 let version = parts[2];
                 let classifier = parts[3];
+                if arm64 && classifier == "natives-macos" {
+                    let base = format!("{}:{}:{}", parts[0], parts[1], parts[2]);
+                    if arm64_coords.contains(&base) {
+                        continue;
+                    }
+                }
 
                 // Build path to native JAR
                 let native_jar = libraries_dir
@@ -166,18 +199,18 @@ impl NativesExtractor {
                     .join(version)
                     .join(format!("{}-{}-{}.jar", artifact, version, classifier));
 
-                println!("  Checking path: {}", native_jar.display());
+                log::debug!("  Checking path: {}", native_jar.display());
                 if native_jar.exists() {
-                    println!("  ✓ Exists!");
+                    log::debug!("  ✓ Exists!");
                     native_jars.push(native_jar);
                 } else {
-                    println!("  ✗ Not found!");
+                    log::debug!("  ✗ Not found!");
                     log::warn!("Native JAR not found: {}", native_jar.display());
                 }
             }
         }
 
-        println!("=== Total native JARs found: {} ===", native_jars.len());
+        log::debug!("=== Total native JARs found: {} ===", native_jars.len());
         native_jars
     }
 
