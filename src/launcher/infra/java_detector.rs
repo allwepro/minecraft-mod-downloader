@@ -229,3 +229,41 @@ impl JavaDetector {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::JavaDetector;
+
+    #[test]
+    fn parse_java_version_openjdk_format() {
+        let output = r#"openjdk version "17.0.10" 2024-01-16"#;
+        assert_eq!(
+            JavaDetector::parse_java_version(output),
+            Some("17.0.10".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_java_version_legacy_format() {
+        let output = r#"java version "1.8.0_402""#;
+        assert_eq!(
+            JavaDetector::parse_java_version(output),
+            Some("1.8.0_402".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_java_version_returns_none_for_invalid_output() {
+        let output = "this text does not contain a quoted version";
+        assert_eq!(JavaDetector::parse_java_version(output), None);
+    }
+
+    #[test]
+    fn java_executable_matches_current_platform() {
+        if cfg!(target_os = "windows") {
+            assert_eq!(JavaDetector::java_executable(), "java.exe");
+        } else {
+            assert_eq!(JavaDetector::java_executable(), "java");
+        }
+    }
+}
