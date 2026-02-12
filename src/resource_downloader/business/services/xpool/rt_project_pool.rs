@@ -124,16 +124,26 @@ impl RTProjectPool {
         version: GameVersion,
         loader: GameLoader,
     ) -> anyhow::Result<Option<Vec<RTProjectVersion>>> {
-        let (ctx, fun) = Self::versions_prepare_request(
-            &project,
-            resource_type,
-            version.clone(),
-            loader.clone(),
-        );
+        let (ctx, fun) =
+            Self::versions_prepare_request(&project, resource_type, Some(version), Some(loader));
 
         self.cache
             .get::<Vec<RTProjectVersion>>(CacheType::ProjectVersions, ctx, fun)
     }
+
+    pub fn get_versions_any_loader(
+        &self,
+        project: ProjectLnk,
+        resource_type: ResourceType,
+        version: GameVersion,
+    ) -> anyhow::Result<Option<Vec<RTProjectVersion>>> {
+        let (ctx, fun) =
+            Self::versions_prepare_request(&project, resource_type, Some(version), None);
+
+        self.cache
+            .get::<Vec<RTProjectVersion>>(CacheType::ProjectVersions, ctx, fun)
+    }
+
     pub async fn get_versions_blocking(
         &self,
         project: ProjectLnk,
@@ -141,12 +151,27 @@ impl RTProjectPool {
         version: GameVersion,
         loader: GameLoader,
     ) -> anyhow::Result<Option<Vec<RTProjectVersion>>> {
-        let (ctx, fun) = Self::versions_prepare_request(
-            &project,
-            resource_type,
-            version.clone(),
-            loader.clone(),
-        );
+        let (ctx, fun) =
+            Self::versions_prepare_request(&project, resource_type, Some(version), Some(loader));
+
+        self.cache
+            .get_blocking::<Vec<RTProjectVersion>>(
+                CacheType::ProjectVersions,
+                ctx,
+                fun,
+                Duration::from_secs(5),
+            )
+            .await
+    }
+
+    pub async fn get_versions_any_loader_blocking(
+        &self,
+        project: ProjectLnk,
+        resource_type: ResourceType,
+        version: GameVersion,
+    ) -> anyhow::Result<Option<Vec<RTProjectVersion>>> {
+        let (ctx, fun) =
+            Self::versions_prepare_request(&project, resource_type, Some(version), None);
 
         self.cache
             .get_blocking::<Vec<RTProjectVersion>>(
@@ -179,7 +204,16 @@ impl RTProjectPool {
             return Ok(versions);
         }
 
-        // Fallback: Find closest version
+        // Try any loader
+        if resource_type.likely_cross_loader_compatible()
+            && let Ok(Some(any_loader)) =
+                self.get_versions_any_loader(project.clone(), resource_type, version.clone())
+            && !any_loader.is_empty()
+        {
+            return Ok(Some(any_loader));
+        }
+
+        // Try the closest version
         if let Ok(Some(data)) = self.get_metadata(project.clone(), resource_type) {
             let best_v = data
                 .supported_versions
@@ -189,7 +223,16 @@ impl RTProjectPool {
             if let Some(bv) = best_v
                 && bv != &version
             {
-                return self.get_versions(project, resource_type, bv.clone(), loader);
+                let fallback =
+                    self.get_versions(project.clone(), resource_type, bv.clone(), loader.clone())?;
+                if let Some(v) = &fallback
+                    && !v.is_empty()
+                {
+                    return Ok(fallback);
+                }
+
+                // Try the closest game version but any loader
+                return self.get_versions_any_loader(project, resource_type, bv.clone());
             }
         }
 
@@ -218,7 +261,17 @@ impl RTProjectPool {
             return Ok(versions);
         }
 
-        // Fallback: Find closest version
+        // Try any loader
+        if resource_type.likely_cross_loader_compatible()
+            && let Ok(Some(any_loader)) = self
+                .get_versions_any_loader_blocking(project.clone(), resource_type, version.clone())
+                .await
+            && !any_loader.is_empty()
+        {
+            return Ok(Some(any_loader));
+        }
+
+        // Try the closest version
         if let Ok(Some(data)) = self
             .get_metadata_blocking(project.clone(), resource_type)
             .await
@@ -231,8 +284,23 @@ impl RTProjectPool {
             if let Some(bv) = best_v
                 && bv != &version
             {
+                let fallback = self
+                    .get_versions_blocking(
+                        project.clone(),
+                        resource_type,
+                        bv.clone(),
+                        loader.clone(),
+                    )
+                    .await?;
+                if let Some(v) = &fallback
+                    && !v.is_empty()
+                {
+                    return Ok(fallback);
+                }
+
+                // Try the closest game version but any loader
                 return self
-                    .get_versions_blocking(project, resource_type, bv.clone(), loader)
+                    .get_versions_any_loader_blocking(project, resource_type, bv.clone())
                     .await;
             }
         }
@@ -340,8 +408,8 @@ impl RTProjectPool {
     fn versions_prepare_request(
         project: &ProjectLnk,
         resource_type: ResourceType,
-        version: GameVersion,
-        loader: GameLoader,
+        version: Option<GameVersion>,
+        loader: Option<GameLoader>,
     ) -> (CacheContext, FetchFn) {
         let project_owned = project.clone();
         let resource_type_owned = resource_type;
@@ -351,8 +419,8 @@ impl RTProjectPool {
             CacheContext {
                 id: project.to_context_id(),
                 resource_type: Some(resource_type),
-                version: Some(version.clone()),
-                loader: Some(loader.clone()),
+                version: version.clone(),
+                loader: loader.clone(),
             },
             Box::new(move |p_ctx| {
                 let project = project_owned.clone();
@@ -366,8 +434,8 @@ impl RTProjectPool {
                             &p_ctx,
                             project,
                             &resource_type,
-                            Some(&version),
-                            Some(&loader),
+                            version.as_ref(),
+                            loader.as_ref(),
                         )
                         .await?;
                     Ok(Arc::new(data) as AnyCacheData)
