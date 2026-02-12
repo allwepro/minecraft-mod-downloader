@@ -15,8 +15,8 @@ impl ProjectLnk {
         self.project_id == project_list.get_id()
     }
 
-    pub fn to_context_id(&self) -> Option<String> {
-        Some(self.project_id.clone())
+    pub fn to_context_id(&self) -> String {
+        self.project_id.clone()
     }
 }
 
@@ -79,6 +79,10 @@ impl ListLnk {
     pub fn is_for(&self, project_list: &ProjectList) -> bool {
         self.list_id == project_list.get_id()
     }
+
+    pub fn to_context_id(&self) -> String {
+        self.list_id.clone()
+    }
 }
 
 impl From<&ProjectList> for ListLnk {
@@ -118,55 +122,63 @@ impl<'de> Deserialize<'de> for ListLnk {
     }
 }
 
-/// A simple representation of a folder that can contain lists.
+/// A simple representation of a list group that can contain lists.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FolderLnk {
-    folder_id: String,
+pub struct ListGroupLnk {
+    group_id: String,
 }
 
-impl FolderLnk {
-    pub fn new(folder_id: String) -> Self {
-        Self { folder_id }
+impl ListGroupLnk {
+    pub fn new(group_id: String) -> Self {
+        Self { group_id }
     }
 
-    pub fn id(&self) -> &str {
-        &self.folder_id
+    pub fn to_context_id(&self) -> String {
+        self.group_id.clone()
     }
 }
 
-impl From<String> for FolderLnk {
+impl PartialEq<ListGroupLnk> for &mut ListGroupLnk {
+    fn eq(&self, other: &ListGroupLnk) -> bool {
+        self.group_id == other.group_id
+    }
+}
+
+impl From<String> for ListGroupLnk {
     fn from(folder_id: String) -> Self {
-        Self { folder_id }
+        Self {
+            group_id: folder_id,
+        }
     }
 }
 
-impl From<FolderLnk> for String {
-    fn from(val: FolderLnk) -> Self {
-        val.folder_id
+impl From<ListGroupLnk> for String {
+    fn from(val: ListGroupLnk) -> Self {
+        val.group_id
     }
 }
 
-impl Serialize for FolderLnk {
+impl Serialize for ListGroupLnk {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_str(&self.folder_id)
+        serializer.serialize_str(&self.group_id)
     }
 }
 
-impl Display for FolderLnk {
+impl Display for ListGroupLnk {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.folder_id)
+        write!(f, "{}", self.group_id)
     }
 }
 
-impl<'de> Deserialize<'de> for FolderLnk {
+impl<'de> Deserialize<'de> for ListGroupLnk {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(FolderLnk { folder_id: s })
+        Ok(ListGroupLnk { group_id: s })
     }
 }

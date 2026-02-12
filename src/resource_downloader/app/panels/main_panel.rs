@@ -1,5 +1,6 @@
 use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::app::dialogs::Dialogs;
+use crate::resource_downloader::app::modals::list_group_settings_modal::ListGroupSettingsModal;
 use crate::resource_downloader::app::modals::list_settings_modal::ListSettingsModal;
 use crate::resource_downloader::app::modals::search_modal::SearchModal;
 use crate::resource_downloader::app::popups::multi_select_context_menu::MultiSelectContextMenu;
@@ -7,10 +8,11 @@ use crate::resource_downloader::app::popups::sort_popup::SortPopup;
 use crate::resource_downloader::business::DownloadStatus;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::list_actions::ListActions;
+use crate::resource_downloader::business::list_group_actions::ListGroupActions;
 use crate::resource_downloader::business::project_actions::ProjectActions;
 use crate::resource_downloader::domain::{
-    FilterMode, GameLoader, GameVersion, ListLnk, OrderMode, ProjectDependencyType, ProjectList,
-    ProjectLnk, ResourceType, SortMode,
+    FilterMode, GameLoader, GameVersion, ListGroupLnk, ListLnk, OrderMode, ProjectDependencyType,
+    ProjectList, ProjectLnk, ResourceType, SortMode,
 };
 use crate::{
     clear_project_metadata, get_list, get_list_type, get_project_icon_texture, get_project_link,
@@ -30,8 +32,8 @@ pub struct MainPanel {
     rename_input_open: bool,
     rename_input: String,
 
-    folder_rename_input: String,
-    current_folder_id: Option<String>,
+    list_group_rename_input_open: bool,
+    list_group_rename_input: String,
 
     search_query: String,
     selected_projects: HashSet<ProjectLnk>,
@@ -50,8 +52,8 @@ impl MainPanel {
             sort_popup: SortPopup::new(state.clone()),
             rename_input_open: false,
             rename_input: String::new(),
-            folder_rename_input: String::new(),
-            current_folder_id: None,
+            list_group_rename_input_open: false,
+            list_group_rename_input: String::new(),
             search_query: String::new(),
             selected_projects: HashSet::new(),
             last_selected: None,
@@ -74,7 +76,7 @@ impl MainPanel {
             let mut s = self.state.write();
             (
                 s.open_list.clone(),
-                s.open_folder.clone(),
+                s.open_list_group.clone(),
                 s.found_files.clone(),
                 s.active_scans.clone(),
                 s.pending_scroll.take(),
@@ -1505,143 +1507,81 @@ impl MainPanel {
         ui.separator();
     }
 
-    fn show_folder_settings(
-        &mut self,
-        ui: &mut Ui,
-        folder_lnk: crate::resource_downloader::domain::FolderLnk,
-    ) {
-        use crate::resource_downloader::business::folder_actions::FolderActions;
-
+    fn show_folder_settings(&mut self, ui: &mut Ui, folder_lnk: ListGroupLnk) {
         let (folder_name, list_count) = {
             let state = self.state.read();
             let config = state.config.read();
-            let folder = config.folders.iter().find(|f| f.id == folder_lnk.id());
+            let folder = config.list_groups.iter().find(|f| f.lnk == folder_lnk);
             let name = folder
                 .map(|f| f.name.clone())
                 .unwrap_or_else(|| "Unknown".to_string());
             let count = config
-                .folder_assignments
+                .list_group_assignments
                 .values()
-                .filter(|fid| *fid == folder_lnk.id())
+                .filter(|fid| **fid == folder_lnk)
                 .count();
             (name, count)
         };
 
-        let current_folder_id = folder_lnk.id().to_string();
-        if self.current_folder_id.as_ref() != Some(&current_folder_id) {
-            self.folder_rename_input = folder_name.clone();
-            self.current_folder_id = Some(current_folder_id);
-        }
-
         ui.horizontal(|ui| {
-            ui.heading(format!("📁 {}", folder_name));
-
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("🗑  Delete Folder").clicked() {
-                    FolderActions::delete_folder(self.state.clone(), folder_lnk.clone());
+            if self.list_group_rename_input_open {
+                ui.text_edit_singleline(&mut self.list_group_rename_input);
+                if ui.button("✔").clicked() {
+                    ListGroupActions::rename_list_group(
+                        self.state.clone(),
+                        folder_lnk.clone(),
+                        self.list_group_rename_input.clone(),
+                    );
+                    self.list_group_rename_input_open = false;
                 }
-
-                if ui.button("👥  Duplicate").clicked() {
-                    FolderActions::duplicate_folder(self.state.clone(), folder_lnk.clone());
+                if ui.button("❌").clicked() {
+                    self.list_group_rename_input_open = false;
                 }
-            });
+            } else {
+                ui.heading(format!("📁 {}", folder_name));
+                ui.add_space(1.0);
+                ui.label(
+                    egui::RichText::new(format!("{} list(s)", list_count))
+                        .small()
+                        .weak(),
+                );
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add(egui::Button::new(
+                            egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
+                        ))
+                        .clicked()
+                    {
+                        ListGroupActions::delete_list_group(self.state.clone(), folder_lnk.clone());
+                    }
+                    if ui.add(egui::Button::new("✏ Rename")).clicked() {
+                        self.list_group_rename_input = folder_name.clone();
+                        self.list_group_rename_input_open = true;
+                    }
+                    if ui.add(egui::Button::new("👥 Duplicate")).clicked() {
+                        ListGroupActions::duplicate_list_group(
+                            self.state.clone(),
+                            folder_lnk.clone(),
+                        );
+                    }
+                    if ui.button("⚙ Group Settings").clicked() {
+                        let sm =
+                            ListGroupSettingsModal::new(self.state.clone(), folder_lnk.clone());
+                        self.state.read().submit_modal(Box::new(sm));
+                    }
+                });
+            }
         });
 
         ui.separator();
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.add_space(8.0);
-
-            egui::Frame::default()
-                .fill(ui.visuals().faint_bg_color)
-                .stroke(egui::Stroke::new(1.0, Color32::from_gray(60)))
-                .corner_radius(8.0)
-                .inner_margin(egui::Margin::same(16))
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.heading("Folder Information");
-                    ui.add_space(12.0);
-
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("📋 Lists in folder:").size(16.0));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(
-                                egui::RichText::new(list_count.to_string())
-                                    .size(20.0)
-                                    .strong()
-                                    .color(Color32::from_rgb(100, 200, 255)),
-                            );
-                        });
-                    });
-
-                    ui.add_space(8.0);
-
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("🆔 Folder ID:").size(14.0));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(
-                                egui::RichText::new(folder_lnk.id())
-                                    .size(12.0)
-                                    .weak()
-                                    .monospace(),
-                            );
-                        });
-                    });
-                });
-
-            ui.add_space(16.0);
-
-            egui::Frame::default()
-                .fill(ui.visuals().faint_bg_color)
-                .stroke(egui::Stroke::new(1.0, Color32::from_gray(60)))
-                .corner_radius(8.0)
-                .inner_margin(egui::Margin::same(16))
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.heading("Folder Name");
-                    ui.add_space(12.0);
-
-                    ui.horizontal(|ui| {
-                        let text_width = ui.available_width() - 120.0;
-                        let _response = ui.add(
-                            egui::TextEdit::singleline(&mut self.folder_rename_input)
-                                .desired_width(text_width)
-                                .hint_text("Enter folder name..."),
-                        );
-
-                        if ui.button("💾 Rename").clicked()
-                            && !self.folder_rename_input.trim().is_empty()
-                            && self.folder_rename_input != folder_name
-                        {
-                            FolderActions::rename_folder(
-                                self.state.clone(),
-                                folder_lnk.clone(),
-                                self.folder_rename_input.trim().to_string(),
-                            );
-                            self.folder_rename_input = self.folder_rename_input.trim().to_string();
-                        }
-                    });
-                });
-
-            ui.add_space(16.0);
-
-
-            egui::Frame::default()
-                .fill(ui.visuals().faint_bg_color)
-                .stroke(egui::Stroke::new(1.0, Color32::from_gray(60)))
-                .corner_radius(8.0)
-                .inner_margin(egui::Margin::same(16))
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.heading("Actions");
-                    ui.add_space(12.0);
-
-                    ui.label("Organize your lists by dragging them into this folder from the sidebar.");
-                    ui.add_space(8.0);
-                    ui.label(
-                        "You can also use the context menu (right-click) on any list to move it to this folder.",
-                    );
-                });
+            ui.vertical_centered(|ui| {
+                ui.add_space(80.0);
+                ui.label(egui::RichText::new("Select a list to view its contents").weak());
+            });
         });
     }
 }

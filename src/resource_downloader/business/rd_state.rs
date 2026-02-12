@@ -9,8 +9,8 @@ use crate::resource_downloader::business::list_pool::ListPool;
 use crate::resource_downloader::business::services::ApiService;
 use crate::resource_downloader::business::{Event, InternalEvent};
 use crate::resource_downloader::domain::{
-    AppConfig, FolderLnk, GameLoader, GameVersion, ListLnk, MutationOutcome, MutationResult,
-    Project, ProjectLnk, ResourceType,
+    AppConfig, GameLoader, GameVersion, ListGroupLnk, ListLnk, MutationOutcome, MutationResult,
+    Project, ProjectLnk, ResourceType, SidebarItem,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -82,7 +82,7 @@ pub struct RDState {
     pub list_pool: Arc<ListPool>,
 
     pub open_list: Option<ListLnk>,
-    pub open_folder: Option<FolderLnk>,
+    pub open_list_group: Option<ListGroupLnk>,
     pub found_files: HashMap<PathBuf, Vec<(PathBuf, String)>>,
     pub active_scans: HashSet<PathBuf>,
     pub download_status: HashMap<ProjectLnk, (DownloadStatus, f32)>,
@@ -91,7 +91,7 @@ pub struct RDState {
     pub folder_import_session: Option<FolderImportSession>,
 
     pub pending_scroll: Option<(ListLnk, ProjectLnk)>,
-    pub pending_list_scroll: Option<ListLnk>,
+    pub pending_sidebar_scroll: Option<SidebarItem>,
 }
 
 impl RDState {
@@ -125,14 +125,14 @@ impl RDState {
             list_pool,
 
             open_list: None,
-            open_folder: None,
+            open_list_group: None,
             found_files: Default::default(),
             active_scans: Default::default(),
             download_status: Default::default(),
             clipboard: None,
             folder_import_session: None,
             pending_scroll: None,
-            pending_list_scroll: None,
+            pending_sidebar_scroll: None,
         }
     }
 
@@ -360,25 +360,32 @@ impl RDState {
                 loader,
                 download_dir,
                 projects,
-                lnk,
+                list_lnk,
                 list,
             } => {
                 self.list_pool.insert_arc(list);
                 self.request_full_refresh();
-                self.pending_list_scroll = Some(lnk.clone());
+                self.pending_sidebar_scroll = Some(SidebarItem::from(&list_lnk));
 
-                if let Some(folder_lnk) = &self.open_folder {
+                {
                     let mut config = self.config.write();
-                    config
-                        .folder_assignments
-                        .insert(lnk.to_string(), folder_lnk.id().to_string());
-                    drop(config);
 
-                    self.dispatch(Effect::SaveConfig {
-                        config: self.config.read().clone(),
-                    });
+                    config
+                        .sidebar_ui_order
+                        .insert(0, SidebarItem::from(&list_lnk));
+
+                    if let Some(lg_lnk) = &self.open_list_group {
+                        config
+                            .list_group_assignments
+                            .insert(list_lnk.clone(), lg_lnk.clone());
+                    }
+
+                    drop(config);
                 }
 
+                self.dispatch(Effect::SaveConfig {
+                    config: self.config.read().clone(),
+                });
                 Some(Event::ListCreated {
                     name,
                     resource_type,
@@ -386,18 +393,44 @@ impl RDState {
                     loader,
                     download_dir,
                     projects,
-                    list: lnk,
+                    list: list_lnk,
                 })
             }
             InternalEvent::ListDuplicated {
-                list,
+                list_lnk,
                 dup_lnk,
                 dup_list,
             } => {
                 self.list_pool.insert_arc(dup_list);
-                self.pending_list_scroll = Some(list.clone());
+
+                {
+                    let mut config = self.config.write();
+
+                    if let Some(pos) = config
+                        .sidebar_ui_order
+                        .iter()
+                        .position(|id| id.match_list(&list_lnk))
+                    {
+                        config
+                            .sidebar_ui_order
+                            .insert(pos + 1, SidebarItem::from(&dup_lnk));
+                    } else {
+                        config
+                            .sidebar_ui_order
+                            .insert(0, SidebarItem::from(&dup_lnk));
+                    }
+
+                    if let Some(parent) = config.list_group_assignments.get(&list_lnk).cloned() {
+                        config
+                            .list_group_assignments
+                            .insert(dup_lnk.clone(), parent.clone());
+                    }
+                }
+
+                self.pending_sidebar_scroll = Some(SidebarItem::from(&dup_lnk));
+
                 Some(Event::ListDuplicated {
-                    list,
+                    list: list_lnk,
                     dup_list: dup_lnk,
                 })
             }
@@ -411,19 +444,28 @@ impl RDState {
                 path,
             } => {
                 self.list_pool.insert_arc(list);
-                self.pending_list_scroll = Some(list_lnk.clone());
 
-                if let Some(folder_lnk) = &self.open_folder {
+                {
                     let mut config = self.config.write();
+
                     config
-                        .folder_assignments
-                        .insert(list_lnk.to_string(), folder_lnk.id().to_string());
+                        .sidebar_ui_order
+                        .insert(0, SidebarItem::from(&list_lnk));
+
+                    if let Some(lg_lnk) = &self.open_list_group {
+                        config
+                            .list_group_assignments
+                            .insert(list_lnk.clone(), lg_lnk.clone());
+                    }
+
                     drop(config);
 
                     self.dispatch(Effect::SaveConfig {
                         config: self.config.read().clone(),
                     });
                 }
+
+                self.pending_sidebar_scroll = Some(SidebarItem::from(&list_lnk));
 
                 Some(Event::ListImported {
                     list: list_lnk,
@@ -432,7 +474,7 @@ impl RDState {
             }
             InternalEvent::LegacyListImported {
                 path,
-                list,
+                list_lnk,
                 list_data,
                 version,
                 loader,
@@ -440,13 +482,12 @@ impl RDState {
                 unresolved,
             } => {
                 self.list_pool.insert_arc(list_data);
-                self.pending_list_scroll = Some(list.clone());
 
-                if let Some(folder_lnk) = &self.open_folder {
+                if let Some(lg_lnk) = &self.open_list_group {
                     let mut config = self.config.write();
                     config
-                        .folder_assignments
-                        .insert(list.to_string(), folder_lnk.id().to_string());
+                        .list_group_assignments
+                        .insert(list_lnk.clone(), lg_lnk.clone());
                     drop(config);
 
                     self.dispatch(Effect::SaveConfig {
@@ -454,12 +495,14 @@ impl RDState {
                     });
                 }
 
+                self.pending_sidebar_scroll = Some(SidebarItem::from(&list_lnk));
+
                 Some(Event::LegacyListImported {
                     path,
                     version,
                     loader,
                     download_dir,
-                    list,
+                    list: list_lnk,
                     unresolved,
                 })
             }
@@ -491,7 +534,7 @@ impl RDState {
                     for (p_lnk, rt, meta) in dependency_data {
                         if !list.has_project(&p_lnk) {
                             list.add_project(Project::new(
-                                p_lnk.to_context_id().unwrap(),
+                                p_lnk.to_context_id(),
                                 rt,
                                 false,
                                 meta.name,
@@ -652,12 +695,12 @@ impl RDState {
         self.request_full_refresh();
     }
 
-    pub fn set_open_folder(&mut self, folder: Option<FolderLnk>) {
-        if self.open_folder == folder {
+    pub fn set_open_list_group(&mut self, list_group: Option<ListGroupLnk>) {
+        if self.open_list_group == list_group {
             return;
         }
 
-        if folder.is_some() {
+        if list_group.is_some() {
             if let Some(old_list) = self.open_list.clone() {
                 self.list_pool.save(&old_list);
             }
@@ -665,7 +708,7 @@ impl RDState {
             self.config.write().last_open_list_id = None;
         }
 
-        self.open_folder = folder;
+        self.open_list_group = list_group;
         self.save_config();
         self.request_full_refresh();
     }

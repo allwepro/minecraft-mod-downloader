@@ -10,6 +10,8 @@ pub use project::*;
 pub use project_list::*;
 pub use project_operations::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
 // ---------------- Runtime Project ----------------
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RTProjectDependency {
@@ -207,12 +209,12 @@ impl From<String> for ResourceType {
 // ---------------- Config ----------------
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Folder {
-    pub id: String,
+pub struct ListGroup {
+    pub lnk: ListGroupLnk,
     pub name: String,
     pub collapsed: bool,
     #[serde(default)]
-    pub parent_id: Option<String>, // For subfolder hierarchy
+    pub parent_id: Option<ListGroupLnk>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -221,13 +223,58 @@ pub struct AppConfig {
     pub default_list_name: String,
     pub last_open_list_id: Option<ListLnk>,
     #[serde(default)]
-    pub list_order: Vec<String>,
+    pub list_groups: Vec<ListGroup>,
     #[serde(default)]
-    pub folders: Vec<Folder>,
+    pub list_group_assignments: HashMap<ListLnk, ListGroupLnk>, // list_id -> group_id
     #[serde(default)]
-    pub folder_assignments: std::collections::HashMap<String, String>, // list_id -> folder_id
-    #[serde(default)]
-    pub folder_order: Vec<String>,
+    pub sidebar_ui_order: Vec<SidebarItem>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum SidebarItem {
+    List(ListLnk),
+    ListGroup(ListGroupLnk),
+}
+
+impl SidebarItem {
+    pub fn match_list(&self, lnk: &ListLnk) -> bool {
+        matches!(self, Self::List(g) if g == lnk)
+    }
+    pub fn match_list_group(&self, lnk: &ListGroupLnk) -> bool {
+        matches!(self, Self::ListGroup(g) if g == lnk)
+    }
+
+    pub fn list_lnk(&self) -> Option<ListLnk> {
+        match self {
+            Self::List(lnk) => Some(lnk.clone()),
+            _ => None,
+        }
+    }
+    pub fn list_group_lnk(&self) -> Option<ListGroupLnk> {
+        match self {
+            Self::ListGroup(lnk) => Some(lnk.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn to_context_id(&self) -> String {
+        match self {
+            Self::List(lnk) => lnk.to_context_id(),
+            Self::ListGroup(lnk) => lnk.to_context_id(),
+        }
+    }
+}
+
+impl From<&ListLnk> for SidebarItem {
+    fn from(lnk: &ListLnk) -> Self {
+        SidebarItem::List(lnk.clone())
+    }
+}
+
+impl From<&ListGroupLnk> for SidebarItem {
+    fn from(lnk: &ListGroupLnk) -> Self {
+        SidebarItem::ListGroup(lnk.clone())
+    }
 }
 
 impl Default for AppConfig {
@@ -235,10 +282,9 @@ impl Default for AppConfig {
         Self {
             default_list_name: default_list_name(),
             last_open_list_id: None,
-            list_order: Vec::new(),
-            folders: Vec::new(),
-            folder_assignments: std::collections::HashMap::new(),
-            folder_order: Vec::new(),
+            list_groups: Vec::new(),
+            list_group_assignments: HashMap::new(),
+            sidebar_ui_order: Vec::new(),
         }
     }
 }

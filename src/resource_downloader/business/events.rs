@@ -241,11 +241,11 @@ pub enum InternalEvent {
         loader: GameLoader,
         download_dir: String,
         projects: Vec<String>,
-        lnk: ListLnk,
+        list_lnk: ListLnk,
         list: Arc<RwLock<ProjectList>>,
     },
     ListDuplicated {
-        list: ListLnk,
+        list_lnk: ListLnk,
         dup_lnk: ListLnk,
         dup_list: Arc<RwLock<ProjectList>>,
     },
@@ -259,7 +259,7 @@ pub enum InternalEvent {
     },
     LegacyListImported {
         path: PathBuf,
-        list: ListLnk,
+        list_lnk: ListLnk,
         list_data: Arc<RwLock<ProjectList>>,
         version: GameVersion,
         loader: GameLoader,

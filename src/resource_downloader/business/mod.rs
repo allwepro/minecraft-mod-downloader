@@ -1,10 +1,10 @@
 pub(crate) mod cache;
 mod effects;
 mod events;
-pub mod folder_actions;
-pub mod list_actions;
+pub(crate) mod list_actions;
+pub(crate) mod list_group_actions;
 mod list_pool;
-pub mod project_actions;
+pub(crate) mod project_actions;
 pub(crate) mod rd_state;
 pub(crate) mod services;
 pub(crate) mod xcache;

@@ -1,5 +1,7 @@
 use crate::resource_downloader::business::{Effect, SharedRDState};
-use crate::resource_downloader::domain::{GameLoader, GameVersion, ListLnk, ResourceType};
+use crate::resource_downloader::domain::{
+    GameLoader, GameVersion, ListLnk, ResourceType, SidebarItem,
+};
 use std::path::PathBuf;
 
 pub struct ListActions;
@@ -38,9 +40,9 @@ impl ListActions {
         );
     }
 
-    pub fn set_list_order(state: SharedRDState, new_order: Vec<String>) {
+    pub fn set_sidebar_ui_order(state: SharedRDState, new_order: Vec<SidebarItem>) {
         let state_guard = state.write();
-        state_guard.config.write().list_order = new_order;
+        state_guard.config.write().sidebar_ui_order = new_order;
         state_guard.dispatch(Effect::SaveConfig {
             config: state_guard.config.read().clone(),
         });
@@ -53,8 +55,8 @@ impl ListActions {
         } else {
             {
                 let mut s = state.write();
-                if s.open_folder.is_some() {
-                    s.open_folder = None;
+                if s.open_list_group.is_some() {
+                    s.open_list_group = None;
                 }
             }
             state.write().set_open_list(Some(list.clone()));
