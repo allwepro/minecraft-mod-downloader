@@ -10,7 +10,7 @@ use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::business::list_group_actions::ListGroupActions;
 use crate::resource_downloader::domain::{
-    ListGroup, ListGroupLnk, ListLnk, ResourceType, SidebarItem,
+    AppConfig, ListGroup, ListGroupLnk, ListLnk, ResourceType, SidebarItem,
 };
 use eframe::egui;
 use egui::{Color32, StrokeKind, Ui};
@@ -109,52 +109,16 @@ impl SidebarPanel {
                 create_btn = create_btn.fill(Color32::from_rgba_unmultiplied(100, 100, 100, 50));
             }
 
-            let res = ui
-                .add_enabled_ui(!offline_mode, |ui| {
-                    ui.add_sized([button_width, 25.0], create_btn)
-                        .on_disabled_hover_text("Disabled in offline mode")
-                })
-                .inner;
+            self.show_popup_button(ui, self.create_menu_popup.clone(), !offline_mode, |ui| {
+                ui.add_sized([button_width, 25.0], create_btn)
+                    .on_disabled_hover_text("Disabled in offline mode")
+            });
 
-            if res.clicked() {
-                self.state
-                    .read()
-                    .popup_manager
-                    .toggle(self.create_menu_popup.id());
-            }
-            self.state
-                .read()
-                .popup_manager
-                .register_interaction_area(self.create_menu_popup.id(), res.rect);
-
-            self.state
-                .read()
-                .popup_manager
-                .request_show(Box::new(self.create_menu_popup.clone()), res.rect);
-
-            let import_btn = ui
-                .add_enabled_ui(!offline_mode, |ui| {
-                    ui.add_sized([25.0, 25.0], egui::Button::new("📥"))
-                        .on_disabled_hover_text("Disabled in offline mode")
-                        .on_hover_text("Import")
-                })
-                .inner;
-
-            if import_btn.clicked() {
-                self.state
-                    .read()
-                    .popup_manager
-                    .toggle(self.import_popup.id());
-            }
-            self.state
-                .read()
-                .popup_manager
-                .register_interaction_area(self.import_popup.id(), import_btn.rect);
-
-            self.state
-                .read()
-                .popup_manager
-                .request_show(Box::new(self.import_popup.clone()), import_btn.rect);
+            self.show_popup_button(ui, self.import_popup.clone(), !offline_mode, |ui| {
+                ui.add_sized([25.0, 25.0], egui::Button::new("📥"))
+                    .on_disabled_hover_text("Disabled in offline mode")
+                    .on_hover_text("Import")
+            });
         });
 
         ui.add_space(5.0);
@@ -208,38 +172,20 @@ impl SidebarPanel {
                 return;
             }
 
-            if ui.input(|i| i.pointer.is_decidedly_dragging()) {
-                let clip_rect = ui.clip_rect();
-                if let Some(pointer_pos) = ui.ctx().pointer_hover_pos()
-                    && clip_rect.contains(pointer_pos)
-                {
-                    let margin = 20.0;
-                    let speed = 5.0;
-                    if pointer_pos.y < clip_rect.min.y + margin {
-                        ui.scroll_with_delta(egui::vec2(0.0, speed));
-                        ui.ctx().request_repaint();
-                    } else if pointer_pos.y > clip_rect.max.y - margin {
-                        ui.scroll_with_delta(egui::vec2(0.0, -speed));
-                        ui.ctx().request_repaint();
-                    }
-                }
+            let is_dragging = ui.input(|i| i.pointer.is_decidedly_dragging());
+            let has_payload = ui.ctx().memory(|mem| {
+                mem.data
+                    .get_temp::<String>(egui::Id::new("dnd_last_payload"))
+                    .is_some()
+            });
+
+            if is_dragging && has_payload {
+                self.apply_smooth_scroll(ui);
+                self.apply_edge_autoscroll(ui);
             }
 
             if is_searching {
-                let clip_rect = ui.clip_rect();
-                if let Some(pointer_pos) = ui.ctx().pointer_hover_pos()
-                    && clip_rect.contains(pointer_pos)
-                {
-                    let margin = 20.0;
-                    let speed = 5.0;
-                    if pointer_pos.y < clip_rect.min.y + margin {
-                        ui.scroll_with_delta(egui::vec2(0.0, speed));
-                        ui.ctx().request_repaint();
-                    } else if pointer_pos.y > clip_rect.max.y - margin {
-                        ui.scroll_with_delta(egui::vec2(0.0, -speed));
-                        ui.ctx().request_repaint();
-                    }
-                }
+                self.apply_edge_autoscroll(ui);
             }
 
             if is_searching {
@@ -267,28 +213,7 @@ impl SidebarPanel {
                             .and_then(|a| a.list_lnk().clone()),
                     );
                     let response = ui.interact(response.rect, response.id, egui::Sense::click());
-
-                    if response.hovered() {
-                        ui.painter().rect_stroke(
-                            response.rect,
-                            4.0,
-                            egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
-                            StrokeKind::Middle,
-                        );
-                    }
-                    if response.clicked() {
-                        self.handle_list_click(&item.0, &open_list);
-                    }
-                    if let Some((target_lnk, _)) = &self.context_menu_target
-                        && target_lnk == &item.0
-                    {
-                        self.context_menu_target = Some((item.0.clone(), response.rect));
-                    }
-                    if response.secondary_clicked() {
-                        self.context_menu_target = Some((item.0.clone(), response.rect));
-                        let menu_id = egui::Id::new("list_context_menu").with(&item.0);
-                        self.state.read().popup_manager.toggle(menu_id);
-                    }
+                    self.apply_row_interactions(ui, response, &item, &open_list);
                 }
             } else {
                 self.render_sidebar_content(ui, list_items, &open_list, &pending_sidebar_scroll);
@@ -320,6 +245,47 @@ impl SidebarPanel {
                 pm.request_show(Box::new(menu), *rect);
             } else {
                 self.folder_context_menu_target = None;
+            }
+        }
+    }
+
+    fn show_popup_button<P: Popup + Clone + 'static>(
+        &self,
+        ui: &mut Ui,
+        popup: P,
+        enabled: bool,
+        add_button: impl FnOnce(&mut Ui) -> egui::Response,
+    ) {
+        let response = ui.add_enabled_ui(enabled, |ui| add_button(ui)).inner;
+        let pm = self.state.read().popup_manager.clone();
+
+        if response.clicked() {
+            pm.toggle(popup.id());
+        }
+        pm.register_interaction_area(popup.id(), response.rect);
+        pm.request_show(Box::new(popup), response.rect);
+    }
+
+    fn apply_smooth_scroll(&self, ui: &mut Ui) {
+        let scroll_delta = ui.input(|i| i.smooth_scroll_delta);
+        if scroll_delta.y.abs() > 0.0 {
+            ui.scroll_with_delta(scroll_delta);
+        }
+    }
+
+    fn apply_edge_autoscroll(&self, ui: &mut Ui) {
+        let clip_rect = ui.clip_rect();
+        if let Some(pointer_pos) = ui.ctx().pointer_hover_pos()
+            && clip_rect.contains(pointer_pos)
+        {
+            let margin = 20.0;
+            let speed = 5.0;
+            if pointer_pos.y < clip_rect.min.y + margin {
+                ui.scroll_with_delta(egui::vec2(0.0, speed));
+                ui.ctx().request_repaint();
+            } else if pointer_pos.y > clip_rect.max.y - margin {
+                ui.scroll_with_delta(egui::vec2(0.0, -speed));
+                ui.ctx().request_repaint();
             }
         }
     }
@@ -662,7 +628,7 @@ impl SidebarPanel {
             });
         });
 
-        if is_last_in_group {
+        if is_last_in_group && list_group.parent_id.is_none() {
             let drop_zone_height = 4.0;
             let drop_zone_response = ui.allocate_response(
                 egui::vec2(ui.available_width(), drop_zone_height),
@@ -706,8 +672,6 @@ impl SidebarPanel {
                 .list_groups
                 .iter_mut()
                 .find(|f| item.match_list_group(&f.lnk))
-                && new_parent_lg.as_ref().is_some()
-                && item.match_list_group(new_parent_lg.as_ref().unwrap())
             {
                 folder.parent_id = new_parent_lg.clone();
             }
@@ -777,30 +741,7 @@ impl SidebarPanel {
             depth,
         });
 
-        if drag_response.hovered() {
-            ui.painter().rect_stroke(
-                drag_response.rect,
-                4.0,
-                egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
-                StrokeKind::Middle,
-            );
-        }
-
-        if drag_response.clicked() {
-            self.handle_list_click(&item.0, open_list);
-        }
-
-        if let Some((target_lnk, _)) = &self.context_menu_target
-            && target_lnk == &item.0
-        {
-            self.context_menu_target = Some((item.0.clone(), drag_response.rect));
-        }
-
-        if drag_response.secondary_clicked() {
-            self.context_menu_target = Some((item.0.clone(), drag_response.rect));
-            let menu_id = egui::Id::new("list_context_menu").with(&item.0);
-            self.state.read().popup_manager.toggle(menu_id);
-        }
+        self.apply_row_interactions(ui, drag_response, item, open_list);
     }
 
     fn handle_list_click(&self, list: &ListLnk, _open_list: &Option<ListLnk>) {
@@ -1026,6 +967,13 @@ impl SidebarPanel {
         }
 
         if is_inside_end {
+            if is_folder_drag {
+                let target_as_listgroup = ListGroupLnk::from(actual_target_id.clone());
+                if self.is_descendant_of(&target_as_listgroup, &sidebar_item) {
+                    return;
+                }
+            }
+
             let state = self.state.read();
             let config = state.config.read();
 
@@ -1042,60 +990,20 @@ impl SidebarPanel {
                     .cloned()
             };
 
-            if current_parent.map(|a| a.to_context_id()) == Some(actual_target_id.clone()) {
-                let children_in_order: Vec<SidebarItem> = config
-                    .sidebar_ui_order
-                    .iter()
-                    .filter(|id| {
-                        let item_parent = if let Some(folder) = config
-                            .list_groups
-                            .iter()
-                            .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
-                        {
-                            folder.parent_id.clone()
-                        } else {
-                            config
-                                .list_group_assignments
-                                .get(&id.list_lnk().unwrap())
-                                .cloned()
-                        };
-                        item_parent.map(|a| a.to_context_id()) == Some(actual_target_id.clone())
-                    })
-                    .cloned()
-                    .collect();
+            let target_children = Self::items_in_parent_context_id(&config, &actual_target_id);
 
-                if children_in_order.last().map(|a| a.to_context_id()) == Some(item_id.clone()) {
-                    drop(config);
-                    drop(state);
-                    return;
-                }
+            if current_parent.map(|a| a.to_context_id()) == Some(actual_target_id.clone())
+                && target_children.last().map(|a| a.to_context_id()) == Some(item_id.clone())
+            {
+                drop(config);
+                drop(state);
+                return;
             }
-
-            let children_in_order: Vec<SidebarItem> = config
-                .sidebar_ui_order
-                .iter()
-                .filter(|id| {
-                    let item_parent = if let Some(list_group) = config
-                        .list_groups
-                        .iter()
-                        .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
-                    {
-                        list_group.parent_id.clone()
-                    } else {
-                        config
-                            .list_group_assignments
-                            .get(&id.list_lnk().unwrap())
-                            .cloned()
-                    };
-                    item_parent.map(|a| a.to_context_id()) == Some(actual_target_id.clone())
-                })
-                .cloned()
-                .collect();
 
             drop(config);
             drop(state);
 
-            let insert_after = children_in_order.last().cloned();
+            let insert_after = target_children.last().cloned();
 
             self.move_item(
                 sidebar_item,
@@ -1110,6 +1018,13 @@ impl SidebarPanel {
                 if closest.target.dnd_id.ends_with("_after")
                     || closest.target.dnd_id.ends_with("_inside_end")
                 {
+                    if is_folder_drag
+                        && let Some(ref target_parent) = closest.target.parent_id
+                        && self.is_descendant_of(target_parent, &sidebar_item)
+                    {
+                        return;
+                    }
+
                     self.move_item(
                         sidebar_item,
                         closest.target.parent_id.clone(),
@@ -1125,13 +1040,14 @@ impl SidebarPanel {
                     .sidebar_ui_order
                     .iter()
                     .filter(|id| {
-                        let item_parent = if let Some(folder) = config
-                            .list_groups
-                            .iter()
-                            .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
-                        {
+                        let item_parent = if let Some(folder) =
+                            config.list_groups.iter().find(|f| {
+                                println!("Comparing {:?} with {:?}", f.lnk, id.list_group_lnk());
+                                Some(f.lnk.clone()) == id.list_group_lnk()
+                            }) {
                             folder.parent_id.clone()
                         } else {
+                            println!("Looking up assignment for {:?}", id);
                             config
                                 .list_group_assignments
                                 .get(&id.list_lnk().unwrap())
@@ -1166,32 +1082,27 @@ impl SidebarPanel {
                     return;
                 }
 
+                if is_folder_drag
+                    && let Some(ref target_parent) = closest.target.parent_id
+                    && self.is_descendant_of(target_parent, &sidebar_item)
+                {
+                    return;
+                }
+
                 self.move_item(sidebar_item, closest.target.parent_id.clone(), insert_after);
             }
             DropPosition::After => {
+                if is_folder_drag
+                    && let Some(ref target_parent) = closest.target.parent_id
+                    && self.is_descendant_of(target_parent, &sidebar_item)
+                {
+                    return;
+                }
+
                 let state = self.state.read();
                 let config = state.config.read();
 
-                let siblings_in_order: Vec<SidebarItem> = config
-                    .sidebar_ui_order
-                    .iter()
-                    .filter(|id| {
-                        let item_parent = if let Some(folder) = config
-                            .list_groups
-                            .iter()
-                            .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
-                        {
-                            folder.parent_id.clone()
-                        } else {
-                            config
-                                .list_group_assignments
-                                .get(&id.list_lnk().unwrap())
-                                .cloned()
-                        };
-                        item_parent == closest.target.parent_id
-                    })
-                    .cloned()
-                    .collect();
+                let siblings_in_order = Self::items_in_parent(&config, &closest.target.parent_id);
 
                 drop(config);
                 drop(state);
@@ -1234,7 +1145,7 @@ impl SidebarPanel {
         let mut current = potential_descendant;
         while let Some(folder) = config.list_groups.iter().find(|f| f.lnk == *current) {
             if let Some(parent_id) = &folder.parent_id {
-                if potential_ancestor.match_list_group(potential_descendant) {
+                if potential_ancestor.match_list_group(parent_id) {
                     return true;
                 }
                 current = parent_id;
@@ -1244,5 +1155,71 @@ impl SidebarPanel {
         }
 
         false
+    }
+
+    fn apply_row_interactions(
+        &mut self,
+        ui: &mut Ui,
+        response: egui::Response,
+        item: &ListItem,
+        open_list: &Option<ListLnk>,
+    ) {
+        if response.hovered() {
+            ui.painter().rect_stroke(
+                response.rect,
+                4.0,
+                egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
+                StrokeKind::Middle,
+            );
+        }
+        if response.clicked() {
+            self.handle_list_click(&item.0, open_list);
+        }
+        if let Some((target_lnk, _)) = &self.context_menu_target
+            && target_lnk == &item.0
+        {
+            self.context_menu_target = Some((item.0.clone(), response.rect));
+        }
+        if response.secondary_clicked() {
+            self.context_menu_target = Some((item.0.clone(), response.rect));
+            let menu_id = egui::Id::new("list_context_menu").with(&item.0);
+            self.state.read().popup_manager.toggle(menu_id);
+        }
+    }
+
+    fn item_parent(config: &AppConfig, id: &SidebarItem) -> Option<ListGroupLnk> {
+        if let Some(folder) = config
+            .list_groups
+            .iter()
+            .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
+        {
+            folder.parent_id.clone()
+        } else {
+            config
+                .list_group_assignments
+                .get(&id.list_lnk().unwrap())
+                .cloned()
+        }
+    }
+
+    fn items_in_parent(config: &AppConfig, parent_id: &Option<ListGroupLnk>) -> Vec<SidebarItem> {
+        config
+            .sidebar_ui_order
+            .iter()
+            .filter(|id| Self::item_parent(config, id) == *parent_id)
+            .cloned()
+            .collect()
+    }
+
+    fn items_in_parent_context_id(config: &AppConfig, parent_id: &str) -> Vec<SidebarItem> {
+        config
+            .sidebar_ui_order
+            .iter()
+            .filter(|id| {
+                Self::item_parent(config, id).map(|a| a.to_context_id())
+                    == Some(parent_id.to_string())
+            })
+            .cloned()
+            .collect()
     }
 }
