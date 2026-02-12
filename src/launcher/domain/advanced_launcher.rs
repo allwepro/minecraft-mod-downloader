@@ -39,29 +39,29 @@ impl AdvancedLauncher {
             .join("natives");
 
         let native_jars = NativesExtractor::get_native_jars(&manifest, game_dir);
-        println!("=== NATIVES DEBUG ===");
-        println!("Found {} native JAR files", native_jars.len());
+        log::debug!("=== NATIVES DEBUG ===");
+        log::debug!("Found {} native JAR files", native_jars.len());
         log::info!("Found {} native JAR files", native_jars.len());
 
         if native_jars.is_empty() {
-            println!("WARNING: No native libraries found! This will likely cause LWJGL errors");
-            println!("Checking manifest for natives info...");
+            log::debug!("WARNING: No native libraries found! This will likely cause LWJGL errors");
+            log::debug!("Checking manifest for natives info...");
             log::warn!("No native libraries found! This will likely cause LWJGL errors");
             log::warn!("Checking manifest for natives info...");
             for (i, lib) in manifest.libraries.iter().enumerate().take(5) {
-                println!("  Library {}: {} (rules: {:?})", i, lib.name, lib.rules);
+                log::debug!("  Library {}: {} (rules: {:?})", i, lib.name, lib.rules);
                 log::warn!("  Library {}: {} (natives: {:?})", i, lib.name, lib.natives);
             }
         } else {
-            println!("Extracting {} native libraries", native_jars.len());
+            log::debug!("Extracting {} native libraries", native_jars.len());
             log::info!("Extracting {} native libraries", native_jars.len());
             for jar in &native_jars {
-                println!("  Native JAR: {}", jar.display());
+                log::debug!("  Native JAR: {}", jar.display());
                 log::info!("  Native JAR: {}", jar.display());
             }
             NativesExtractor::extract_natives(&native_jars, &natives_dir)
                 .context("Failed to extract native libraries")?;
-            println!("Native extraction complete!");
+            log::debug!("Native extraction complete!");
         }
 
         // Build classpath
@@ -110,7 +110,7 @@ impl AdvancedLauncher {
 
         // Optional: enable JNA debug logging to identify native load failures
         if std::env::var("MMD_JNA_DEBUG").is_ok() {
-            println!("JNA debug enabled (MMD_JNA_DEBUG=1)");
+            log::debug!("JNA debug enabled (MMD_JNA_DEBUG=1)");
             Self::replace_or_push_arg(
                 &mut jvm_args,
                 "-Djna.debug_load=",
@@ -135,20 +135,20 @@ impl AdvancedLauncher {
         let mut all_args = jvm_args.clone();
         all_args.extend(game_args);
 
-        println!("=== LAUNCH ARGUMENTS DEBUG ===");
-        println!("Java: {}", config.profile.java_path.display());
-        println!("Working directory: {}", game_dir.display());
-        println!("Main class: {}", manifest.main_class);
-        println!("Total arguments: {}", all_args.len());
-        println!("\nJVM Arguments containing 'natives' or 'library.path':");
+        log::debug!("=== LAUNCH ARGUMENTS DEBUG ===");
+        log::debug!("Java: {}", config.profile.java_path.display());
+        log::debug!("Working directory: {}", game_dir.display());
+        log::debug!("Main class: {}", manifest.main_class);
+        log::debug!("Total arguments: {}", all_args.len());
+        log::debug!("\nJVM Arguments containing 'natives' or 'library.path':");
         for (i, arg) in all_args.iter().enumerate() {
             if arg.contains("natives") || arg.contains("library.path") {
-                println!("  [{}] {}", i, arg);
+                log::debug!("  [{}] {}", i, arg);
             }
         }
-        println!("\nFirst 20 arguments:");
+        log::debug!("\nFirst 20 arguments:");
         for (i, arg) in all_args.iter().enumerate().take(20) {
-            println!("  [{}] {}", i, arg);
+            log::debug!("  [{}] {}", i, arg);
         }
 
         log::info!("Launching Minecraft with {} arguments", all_args.len());
@@ -432,7 +432,7 @@ impl AdvancedLauncher {
             .join("natives");
 
         if template.contains("${natives_directory}") {
-            println!("Substituting natives_directory: {}", natives_dir.display());
+            log::debug!("Substituting natives_directory: {}", natives_dir.display());
         }
 
         template
@@ -536,7 +536,7 @@ impl AdvancedLauncher {
                     e
                 );
                 if jna_debug {
-                    println!(
+                    log::debug!(
                         "Failed to remove existing {} shim {}: {}",
                         name,
                         dest.display(),
@@ -570,7 +570,7 @@ impl AdvancedLauncher {
                 let _ = std::fs::remove_file(&stub_source);
                 if jna_debug {
                     let size = std::fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
-                    println!(
+                    log::debug!(
                         "Built lib{}.dylib shim at {} ({} bytes)",
                         name,
                         dest.display(),
@@ -581,14 +581,14 @@ impl AdvancedLauncher {
             Ok(s) => {
                 log::warn!("Failed to build lib{}.dylib shim (status {})", name, s);
                 if jna_debug {
-                    println!("{} shim build failed with status {}", name, s);
+                    log::debug!("{} shim build failed with status {}", name, s);
                 }
                 Self::fallback_framework_symlink(&dest, framework_path, name, jna_debug);
             }
             Err(e) => {
                 log::warn!("Failed to run clang for lib{}.dylib shim: {}", name, e);
                 if jna_debug {
-                    println!("{} shim build failed to run clang: {}", name, e);
+                    log::debug!("{} shim build failed to run clang: {}", name, e);
                 }
                 Self::fallback_framework_symlink(&dest, framework_path, name, jna_debug);
             }
@@ -615,7 +615,7 @@ impl AdvancedLauncher {
                         e
                     );
                     if jna_debug {
-                        println!(
+                        log::debug!(
                             "Failed to remove existing {} shim {}: {}",
                             name,
                             dest.display(),
@@ -627,13 +627,13 @@ impl AdvancedLauncher {
             match symlink(target, dest) {
                 Ok(_) => {
                     if jna_debug {
-                        println!("Created lib{}.dylib symlink to {}", name, target.display());
+                        log::debug!("Created lib{}.dylib symlink to {}", name, target.display());
                     }
                 }
                 Err(e) => {
                     log::warn!("Failed to create lib{}.dylib symlink: {}", name, e);
                     if jna_debug {
-                        println!("{} symlink failed: {}", name, e);
+                        log::debug!("{} symlink failed: {}", name, e);
                     }
                 }
             }
@@ -674,7 +674,7 @@ impl AdvancedLauncher {
             None => return Ok(false),
         };
         if std::env::var_os("MMD_JNA_DEBUG").is_some() {
-            println!("Using JNA jar: {}", jna_jar.display());
+            log::debug!("Using JNA jar: {}", jna_jar.display());
         }
 
         std::fs::create_dir_all(target_dir)
