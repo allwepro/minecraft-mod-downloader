@@ -196,22 +196,17 @@ impl RDRuntime {
                             offline_mode,
                         })
                         .await;
+                });
+            }
 
-                    let tx_connectivity = tx.clone();
-                    let api_connectivity = api.clone();
-                    tokio::spawn(async move {
-                        let mut last_status = !offline_mode;
-                        loop {
-                            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                            let status = api_connectivity.ping().await.is_ok();
-                            if status != last_status {
-                                last_status = status;
-                                let _ = tx_connectivity
-                                    .send(InternalEvent::ConnectivityChanged { offline: !status })
-                                    .await;
-                            }
-                        }
-                    });
+            Effect::PingConnectivity => {
+                let api = self.api_service.clone();
+                let tx = self.event_tx.clone();
+                self.rt_handle.spawn(async move {
+                    let status = api.ping().await.is_ok();
+                    let _ = tx
+                        .send(InternalEvent::ConnectivityChanged { offline: !status })
+                        .await;
                 });
             }
 

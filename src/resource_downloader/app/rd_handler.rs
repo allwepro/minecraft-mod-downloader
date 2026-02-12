@@ -21,7 +21,7 @@ use egui::{Context, Ui};
 use parking_lot::RwLock;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 pub struct RDHandler {
@@ -36,6 +36,7 @@ pub struct RDHandler {
     sidebar: SidebarPanel,
     main: MainPanel,
     settings_modal: SettingsModal,
+    last_connectivity_check: Option<Instant>,
 }
 
 impl RDHandler {
@@ -124,6 +125,7 @@ impl RDHandler {
             sidebar: SidebarPanel::new(state.clone()),
             main: MainPanel::new(state.clone()),
             settings_modal: SettingsModal::new(state.clone()),
+            last_connectivity_check: None,
         }
     }
 }
@@ -229,6 +231,19 @@ impl ViewController for RDHandler {
 
     fn sync_frame(&mut self, ctx: &Context) {
         (self.update_fn)(ctx);
+
+        if ctx.input(|i| i.focused) {
+            let now = Instant::now();
+            let should_ping = match self.last_connectivity_check {
+                Some(last) => now.duration_since(last) >= Duration::from_secs(90),
+                None => true,
+            };
+
+            if should_ping {
+                self.last_connectivity_check = Some(now);
+                self.state.read().dispatch(Effect::PingConnectivity);
+            }
+        }
     }
 
     fn get_top_bar_actions(&mut self) -> Vec<TopBarAction> {
