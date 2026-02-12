@@ -37,6 +37,13 @@ enum PanelMessage {
     },
 }
 
+#[derive(Clone)]
+struct CompatibilityStatus {
+    is_known_good: bool,
+    message: String,
+    recommended_java_major: Option<u32>,
+}
+
 pub struct LauncherPanel {
     java_installations: Vec<JavaInstallation>,
     selected_java_index: Option<usize>,
@@ -62,6 +69,8 @@ pub struct LauncherPanel {
     fabric_supported: Option<bool>,
     fabric_support_for_mc_version: Option<String>,
     fabric_support_error: Option<String>,
+    allow_experimental_launch: bool,
+    last_java_autoselect_for_mc: Option<String>,
 }
 
 impl LauncherPanel {
@@ -102,6 +111,8 @@ impl LauncherPanel {
             fabric_supported: None,
             fabric_support_for_mc_version: None,
             fabric_support_error: None,
+            allow_experimental_launch: false,
+            last_java_autoselect_for_mc: None,
         }
     }
 
@@ -175,10 +186,8 @@ impl LauncherPanel {
                     }
                 }
                 PanelMessage::ModCopyFinished { copied, total } => {
-                    self.mod_copy_progress = Some((
-                        1.0,
-                        format!("Mods copied: {}/{}", copied, total),
-                    ));
+                    self.mod_copy_progress =
+                        Some((1.0, format!("Mods copied: {}/{}", copied, total)));
                     self.mod_copy_done_at = Some(Instant::now());
                     self.launch_status = Some(format!("Mods copied: {}/{}", copied, total));
                 }
@@ -255,6 +264,8 @@ impl LauncherPanel {
         download_dir: &str,
         selected_loader: &str,
     ) {
+        self.maybe_auto_select_java_for_mc_version();
+
         ui.heading("Minecraft Launcher");
         ui.add_space(10.0);
 
@@ -441,6 +452,44 @@ impl LauncherPanel {
 
         ui.add_space(10.0);
 
+        let compatibility_status = self.evaluate_compatibility(selected_loader);
+
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Compatibility").strong());
+            ui.add_space(5.0);
+
+            if let Some(status) = &compatibility_status {
+                let color = if status.is_known_good {
+                    egui::Color32::GREEN
+                } else {
+                    egui::Color32::YELLOW
+                };
+                ui.colored_label(color, status.message.clone());
+
+                if let Some(recommended) = status.recommended_java_major {
+                    ui.label(format!(
+                        "Recommended Java major for Minecraft {}: {}",
+                        self.selected_mc_version, recommended
+                    ));
+                }
+
+                if status.is_known_good {
+                    self.allow_experimental_launch = false;
+                } else {
+                    ui.checkbox(
+                        &mut self.allow_experimental_launch,
+                        "Allow experimental launch (unsupported combination)",
+                    );
+                }
+            } else {
+                ui.label(
+                    "Select a Java installation and Minecraft version to check compatibility.",
+                );
+            }
+        });
+
+        ui.add_space(10.0);
+
         // Mod list selection
         ui.group(|ui| {
             ui.label(egui::RichText::new("Mod List").strong());
@@ -498,6 +547,14 @@ impl LauncherPanel {
         }
         if self.launcher_min_memory > self.launcher_max_memory {
             disabled_reasons.push("Min memory cannot exceed max memory".to_string());
+        }
+        if let Some(status) = &compatibility_status {
+            if !status.is_known_good && !self.allow_experimental_launch {
+                disabled_reasons.push(
+                    "Unsupported Java/Minecraft combination (enable experimental launch)"
+                        .to_string(),
+                );
+            }
         }
         if selected_loader == "fabric" {
             if self.fabric_support_checking {
@@ -719,6 +776,16 @@ impl LauncherPanel {
             }
         };
 
+        if let Some(status) = self.evaluate_compatibility(selected_loader) {
+            if !status.is_known_good && !self.allow_experimental_launch {
+                self.launch_status = Some(format!(
+                    "❌ {} Enable experimental launch to continue.",
+                    status.message
+                ));
+                return;
+            }
+        }
+
         let launch_version = if selected_loader == "fabric" {
             if self.fabric_supported == Some(false) {
                 self.launch_status = Some(
@@ -912,6 +979,147 @@ impl LauncherPanel {
 
             let _ = tx.send(PanelMessage::LaunchFinished(result)).await;
         });
+    }
+
+    fn maybe_auto_select_java_for_mc_version(&mut self) {
+        if self.last_java_autoselect_for_mc.as_deref() == Some(&self.selected_mc_version) {
+            return;
+        }
+
+        self.last_java_autoselect_for_mc = Some(self.selected_mc_version.clone());
+
+        let target_major =
+            match Self::recommended_java_major_for_mc_version(&self.selected_mc_version) {
+                Some(major) => major,
+                None => return,
+            };
+
+        if let Some(index) = self.find_java_index_for_major(target_major) {
+            self.selected_java_index = Some(index);
+        }
+    }
+
+    fn find_java_index_for_major(&self, major: u32) -> Option<usize> {
+        self.java_installations
+            .iter()
+            .enumerate()
+            .find(|(_, java)| {
+                java.is_valid
+                    && Self::parse_java_major(&java.version)
+                        .map(|java_major| java_major == major)
+                        .unwrap_or(false)
+            })
+            .map(|(idx, _)| idx)
+    }
+
+    fn evaluate_compatibility(&self, selected_loader: &str) -> Option<CompatibilityStatus> {
+        let java_idx = self.selected_java_index?;
+        let java = self.java_installations.get(java_idx)?;
+
+        let java_major = match Self::parse_java_major(&java.version) {
+            Some(major) => major,
+            None => {
+                return Some(CompatibilityStatus {
+                    is_known_good: false,
+                    message: format!("Could not parse selected Java version: {}", java.version),
+                    recommended_java_major: None,
+                });
+            }
+        };
+
+        let recommended =
+            match Self::recommended_java_major_for_mc_version(&self.selected_mc_version) {
+                Some(major) => major,
+                None => {
+                    let loader_note = if selected_loader == "fabric" {
+                        " (Fabric snapshot/pre-release combos are experimental)"
+                    } else {
+                        ""
+                    };
+                    return Some(CompatibilityStatus {
+                        is_known_good: false,
+                        message: format!(
+                            "No known-good matrix entry for Minecraft {}{}",
+                            self.selected_mc_version, loader_note
+                        ),
+                        recommended_java_major: None,
+                    });
+                }
+            };
+
+        if java_major == recommended {
+            Some(CompatibilityStatus {
+                is_known_good: true,
+                message: format!(
+                    "Known-good combination: Minecraft {} + Java {}",
+                    self.selected_mc_version, java_major
+                ),
+                recommended_java_major: Some(recommended),
+            })
+        } else {
+            Some(CompatibilityStatus {
+                is_known_good: false,
+                message: format!(
+                    "Selected Java {} is outside matrix for Minecraft {}",
+                    java_major, self.selected_mc_version
+                ),
+                recommended_java_major: Some(recommended),
+            })
+        }
+    }
+
+    fn recommended_java_major_for_mc_version(version: &str) -> Option<u32> {
+        let (major, minor, patch) = Self::parse_release_mc_version(version)?;
+
+        if major == 1 {
+            if minor <= 16 {
+                return Some(8);
+            }
+            if minor <= 19 {
+                return Some(17);
+            }
+            if minor == 20 {
+                if patch >= 5 {
+                    return Some(21);
+                }
+                return Some(17);
+            }
+            return Some(21);
+        }
+
+        if major >= 2 {
+            return Some(21);
+        }
+
+        None
+    }
+
+    fn parse_release_mc_version(version: &str) -> Option<(u32, u32, u32)> {
+        if version.chars().any(|c| c.is_ascii_alphabetic()) {
+            return None;
+        }
+
+        let mut parts = version.split('.');
+        let major = parts.next()?.parse::<u32>().ok()?;
+        let minor = parts.next().unwrap_or("0").parse::<u32>().ok()?;
+        let patch = parts.next().unwrap_or("0").parse::<u32>().ok()?;
+
+        if parts.next().is_some() {
+            return None;
+        }
+
+        Some((major, minor, patch))
+    }
+
+    fn parse_java_major(version: &str) -> Option<u32> {
+        let mut parts = version.split('.');
+        let first = parts.next()?.parse::<u32>().ok()?;
+
+        if first == 1 {
+            return parts.next()?.parse::<u32>().ok();
+        }
+
+        Some(first)
     }
 }
 
