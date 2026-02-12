@@ -190,6 +190,10 @@ impl ResourceType {
         .parse()
         .unwrap()
     }
+
+    pub fn likely_cross_loader_compatible(&self) -> bool {
+        matches!(self, Self::ResourcePack | Self::Shader | Self::Plugin)
+    }
 }
 
 /*

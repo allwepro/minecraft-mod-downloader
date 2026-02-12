@@ -680,7 +680,7 @@ impl MainPanel {
             (meta, vers)
         };
 
-        let compatibility = if let Ok(Some(vers)) = &versions {
+        let mut compatibility = if let Ok(Some(vers)) = &versions {
             Some(!vers.is_empty())
         } else {
             None
@@ -697,6 +697,12 @@ impl MainPanel {
             )
         {
             versions = Ok(Some(best_vers));
+
+            compatibility = if let Ok(Some(vers)) = &versions {
+                Some(!vers.is_empty())
+            } else {
+                None
+            };
         }
 
         let auto_update_enabled = list_arc.read().get_do_updates();
