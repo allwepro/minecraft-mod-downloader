@@ -1,5 +1,5 @@
 use crate::common::prefabs::popup_window::Popup;
-use crate::resource_downloader::app::modals::create_folder_modal::CreateFolderModal;
+use crate::resource_downloader::app::modals::create_list_group_modal::CreateListGroupModal;
 use crate::resource_downloader::app::modals::create_modal::CreateModal;
 use crate::resource_downloader::business::SharedRDState;
 use eframe::egui;
@@ -9,7 +9,7 @@ use egui::{Id, Ui};
 pub struct CreateMenuPopup {
     state: SharedRDState,
     new_list_modal: CreateModal,
-    new_folder_modal: CreateFolderModal,
+    new_list_group_modal: CreateListGroupModal,
 }
 
 impl CreateMenuPopup {
@@ -17,7 +17,7 @@ impl CreateMenuPopup {
         Self {
             state: state.clone(),
             new_list_modal: CreateModal::new(state.clone()),
-            new_folder_modal: CreateFolderModal::new(state.clone()),
+            new_list_group_modal: CreateListGroupModal::new(state.clone()),
         }
     }
 }
@@ -40,11 +40,11 @@ impl Popup for CreateMenuPopup {
                 *open = false;
             }
 
-            if ui.button("📁  New Folder").clicked() {
+            if ui.button("📁  New Group").clicked() {
                 self.state
                     .read()
                     .modal_manager
-                    .open(Box::new(self.new_folder_modal.clone()));
+                    .open(Box::new(self.new_list_group_modal.clone()));
                 *open = false;
             }
         });

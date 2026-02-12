@@ -53,7 +53,7 @@ impl ModalWindow for ListSettingsModal {
         });
         ui.add_space(8.0);
         ui.label(
-            egui::RichText::new(format!("ID: {}", self.list))
+            egui::RichText::new(format!("🆔 List ID: {}", self.list))
                 .small()
                 .color(egui::Color32::GRAY),
         );

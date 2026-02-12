@@ -1,10 +1,10 @@
-pub(crate) mod create_folder_modal;
+pub(crate) mod create_list_group_modal;
 pub(crate) mod create_modal;
 pub(crate) mod folder_import_modal;
-pub(crate) mod folder_settings_modal;
 pub(crate) mod import_modal;
 pub(crate) mod legacy_import_modal;
 pub(crate) mod legacy_import_progress_modal;
+pub(crate) mod list_group_settings_modal;
 pub(crate) mod list_settings_modal;
 pub(crate) mod modrinth_collection_import_modal;
 pub(crate) mod search_modal;
