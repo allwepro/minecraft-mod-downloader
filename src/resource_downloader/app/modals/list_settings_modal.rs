@@ -40,7 +40,13 @@ impl ModalWindow for ListSettingsModal {
 
         ui.add_space(12.0);
         ui.horizontal(|ui| {
-            if ui.button("Save").clicked() {
+            let can_save = self.list_settings_component.new_game_version.is_some()
+                && self.list_settings_component.new_game_loader.is_some();
+
+            if ui
+                .add_enabled(can_save, egui::Button::new("Save"))
+                .clicked()
+            {
                 self.save_on_close = true;
                 *open = false;
             }
@@ -65,23 +71,21 @@ impl ModalWindow for ListSettingsModal {
         let pool = self.state.read().list_pool.clone();
         let lnk = self.list.clone();
 
+        let (ver, loader) = match (
+            self.list_settings_component.new_game_version.clone(),
+            self.list_settings_component.new_game_loader.clone(),
+        ) {
+            (Some(v), Some(l)) => (v, l),
+            _ => return,
+        };
+
         if let Some(list_arc) = pool.get(&lnk) {
             let mut target_list = list_arc.write();
-            target_list.set_game_version(
-                self.list_settings_component
-                    .new_game_version
-                    .as_ref()
-                    .unwrap()
-                    .clone(),
-            );
+            target_list.set_game_version(ver);
             target_list.set_resource_type(
                 self.list_settings_component.new_resource_type,
                 ProjectTypeConfig::new(
-                    self.list_settings_component
-                        .new_game_loader
-                        .as_ref()
-                        .unwrap()
-                        .clone(),
+                    loader,
                     self.list_settings_component.new_download_dir.clone(),
                 ),
             );

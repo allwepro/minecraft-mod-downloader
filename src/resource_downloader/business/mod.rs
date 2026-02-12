@@ -15,24 +15,25 @@ pub use rd_state::{DownloadStatus, FolderImportCandidate, RDState, SharedRDState
 #[macro_export]
 macro_rules! get_versions {
     ($state:expr) => {
-        $state
-            .read()
-            .api()
-            .game_version_pool
-            .get_versions()
-            .unwrap()
+        match $state.read().api().game_version_pool.get_versions() {
+            Ok(v) => v,
+            Err(_) => None,
+        }
     };
 }
 
 #[macro_export]
 macro_rules! get_loaders {
     ($state:expr, $resource_type:expr) => {
-        $state
+        match $state
             .read()
             .api()
             .game_loader_pool
             .get_loaders($resource_type)
-            .unwrap()
+        {
+            Ok(v) => v,
+            Err(_) => None,
+        }
     };
 }
 
@@ -43,8 +44,8 @@ macro_rules! get_default_dir {
             .read()
             .default_dirs
             .get($resource_type)
-            .unwrap()
-            .clone()
+            .map(|s| s.clone())
+            .unwrap_or_else(|| "".to_string())
     };
 }
 

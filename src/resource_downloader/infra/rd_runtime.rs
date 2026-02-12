@@ -105,6 +105,8 @@ impl RDRuntime {
         match effect {
             Effect::Initialize => {
                 self.rt_handle.spawn(async move {
+                    let status_ping = api.ping();
+
                     if let Err(e) = cm.init().await {
                         let _ = tx
                             .send(InternalEvent::Standard(Event::FailedInitialization {
@@ -151,17 +153,25 @@ impl RDRuntime {
                         }
                     }
 
+                    let mut join_set2: tokio::task::JoinSet<anyhow::Result<DefaultReason>> =
+                        tokio::task::JoinSet::new();
+                    struct DefaultReason;
+
                     let api_v = api.clone();
-                    tokio::spawn(async move {
-                        let _ = api_v.game_version_pool.get_versions_blocking().await;
+                    join_set2.spawn(async move {
+                        api_v.game_version_pool.get_versions_blocking().await?;
+                        Ok(DefaultReason)
                     });
 
                     for rt in RESOURCE_TYPES {
                         let api_l = api.clone();
-                        tokio::spawn(async move {
-                            let _ = api_l.game_loader_pool.get_loaders_blocking(rt).await;
+                        join_set2.spawn(async move {
+                            api_l.game_loader_pool.get_loaders_blocking(rt).await?;
+                            Ok(DefaultReason)
                         });
                     }
+
+                    while join_set2.join_next().await.is_some() {}
 
                     let mut default_download_dir_by_type = HashMap::new();
                     for rt in RESOURCE_TYPES {
@@ -177,13 +187,31 @@ impl RDRuntime {
                     lm.set_default_download_dirs(default_download_dir_by_type.clone())
                         .await;
 
+                    let offline_mode = status_ping.await.is_err();
                     let _ = tx
                         .send(InternalEvent::Initialized {
                             config: config.clone(),
                             lists: lists_with_lnks,
                             default_download_dir_by_type,
+                            offline_mode,
                         })
                         .await;
+
+                    let tx_connectivity = tx.clone();
+                    let api_connectivity = api.clone();
+                    tokio::spawn(async move {
+                        let mut last_status = !offline_mode;
+                        loop {
+                            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                            let status = api_connectivity.ping().await.is_ok();
+                            if status != last_status {
+                                last_status = status;
+                                let _ = tx_connectivity
+                                    .send(InternalEvent::ConnectivityChanged { offline: !status })
+                                    .await;
+                            }
+                        }
+                    });
                 });
             }
 
@@ -429,11 +457,10 @@ impl RDRuntime {
                                     if list.read().has_project(&prj) {
                                         continue;
                                     }
-                                    if let Some(rtpm) = api
+                                    if let Ok(Some(rtpm)) = api
                                         .rt_project_pool
                                         .get_metadata_blocking(prj.clone(), rt)
                                         .await
-                                        .expect("Valid metadata expected")
                                     {
                                         dependency_data.push((prj, rt, rtpm));
                                     }

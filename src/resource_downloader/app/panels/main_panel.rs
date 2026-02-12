@@ -270,19 +270,25 @@ impl MainPanel {
 
             ui.allocate_rect(full_rect, egui::Sense::hover());
 
+            let offline_mode = self.state.read().offline_mode;
+
             let left_rect = ui
                 .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        if ui
-                            .button(
-                                egui::RichText::new(format!(
-                                    "➕ Add {}",
-                                    content_type.display_name()
-                                ))
-                                .color(Color32::LIGHT_GREEN),
-                            )
-                            .clicked()
-                        {
+                        let add_btn = egui::Button::new(
+                            egui::RichText::new(format!("➕ Add {}", content_type.display_name()))
+                                .color(if offline_mode {
+                                    Color32::GRAY
+                                } else {
+                                    Color32::LIGHT_GREEN
+                                }),
+                        );
+
+                        let res = ui
+                            .add_enabled(!offline_mode, add_btn)
+                            .on_disabled_hover_text("Disabled in offline mode");
+
+                        if res.clicked() {
                             let sm = SearchModal::new(
                                 self.state.clone(),
                                 lnk.clone(),
@@ -321,12 +327,22 @@ impl MainPanel {
 
                         let mut combined_res: Option<egui::Response>;
 
-                        let res1 = ui.add_enabled(
-                            !missing.is_empty(),
-                            egui::Button::new(
-                                egui::RichText::new("⬇ Download All").color(Color32::LIGHT_BLUE),
-                            ),
-                        );
+                        let res1 = ui
+                            .add_enabled(
+                                !missing.is_empty() && !offline_mode,
+                                egui::Button::new(egui::RichText::new("⬇ Download All").color(
+                                    if offline_mode {
+                                        Color32::GRAY
+                                    } else {
+                                        Color32::LIGHT_BLUE
+                                    },
+                                )),
+                            )
+                            .on_disabled_hover_text(if offline_mode {
+                                "Disabled in offline mode"
+                            } else {
+                                ""
+                            });
 
                         if res1.clicked() {
                             ProjectActions::download_projects_latest(
@@ -340,10 +356,21 @@ impl MainPanel {
 
                         if !auto_update_enabled && any_updates_available {
                             let res2 = ui
-                                .button(
-                                    egui::RichText::new("🔄 Update All")
-                                        .color(Color32::from_rgb(0, 150, 240)),
+                                .add_enabled(
+                                    !offline_mode,
+                                    egui::Button::new(egui::RichText::new("🔄 Update All").color(
+                                        if offline_mode {
+                                            Color32::GRAY
+                                        } else {
+                                            Color32::from_rgb(0, 150, 240)
+                                        },
+                                    )),
                                 )
+                                .on_disabled_hover_text(if offline_mode {
+                                    "Disabled in offline mode"
+                                } else {
+                                    ""
+                                })
                                 .on_hover_text("Update all projects to their latest versions");
 
                             if res2.clicked() {
@@ -666,6 +693,8 @@ impl MainPanel {
         ordered_list: &[ProjectLnk],
         current_idx: usize,
     ) {
+        let offline_mode = self.state.read().offline_mode;
+
         let is_overruled = {
             let list = list_arc.read();
             list.get_project(p_lnk)
@@ -942,7 +971,7 @@ impl MainPanel {
                                     let btn_label = "Download";
                                     let can_dl =
                                         matches!(compatibility, Some(true)) || is_overruled;
-                                    let ui_enabled = can_dl && !is_downloaded && has_loaded_files;
+                                    let ui_enabled = can_dl && !is_downloaded && has_loaded_files && !offline_mode;
 
                                     let latest_version = if let Ok(Some(v_list)) = &versions {
                                         v_list.first()
@@ -950,13 +979,17 @@ impl MainPanel {
                                         None
                                     };
 
-                                    let btn = ui.add_enabled(
+                                    let mut btn = ui.add_enabled(
                                         ui_enabled && latest_version.is_some(),
                                         egui::Button::new(
                                             egui::RichText::new(btn_label)
-                                                .color(Color32::LIGHT_BLUE),
+                                                .color(if offline_mode { Color32::GRAY } else { Color32::LIGHT_BLUE }),
                                         ),
                                     );
+
+                                    if offline_mode {
+                                        btn = btn.on_disabled_hover_text("Disabled in offline mode");
+                                    }
 
                                     if btn.clicked()
                                         && let Some(v) = latest_version
