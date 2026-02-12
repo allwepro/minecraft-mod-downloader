@@ -464,3 +464,272 @@ impl ModCopier {
         Ok(errors)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{ModCopier, ModValidationSpec};
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use tokio::sync::mpsc;
+
+    fn test_temp_dir(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "mmd_mod_copier_{}_{}_{}",
+            name,
+            std::process::id(),
+            nonce
+        ));
+        std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+        dir
+    }
+
+    #[test]
+    fn parse_numeric_version_handles_common_values() {
+        assert_eq!(
+            ModCopier::parse_numeric_version("1.20.5"),
+            Some(vec![1, 20, 5])
+        );
+        assert_eq!(
+            ModCopier::parse_numeric_version("1.20.5-beta"),
+            Some(vec![1, 20, 5])
+        );
+        assert_eq!(ModCopier::parse_numeric_version("abc"), None);
+    }
+
+    #[test]
+    fn compare_versions_handles_different_lengths() {
+        assert_eq!(ModCopier::compare_versions(&[1, 20], &[1, 20, 0]), 0);
+        assert!(ModCopier::compare_versions(&[1, 20, 1], &[1, 20]) > 0);
+        assert!(ModCopier::compare_versions(&[1, 19], &[1, 20]) < 0);
+    }
+
+    #[test]
+    fn starts_with_version_checks_prefix() {
+        assert!(ModCopier::starts_with_version(&[1, 20, 1], &[1, 20]));
+        assert!(!ModCopier::starts_with_version(&[1, 20], &[1, 20, 1]));
+    }
+
+    #[test]
+    fn eval_requirement_token_supports_operators_and_wildcards() {
+        let nums = ModCopier::parse_numeric_version("1.20.1");
+        assert_eq!(
+            ModCopier::eval_requirement_token("1.20.1", &nums, ">=1.20"),
+            Some(true)
+        );
+        assert_eq!(
+            ModCopier::eval_requirement_token("1.20.1", &nums, "<1.20"),
+            Some(false)
+        );
+        assert_eq!(
+            ModCopier::eval_requirement_token("1.20.1", &nums, "1.20.x"),
+            Some(true)
+        );
+        assert_eq!(
+            ModCopier::eval_requirement_token("1.20.1", &nums, "*"),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn matches_version_requirement_handles_groups() {
+        assert_eq!(
+            ModCopier::matches_version_requirement("1.20.1", ">=1.20 <1.21"),
+            Some(true)
+        );
+        assert_eq!(
+            ModCopier::matches_version_requirement("1.20.1", ">=1.21 || 1.20.x"),
+            Some(true)
+        );
+        assert_eq!(
+            ModCopier::matches_version_requirement("1.20.1", "<1.20"),
+            Some(false)
+        );
+        assert_eq!(
+            ModCopier::matches_version_requirement("1.20.1", "not-a-rule"),
+            None
+        );
+    }
+
+    #[test]
+    fn get_dependency_supports_string_and_array() {
+        let json = serde_json::json!({
+            "depends": {
+                "minecraft": ">=1.20",
+                "fabricloader": [">=0.15.0", "<0.16.0"]
+            }
+        });
+
+        assert_eq!(
+            ModCopier::get_dependency(&json, "minecraft"),
+            Some(">=1.20".to_string())
+        );
+        assert_eq!(
+            ModCopier::get_dependency(&json, "fabricloader"),
+            Some(">=0.15.0 <0.16.0".to_string())
+        );
+        assert_eq!(ModCopier::get_dependency(&json, "missing"), None);
+    }
+
+    #[test]
+    fn find_mod_file_sync_matches_normalized_name() {
+        let dir = test_temp_dir("find_sync");
+        let jar = dir.join("Awesome-Mod_1.0.0.jar");
+        std::fs::write(&jar, b"dummy").expect("failed to create test jar");
+
+        let found = ModCopier::find_mod_file_sync(&dir, "awesome mod")
+            .expect("find_mod_file_sync should not fail");
+        assert_eq!(found.as_deref(), Some(jar.as_path()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn clear_mods_directory_removes_only_jars() {
+        let dir = test_temp_dir("clear_mods");
+        let jar = dir.join("a.jar");
+        let txt = dir.join("notes.txt");
+        std::fs::write(&jar, b"dummy").expect("failed to create jar");
+        std::fs::write(&txt, b"dummy").expect("failed to create txt");
+
+        let removed = ModCopier::clear_mods_directory(&dir)
+            .await
+            .expect("clear_mods_directory failed");
+
+        assert_eq!(removed, 1);
+        assert!(!jar.exists());
+        assert!(txt.exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn validate_mods_for_launch_reports_empty_mod_file() {
+        let mods_dir = test_temp_dir("validate_empty");
+        let empty_mod = mods_dir.join("Bobby.jar");
+        std::fs::write(&empty_mod, b"").expect("failed to create empty mod");
+
+        let specs = vec![ModValidationSpec {
+            name: "Bobby".to_string(),
+            allow_incompatible: false,
+        }];
+
+        let errors = ModCopier::validate_mods_for_launch(
+            &mods_dir,
+            &specs,
+            "fabric",
+            "1.20.1",
+            Some("0.15.0"),
+        )
+        .expect("validation should not fail unexpectedly");
+
+        assert!(errors.iter().any(|e| e.contains("Mod file is empty")));
+
+        let _ = std::fs::remove_dir_all(&mods_dir);
+    }
+
+    #[test]
+    fn validate_mods_for_launch_respects_allow_incompatible() {
+        let mods_dir = test_temp_dir("validate_allow");
+        let mod_file = mods_dir.join("ParticleEffects.jar");
+        std::fs::write(&mod_file, b"not-a-zip").expect("failed to create mod file");
+
+        let strict_specs = vec![ModValidationSpec {
+            name: "ParticleEffects".to_string(),
+            allow_incompatible: false,
+        }];
+        let strict_errors = ModCopier::validate_mods_for_launch(
+            &mods_dir,
+            &strict_specs,
+            "fabric",
+            "1.20.1",
+            Some("0.15.0"),
+        )
+        .expect("strict validation failed unexpectedly");
+        assert!(!strict_errors.is_empty());
+
+        let lax_specs = vec![ModValidationSpec {
+            name: "ParticleEffects".to_string(),
+            allow_incompatible: true,
+        }];
+        let lax_errors = ModCopier::validate_mods_for_launch(
+            &mods_dir,
+            &lax_specs,
+            "fabric",
+            "1.20.1",
+            Some("0.15.0"),
+        )
+        .expect("lax validation failed unexpectedly");
+        assert!(lax_errors.is_empty());
+
+        let _ = std::fs::remove_dir_all(&mods_dir);
+    }
+
+    #[tokio::test]
+    async fn copy_mods_copies_non_empty_and_reports_progress() {
+        let source_dir = test_temp_dir("copy_with_progress_src");
+        let dest_dir = test_temp_dir("copy_with_progress_dest");
+
+        let bobby = source_dir.join("Bobby.jar");
+        let particle = source_dir.join("ParticleEffects.jar");
+        std::fs::write(&bobby, b"valid-mod").expect("failed to write bobby mod");
+        std::fs::write(&particle, b"").expect("failed to write empty particle mod");
+
+        let mod_names = vec![
+            "Bobby".to_string(),
+            "ParticleEffects".to_string(),
+            "MissingMod".to_string(),
+        ];
+
+        let (tx, mut rx) = mpsc::channel(16);
+        let copied = ModCopier::copy_mods_to_minecraft_with_progress(
+            &source_dir,
+            &dest_dir,
+            &mod_names,
+            Some(tx),
+        )
+        .await
+        .expect("copy_mods_to_minecraft_with_progress failed");
+
+        let mut progress_messages = Vec::new();
+        while let Some(progress) = rx.recv().await {
+            progress_messages.push(progress);
+        }
+
+        assert_eq!(copied, vec!["Bobby.jar".to_string()]);
+        assert!(dest_dir.join("Bobby.jar").exists());
+        assert!(!dest_dir.join("ParticleEffects.jar").exists());
+
+        assert_eq!(progress_messages.len(), 3);
+        assert_eq!(progress_messages[0].current, 1);
+        assert_eq!(progress_messages[0].total, 3);
+        assert_eq!(progress_messages[2].current, 3);
+
+        let _ = std::fs::remove_dir_all(&source_dir);
+        let _ = std::fs::remove_dir_all(&dest_dir);
+    }
+
+    #[tokio::test]
+    async fn copy_mods_same_source_and_destination_keeps_file_in_place() {
+        let mods_dir = test_temp_dir("copy_same_dir");
+        let jar = mods_dir.join("WorldEdit.jar");
+        std::fs::write(&jar, b"worldedit").expect("failed to write worldedit mod");
+
+        let copied = ModCopier::copy_mods_to_minecraft_with_progress(
+            &mods_dir,
+            &mods_dir,
+            &["WorldEdit".to_string()],
+            None,
+        )
+        .await
+        .expect("copy_mods_to_minecraft_with_progress failed");
+
+        assert_eq!(copied, vec!["WorldEdit.jar".to_string()]);
+        assert!(jar.exists());
+
+        let _ = std::fs::remove_dir_all(&mods_dir);
+    }
+}
