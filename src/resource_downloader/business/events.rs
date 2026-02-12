@@ -225,10 +225,14 @@ pub enum Event {
 
 pub enum InternalEvent {
     Standard(Event),
+    ConnectivityChanged {
+        offline: bool,
+    },
     Initialized {
         config: AppConfig,
         lists: Vec<(ListLnk, Arc<RwLock<ProjectList>>)>,
         default_download_dir_by_type: HashMap<ResourceType, String>,
+        offline_mode: bool,
     },
     ListCreated {
         name: String,

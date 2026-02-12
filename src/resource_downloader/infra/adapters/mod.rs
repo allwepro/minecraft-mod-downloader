@@ -12,6 +12,8 @@ use std::sync::Arc;
 
 #[async_trait]
 pub trait ResourceProvider: Send + Sync {
+    async fn ping(&self) -> anyhow::Result<()>;
+
     fn get_project_link(&self, resource_type: &ResourceType, project: ProjectLnk) -> String;
 
     async fn fetch_release_game_versions(

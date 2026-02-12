@@ -109,8 +109,20 @@ impl ModrinthProvider {
 
 #[async_trait]
 impl ResourceProvider for ModrinthProvider {
-    fn get_project_link(&self, project_type: &ResourceType, project: ProjectLnk) -> String {
-        format!("https://modrinth.com/{}/{}", project_type.id(), project)
+    async fn ping(&self) -> anyhow::Result<()> {
+        let url = "https://api.modrinth.com/v2/statistics";
+        let _ = self
+            .client
+            .get(url)
+            .header("User-Agent", self.user_agent.clone())
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
+    }
+
+    fn get_project_link(&self, resource_type: &ResourceType, project: ProjectLnk) -> String {
+        format!("https://modrinth.com/{}/{}", resource_type.id(), project)
     }
 
     async fn fetch_release_game_versions(

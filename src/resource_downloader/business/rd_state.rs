@@ -75,6 +75,7 @@ pub struct RDState {
     pub notification_manager: SharedNotificationManager,
 
     pub loading: bool,
+    pub offline_mode: bool,
 
     pub default_dirs: HashMap<ResourceType, String>,
     pub config: Arc<RwLock<AppConfig>>,
@@ -116,6 +117,7 @@ impl RDState {
             notification_manager,
 
             loading: true,
+            offline_mode: false,
 
             default_dirs: Default::default(),
             config: Arc::new(RwLock::new(AppConfig::default())),
@@ -314,12 +316,18 @@ impl RDState {
                 }
                 Some(event)
             }
+            InternalEvent::ConnectivityChanged { offline } => {
+                self.offline_mode = offline;
+                None
+            }
             InternalEvent::Initialized {
                 config,
                 lists,
                 default_download_dir_by_type,
+                offline_mode,
             } => {
                 *self.config.write() = config.clone();
+                self.offline_mode = offline_mode;
 
                 let list_lnks: Vec<ListLnk> = lists
                     .into_iter()

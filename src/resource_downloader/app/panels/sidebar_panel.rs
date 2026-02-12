@@ -39,25 +39,41 @@ impl SidebarPanel {
                 .desired_width(ui.available_width()),
         );
 
+        let offline_mode = self.state.read().offline_mode;
+
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             let button_width = ui.available_width() - 35.0;
-            if ui
-                .add_sized(
-                    [button_width, 25.0],
-                    egui::Button::new(
-                        egui::RichText::new("➕ New List").color(Color32::LIGHT_GREEN),
-                    ),
-                )
-                .clicked()
-            {
+            let mut new_btn =
+                egui::Button::new(egui::RichText::new("➕ New List").color(if offline_mode {
+                    Color32::GRAY
+                } else {
+                    Color32::LIGHT_GREEN
+                }));
+
+            if offline_mode {
+                new_btn = new_btn.fill(Color32::from_rgba_unmultiplied(100, 100, 100, 50));
+            }
+
+            let res = ui
+                .add_enabled_ui(!offline_mode, |ui| {
+                    ui.add_sized([button_width, 25.0], new_btn)
+                        .on_disabled_hover_text("Disabled in offline mode")
+                })
+                .inner;
+
+            if res.clicked() {
                 let mm = self.state.read().modal_manager.clone();
                 mm.open(Box::new(self.new_list_modal.clone()));
             }
 
             let import_btn = ui
-                .add_sized([25.0, 25.0], egui::Button::new("📥"))
-                .on_hover_text("Import");
+                .add_enabled_ui(!offline_mode, |ui| {
+                    ui.add_sized([25.0, 25.0], egui::Button::new("📥"))
+                        .on_disabled_hover_text("Disabled in offline mode")
+                        .on_hover_text("Import")
+                })
+                .inner;
 
             if import_btn.clicked() {
                 self.state
