@@ -117,3 +117,56 @@ impl<'de> Deserialize<'de> for ListLnk {
         Ok(ListLnk { list_id: s })
     }
 }
+
+/// A simple representation of a folder that can contain lists.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FolderLnk {
+    folder_id: String,
+}
+
+impl FolderLnk {
+    pub fn new(folder_id: String) -> Self {
+        Self { folder_id }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.folder_id
+    }
+}
+
+impl From<String> for FolderLnk {
+    fn from(folder_id: String) -> Self {
+        Self { folder_id }
+    }
+}
+
+impl From<FolderLnk> for String {
+    fn from(val: FolderLnk) -> Self {
+        val.folder_id
+    }
+}
+
+impl Serialize for FolderLnk {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.folder_id)
+    }
+}
+
+impl Display for FolderLnk {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.folder_id)
+    }
+}
+
+impl<'de> Deserialize<'de> for FolderLnk {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(FolderLnk { folder_id: s })
+    }
+}

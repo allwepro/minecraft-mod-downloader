@@ -1,11 +1,15 @@
 use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::app::components::import_options_component::ImportOptionsComponent;
+use crate::resource_downloader::app::modals::create_folder_modal::CreateFolderModal;
 use crate::resource_downloader::app::modals::create_modal::CreateModal;
+use crate::resource_downloader::app::popups::create_menu_popup::CreateMenuPopup;
+use crate::resource_downloader::app::popups::folder_context_menu::FolderContextMenu;
 use crate::resource_downloader::app::popups::import_popup::ImportPopup;
 use crate::resource_downloader::app::popups::list_context_menu::ListContextMenu;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::folder_actions::FolderActions;
 use crate::resource_downloader::business::list_actions::ListActions;
-use crate::resource_downloader::domain::{ListLnk, ResourceType};
+use crate::resource_downloader::domain::{FolderLnk, ListLnk, ResourceType};
 use eframe::egui;
 use egui::{Color32, StrokeKind, Ui};
 use std::collections::{HashMap, HashSet};
@@ -13,10 +17,24 @@ use std::collections::{HashMap, HashSet};
 pub struct SidebarPanel {
     state: SharedRDState,
     list_search_query: String,
+    #[allow(dead_code)]
     new_list_modal: CreateModal,
+    #[allow(dead_code)]
+    new_folder_modal: CreateFolderModal,
+    create_menu_popup: CreateMenuPopup,
     import_popup: ImportPopup,
     context_menu_target: Option<(ListLnk, egui::Rect)>,
+    folder_context_menu_target: Option<(FolderLnk, String, egui::Rect)>,
     import_options: ImportOptionsComponent,
+    #[allow(dead_code)]
+    drag_state: Option<DragState>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+enum DragState {
+    List(ListLnk),
+    Folder(FolderLnk),
 }
 
 impl SidebarPanel {
@@ -25,9 +43,13 @@ impl SidebarPanel {
             state: state.clone(),
             list_search_query: String::new(),
             new_list_modal: CreateModal::new(state.clone()),
+            new_folder_modal: CreateFolderModal::new(state.clone()),
+            create_menu_popup: CreateMenuPopup::new(state.clone()),
             import_popup: ImportPopup::new(state.clone()),
             context_menu_target: None,
+            folder_context_menu_target: None,
             import_options: ImportOptionsComponent::new(state.clone()),
+            drag_state: None,
         }
     }
 
@@ -44,28 +66,39 @@ impl SidebarPanel {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             let button_width = ui.available_width() - 35.0;
-            let mut new_btn =
-                egui::Button::new(egui::RichText::new("➕ New List").color(if offline_mode {
+            let mut create_btn =
+                egui::Button::new(egui::RichText::new("➕ Create").color(if offline_mode {
                     Color32::GRAY
                 } else {
                     Color32::LIGHT_GREEN
                 }));
 
             if offline_mode {
-                new_btn = new_btn.fill(Color32::from_rgba_unmultiplied(100, 100, 100, 50));
+                create_btn = create_btn.fill(Color32::from_rgba_unmultiplied(100, 100, 100, 50));
             }
 
             let res = ui
                 .add_enabled_ui(!offline_mode, |ui| {
-                    ui.add_sized([button_width, 25.0], new_btn)
+                    ui.add_sized([button_width, 25.0], create_btn)
                         .on_disabled_hover_text("Disabled in offline mode")
                 })
                 .inner;
 
             if res.clicked() {
-                let mm = self.state.read().modal_manager.clone();
-                mm.open(Box::new(self.new_list_modal.clone()));
+                self.state
+                    .read()
+                    .popup_manager
+                    .toggle(self.create_menu_popup.id());
             }
+            self.state
+                .read()
+                .popup_manager
+                .register_interaction_area(self.create_menu_popup.id(), res.rect);
+
+            self.state
+                .read()
+                .popup_manager
+                .request_show(Box::new(self.create_menu_popup.clone()), res.rect);
 
             let import_btn = ui
                 .add_enabled_ui(!offline_mode, |ui| {
@@ -99,7 +132,7 @@ impl SidebarPanel {
             (state.open_list.clone(), state.pending_list_scroll.take())
         };
 
-        let mut list_items: Vec<(ListLnk, ResourceType, String, String, String, String, usize)> = {
+        let list_items: Vec<(ListLnk, ResourceType, String, String, String, String, usize)> = {
             let state = self.state.read();
             state.list_pool.map_filter(|list| {
                 let resource_type = list
@@ -129,56 +162,6 @@ impl SidebarPanel {
         let total_lists = list_items.len();
         let is_searching = !self.list_search_query.is_empty();
 
-        if is_searching {
-            let query = self.list_search_query.to_lowercase();
-            list_items.retain(|item| item.2.to_lowercase().contains(&query));
-            list_items.sort_by(|a, b| a.2.to_lowercase().cmp(&b.2.to_lowercase()));
-        } else {
-            let (changed, order) = {
-                let state = self.state.read();
-                let config = state.config.read();
-                let mut order = config.list_order.clone();
-
-                let available: HashSet<String> =
-                    list_items.iter().map(|i| i.0.to_string()).collect();
-                let mut changed = false;
-
-                let initial_len = order.len();
-                order.retain(|id| available.contains(id));
-                if order.len() != initial_len {
-                    changed = true;
-                }
-
-                let current_order_set: HashSet<String> = order.iter().cloned().collect();
-                let mut new_items: Vec<_> = list_items
-                    .iter()
-                    .filter(|i| !current_order_set.contains(&i.0.to_string()))
-                    .collect();
-
-                if !new_items.is_empty() {
-                    changed = true;
-                    new_items.sort_by(|a, b| a.2.to_lowercase().cmp(&b.2.to_lowercase()));
-                    for item in new_items {
-                        order.push(item.0.to_string());
-                    }
-                }
-                (changed, order)
-            };
-
-            if changed {
-                ListActions::set_list_order(self.state.clone(), order.clone());
-            }
-
-            let mut item_map: HashMap<String, _> = list_items
-                .into_iter()
-                .map(|i| (i.0.to_string(), i))
-                .collect();
-            list_items = order
-                .into_iter()
-                .filter_map(|id| item_map.remove(&id))
-                .collect();
-        }
-
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.set_width(ui.available_width());
 
@@ -189,14 +172,6 @@ impl SidebarPanel {
                     ui.label(egui::RichText::new("You can easily import one:").weak());
                     ui.add_space(10.0);
                     self.import_options.render_contents(ui);
-                });
-                return;
-            }
-
-            if is_searching && list_items.is_empty() {
-                ui.vertical_centered(|ui| {
-                    ui.add_space(20.0);
-                    ui.label(egui::RichText::new("No matching lists").weak());
                 });
                 return;
             }
@@ -219,10 +194,25 @@ impl SidebarPanel {
             }
 
             if is_searching {
-                for item in list_items {
-                    let response = self.render_row(ui, &item, &open_list, &pending_list_scroll);
+                // Search mode: flat list view
+                let query = self.list_search_query.to_lowercase();
+                let filtered_items: Vec<_> = list_items
+                    .into_iter()
+                    .filter(|item| item.3.to_lowercase().contains(&query))
+                    .collect();
 
+                if filtered_items.is_empty() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(20.0);
+                        ui.label(egui::RichText::new("No matching lists").weak());
+                    });
+                    return;
+                }
+
+                for item in filtered_items {
+                    let response = self.render_row(ui, &item, &open_list, &pending_list_scroll);
                     let response = ui.interact(response.rect, response.id, egui::Sense::click());
+
                     if response.hovered() {
                         ui.painter().rect_stroke(
                             response.rect,
@@ -246,79 +236,7 @@ impl SidebarPanel {
                     }
                 }
             } else {
-                let mut moved_item = None;
-                for (idx, item) in list_items.iter().enumerate() {
-                    let item_id = ui.make_persistent_id("list_dnd").with(&item.0);
-                    let payload = idx;
-
-                    let inner_response = ui.dnd_drag_source(item_id, payload, |ui| {
-                        self.render_row(ui, item, &open_list, &pending_list_scroll)
-                    });
-
-                    let drag_response = inner_response
-                        .response
-                        .interact(egui::Sense::click())
-                        .on_hover_cursor(egui::CursorIcon::PointingHand);
-
-                    if drag_response.hovered() {
-                        ui.painter().rect_stroke(
-                            drag_response.rect,
-                            4.0,
-                            egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
-                            StrokeKind::Middle,
-                        );
-                    }
-
-                    if drag_response.clicked() {
-                        self.handle_list_click(&item.0, &open_list);
-                    }
-
-                    if let Some((target_lnk, _)) = &self.context_menu_target
-                        && target_lnk == &item.0
-                    {
-                        self.context_menu_target = Some((item.0.clone(), drag_response.rect));
-                    }
-
-                    if drag_response.secondary_clicked() {
-                        self.context_menu_target = Some((item.0.clone(), drag_response.rect));
-                        let menu_id = egui::Id::new("list_context_menu").with(&item.0);
-                        self.state.read().popup_manager.toggle(menu_id);
-                    }
-
-                    if let Some(source_idx) = inner_response.response.dnd_release_payload::<usize>()
-                    {
-                        moved_item = Some((*source_idx, idx));
-                    }
-                }
-
-                if ui.input(|i| i.pointer.is_decidedly_dragging()) {
-                    let unused_height =
-                        ui.clip_rect().max.y - ui.cursor().min.y - ui.spacing().item_spacing.y;
-                    let remaining_height = unused_height.max(50.0);
-                    let spacer = ui.allocate_response(
-                        egui::vec2(ui.available_width(), remaining_height),
-                        egui::Sense::hover(),
-                    );
-
-                    if let Some(source_idx) = spacer.dnd_release_payload::<usize>() {
-                        moved_item = Some((*source_idx, list_items.len()));
-                    }
-                }
-
-                if let Some((from_idx, mut to_idx)) = moved_item
-                    && from_idx != to_idx
-                {
-                    if from_idx < to_idx {
-                        to_idx -= 1;
-                    }
-                    let moved = list_items.remove(from_idx);
-                    list_items.insert(to_idx, moved);
-
-                    let new_order: Vec<String> =
-                        list_items.iter().map(|i| i.0.to_string()).collect();
-
-                    ListActions::set_list_order(self.state.clone(), new_order);
-                }
+                self.render_folder_structure(ui, list_items, &open_list, &pending_list_scroll);
             }
         });
 
@@ -332,6 +250,364 @@ impl SidebarPanel {
             } else {
                 self.context_menu_target = None;
             }
+        }
+
+        if let Some((folder_lnk, folder_name, rect)) = &self.folder_context_menu_target {
+            let menu =
+                FolderContextMenu::new(self.state.clone(), folder_lnk.clone(), folder_name.clone());
+            let menu_id = menu.id();
+            let pm = self.state.read().popup_manager.clone();
+            if pm.is_open(menu_id) {
+                pm.register_interaction_area(menu_id, *rect);
+                pm.request_show(Box::new(menu), *rect);
+            } else {
+                self.folder_context_menu_target = None;
+            }
+        }
+    }
+
+    fn render_folder_structure(
+        &mut self,
+        ui: &mut Ui,
+        list_items: Vec<(ListLnk, ResourceType, String, String, String, String, usize)>,
+        open_list: &Option<ListLnk>,
+        pending_list_scroll: &Option<ListLnk>,
+    ) {
+        let (folders, folder_assignments, mut folder_order) = {
+            let state = self.state.read();
+            let config = state.config.read();
+            (
+                config.folders.clone(),
+                config.folder_assignments.clone(),
+                config.folder_order.clone(),
+            )
+        };
+
+        let mut lists_by_folder: HashMap<Option<String>, Vec<_>> = HashMap::new();
+        for item in list_items {
+            let folder_id = folder_assignments.get(&item.0.to_string()).cloned();
+            lists_by_folder.entry(folder_id).or_default().push(item);
+        }
+
+        for (folder_id, lists) in lists_by_folder.iter_mut() {
+            if folder_id.is_none() {
+                // Root level lists use global order
+                let (changed, order) = {
+                    let state = self.state.read();
+                    let config = state.config.read();
+                    let mut order = config.list_order.clone();
+                    let available: HashSet<String> =
+                        lists.iter().map(|i| i.0.to_string()).collect();
+                    let mut changed = false;
+
+                    let initial_len = order.len();
+                    order.retain(|id| available.contains(id));
+                    if order.len() != initial_len {
+                        changed = true;
+                    }
+
+                    let current_order_set: HashSet<String> = order.iter().cloned().collect();
+                    let mut new_items: Vec<_> = lists
+                        .iter()
+                        .filter(|i| !current_order_set.contains(&i.0.to_string()))
+                        .collect();
+
+                    if !new_items.is_empty() {
+                        changed = true;
+                        new_items.sort_by(|a, b| a.3.to_lowercase().cmp(&b.3.to_lowercase()));
+                        for item in new_items {
+                            order.push(item.0.to_string());
+                        }
+                    }
+                    (changed, order)
+                };
+
+                if changed {
+                    ListActions::set_list_order(self.state.clone(), order.clone());
+                }
+
+                let mut item_map: HashMap<String, _> =
+                    lists.drain(..).map(|i| (i.0.to_string(), i)).collect();
+                *lists = order
+                    .into_iter()
+                    .filter_map(|id| item_map.remove(&id))
+                    .collect();
+            } else {
+                lists.sort_by(|a, b| a.3.to_lowercase().cmp(&b.3.to_lowercase()));
+            }
+        }
+
+        // Clean up folder order
+        {
+            let available_folders: HashSet<String> = folders.iter().map(|f| f.id.clone()).collect();
+            let initial_len = folder_order.len();
+            folder_order.retain(|id| available_folders.contains(id));
+
+            if folder_order.len() != initial_len {
+                let mut missing: Vec<_> = available_folders
+                    .iter()
+                    .filter(|id| !folder_order.contains(id))
+                    .cloned()
+                    .collect();
+                missing.sort();
+                folder_order.extend(missing);
+                FolderActions::set_folder_order(self.state.clone(), folder_order.clone());
+            }
+        }
+
+        let mut folder_map: HashMap<String, _> =
+            folders.into_iter().map(|f| (f.id.clone(), f)).collect();
+
+        for folder_id in folder_order {
+            if let Some(folder) = folder_map.remove(&folder_id) {
+                let folder_lnk = FolderLnk::new(folder.id.clone());
+                self.render_folder(
+                    ui,
+                    folder,
+                    lists_by_folder
+                        .get(&Some(folder_lnk.id().to_string()))
+                        .cloned()
+                        .unwrap_or_default(),
+                    open_list,
+                    pending_list_scroll,
+                );
+            }
+        }
+
+        // Render root-level lists
+        if let Some(root_lists) = lists_by_folder.get(&None) {
+            for item in root_lists {
+                self.render_list_with_dnd(ui, item, open_list, pending_list_scroll);
+            }
+        }
+
+        if ui.input(|i| i.pointer.is_decidedly_dragging()) {
+            ui.add_space(8.0);
+
+            let drop_zone_height = 40.0;
+            let drop_zone = ui.allocate_response(
+                egui::vec2(ui.available_width(), drop_zone_height),
+                egui::Sense::hover(),
+            );
+
+            if let Some(_list_id) = drop_zone.dnd_hover_payload::<String>() {
+                ui.painter().rect_stroke(
+                    drop_zone.rect,
+                    4.0,
+                    egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(150, 150, 150, 150)),
+                    StrokeKind::Middle,
+                );
+                ui.painter().rect_filled(
+                    drop_zone.rect,
+                    4.0,
+                    Color32::from_rgba_unmultiplied(80, 80, 80, 30),
+                );
+
+                let text = "Drop here to remove from folder";
+                let font_id = egui::FontId::proportional(12.0);
+                let text_color = Color32::from_gray(150);
+                ui.painter().text(
+                    drop_zone.rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    font_id,
+                    text_color,
+                );
+            }
+
+            if let Some(list_id) = drop_zone.dnd_release_payload::<String>() {
+                FolderActions::move_list_to_folder(
+                    self.state.clone(),
+                    (*list_id).clone(),
+                    None, // Remove from folder
+                );
+            }
+        }
+    }
+
+    fn render_folder(
+        &mut self,
+        ui: &mut Ui,
+        folder: crate::resource_downloader::domain::Folder,
+        lists: Vec<(ListLnk, ResourceType, String, String, String, String, usize)>,
+        open_list: &Option<ListLnk>,
+        pending_list_scroll: &Option<ListLnk>,
+    ) {
+        let folder_lnk = FolderLnk::new(folder.id.clone());
+        let list_count = lists.len();
+
+        let is_folder_selected = {
+            let state = self.state.read();
+            state.open_folder.as_ref() == Some(&folder_lnk)
+        };
+
+        let is_list_in_folder_selected = if let Some(selected_list) = open_list {
+            lists.iter().any(|(list_lnk, ..)| list_lnk == selected_list)
+        } else {
+            false
+        };
+
+        ui.add_space(2.0);
+
+        let mut folder_frame = egui::Frame::default()
+            .inner_margin(egui::Margin {
+                left: 4,
+                right: 8,
+                top: 4,
+                bottom: 4,
+            })
+            .corner_radius(4.0);
+
+        if is_folder_selected {
+            folder_frame = folder_frame
+                .fill(ui.visuals().faint_bg_color)
+                .stroke(egui::Stroke::new(1.0, Color32::from_gray(100)));
+        } else if is_list_in_folder_selected {
+            folder_frame = folder_frame
+                .fill(Color32::from_rgba_unmultiplied(100, 150, 200, 30)) // Blue background
+                .stroke(egui::Stroke::new(
+                    2.0,
+                    Color32::from_rgba_unmultiplied(100, 150, 200, 150),
+                )); // Blue border
+        }
+
+        let is_drag_target = ui.input(|i| i.pointer.is_decidedly_dragging());
+
+        let folder_response = folder_frame.show(ui, |ui| {
+            let header = egui::CollapsingHeader::new("")
+                .id_salt(&folder.id)
+                .default_open(!folder.collapsed)
+                .show_background(false);
+
+            let header_response = header.show(ui, |ui| {
+                ui.indent(&folder.id, |ui| {
+                    for item in &lists {
+                        self.render_list_with_dnd(ui, item, open_list, pending_list_scroll);
+                    }
+                });
+            });
+
+            let header_rect = header_response.header_response.rect;
+
+            ui.scope_builder(egui::UiBuilder::new().max_rect(header_rect), |ui| {
+                ui.horizontal(|ui| {
+                    ui.add_space(20.0); // Space for arrow icon
+
+                    let icon = if !folder.collapsed { "📂" } else { "📁" };
+                    let label_response = ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!("{} {}", icon, folder.name)).strong(),
+                        )
+                        .sense(egui::Sense::click()),
+                    );
+
+                    egui::Frame::default()
+                        .fill(Color32::from_rgba_unmultiplied(100, 150, 200, 50))
+                        .stroke(egui::Stroke::new(1.0, Color32::from_rgb(100, 150, 200)))
+                        .corner_radius(8.0)
+                        .inner_margin(egui::Margin::symmetric(6, 2))
+                        .show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new(list_count.to_string())
+                                    .small()
+                                    .color(Color32::from_rgb(200, 220, 255)),
+                            );
+                        });
+
+                    if label_response.clicked() {
+                        self.state.write().set_open_folder(Some(folder_lnk.clone()));
+                    }
+
+                    if label_response.secondary_clicked() {
+                        self.folder_context_menu_target =
+                            Some((folder_lnk.clone(), folder.name.clone(), label_response.rect));
+                        let menu_id = egui::Id::new("folder_context_menu").with(&folder.id);
+                        self.state.read().popup_manager.toggle(menu_id);
+                    }
+                });
+            });
+
+            if header_response.header_response.clicked() {
+                FolderActions::toggle_folder_collapsed(self.state.clone(), folder_lnk.clone());
+            }
+
+            header_response
+        });
+
+        if is_drag_target {
+            let folder_rect = folder_response.response.rect;
+
+            if let Some(hover_pos) = ui.ctx().pointer_hover_pos() {
+                if folder_rect.contains(hover_pos) {
+                    ui.painter().rect_stroke(
+                        folder_rect,
+                        4.0,
+                        egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(100, 150, 255, 200)),
+                        StrokeKind::Middle,
+                    );
+                }
+            }
+
+            let folder_sense = ui.interact(
+                folder_rect,
+                egui::Id::new("folder_drop").with(&folder.id),
+                egui::Sense::hover(),
+            );
+
+            if let Some(list_id) = folder_sense.dnd_release_payload::<String>() {
+                FolderActions::move_list_to_folder(
+                    self.state.clone(),
+                    (*list_id).clone(),
+                    Some(folder_lnk.clone()),
+                );
+            }
+        }
+
+        ui.add_space(2.0);
+    }
+
+    fn render_list_with_dnd(
+        &mut self,
+        ui: &mut Ui,
+        item: &(ListLnk, ResourceType, String, String, String, String, usize),
+        open_list: &Option<ListLnk>,
+        pending_list_scroll: &Option<ListLnk>,
+    ) {
+        let item_id = ui.make_persistent_id("list_dnd").with(&item.0);
+        let payload = item.0.to_string();
+
+        let inner_response = ui.dnd_drag_source(item_id, payload, |ui| {
+            self.render_row(ui, item, open_list, pending_list_scroll)
+        });
+
+        let drag_response = inner_response
+            .response
+            .interact(egui::Sense::click())
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+        if drag_response.hovered() {
+            ui.painter().rect_stroke(
+                drag_response.rect,
+                4.0,
+                egui::Stroke::new(1.0, ui.visuals().widgets.hovered.bg_stroke.color),
+                StrokeKind::Middle,
+            );
+        }
+
+        if drag_response.clicked() {
+            self.handle_list_click(&item.0, open_list);
+        }
+
+        if let Some((target_lnk, _)) = &self.context_menu_target
+            && target_lnk == &item.0
+        {
+            self.context_menu_target = Some((item.0.clone(), drag_response.rect));
+        }
+
+        if drag_response.secondary_clicked() {
+            self.context_menu_target = Some((item.0.clone(), drag_response.rect));
+            let menu_id = egui::Id::new("list_context_menu").with(&item.0);
+            self.state.read().popup_manager.toggle(menu_id);
         }
     }
 

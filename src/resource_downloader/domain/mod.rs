@@ -205,6 +205,14 @@ impl From<String> for ResourceType {
 }*/
 
 // ---------------- Config ----------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Folder {
+    pub id: String,
+    pub name: String,
+    pub collapsed: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default = "default_list_name")]
@@ -212,6 +220,12 @@ pub struct AppConfig {
     pub last_open_list_id: Option<ListLnk>,
     #[serde(default)]
     pub list_order: Vec<String>,
+    #[serde(default)]
+    pub folders: Vec<Folder>,
+    #[serde(default)]
+    pub folder_assignments: std::collections::HashMap<String, String>, // list_id -> folder_id
+    #[serde(default)]
+    pub folder_order: Vec<String>,
 }
 
 impl Default for AppConfig {
@@ -220,6 +234,9 @@ impl Default for AppConfig {
             default_list_name: default_list_name(),
             last_open_list_id: None,
             list_order: Vec::new(),
+            folders: Vec::new(),
+            folder_assignments: std::collections::HashMap::new(),
+            folder_order: Vec::new(),
         }
     }
 }
