@@ -358,19 +358,22 @@ impl SidebarPanel {
         let mut folder_map: HashMap<String, _> =
             folders.into_iter().map(|f| (f.id.clone(), f)).collect();
 
-        for folder_id in folder_order {
-            if let Some(folder) = folder_map.remove(&folder_id) {
-                let folder_lnk = FolderLnk::new(folder.id.clone());
-                self.render_folder(
-                    ui,
-                    folder,
-                    lists_by_folder
-                        .get(&Some(folder_lnk.id().to_string()))
-                        .cloned()
-                        .unwrap_or_default(),
-                    open_list,
-                    pending_list_scroll,
-                );
+        for folder_id in folder_order.clone() {
+            if let Some(folder) = folder_map.get(&folder_id) {
+                // Only render root-level folders (no parent)
+                if folder.parent_id.is_none() {
+                    if let Some(folder) = folder_map.remove(&folder_id) {
+                        self.render_folder_recursive(
+                            ui,
+                            folder,
+                            &mut folder_map,
+                            &lists_by_folder,
+                            open_list,
+                            pending_list_scroll,
+                            0, // depth level
+                        );
+                    }
+                }
             }
         }
 
@@ -390,11 +393,23 @@ impl SidebarPanel {
                 egui::Sense::hover(),
             );
 
-            if let Some(_list_id) = drop_zone.dnd_hover_payload::<String>() {
+            if let Some(payload) = drop_zone.dnd_hover_payload::<String>() {
+                let (text, color) = if payload.starts_with("folder:") {
+                    (
+                        "📁 Drop folder to move to root",
+                        Color32::from_rgba_unmultiplied(100, 200, 100, 150),
+                    )
+                } else {
+                    (
+                        "📋 Drop list to remove from folder",
+                        Color32::from_rgba_unmultiplied(150, 150, 150, 150),
+                    )
+                };
+
                 ui.painter().rect_stroke(
                     drop_zone.rect,
                     4.0,
-                    egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(150, 150, 150, 150)),
+                    egui::Stroke::new(2.0, color),
                     StrokeKind::Middle,
                 );
                 ui.painter().rect_filled(
@@ -403,24 +418,27 @@ impl SidebarPanel {
                     Color32::from_rgba_unmultiplied(80, 80, 80, 30),
                 );
 
-                let text = "Drop here to remove from folder";
                 let font_id = egui::FontId::proportional(12.0);
-                let text_color = Color32::from_gray(150);
                 ui.painter().text(
                     drop_zone.rect.center(),
                     egui::Align2::CENTER_CENTER,
                     text,
                     font_id,
-                    text_color,
+                    color,
                 );
             }
 
-            if let Some(list_id) = drop_zone.dnd_release_payload::<String>() {
-                FolderActions::move_list_to_folder(
-                    self.state.clone(),
-                    (*list_id).clone(),
-                    None, // Remove from folder
-                );
+            if let Some(payload) = drop_zone.dnd_release_payload::<String>() {
+                if payload.starts_with("folder:") {
+                    let folder_id = payload.strip_prefix("folder:").unwrap().to_string();
+                    FolderActions::move_folder_to_parent(self.state.clone(), folder_id, None);
+                } else {
+                    FolderActions::move_list_to_folder(
+                        self.state.clone(),
+                        (*payload).clone(),
+                        None,
+                    );
+                }
             }
         }
     }
@@ -473,6 +491,9 @@ impl SidebarPanel {
 
         let is_drag_target = ui.input(|i| i.pointer.is_decidedly_dragging());
 
+        let folder_id_payload = format!("folder:{}", folder.id);
+        let dnd_id = ui.make_persistent_id("folder_dnd").with(&folder.id);
+
         let folder_response = folder_frame.show(ui, |ui| {
             let header = egui::CollapsingHeader::new("")
                 .id_salt(&folder.id)
@@ -491,9 +512,25 @@ impl SidebarPanel {
 
             ui.scope_builder(egui::UiBuilder::new().max_rect(header_rect), |ui| {
                 ui.horizontal(|ui| {
-                    ui.add_space(20.0); // Space for arrow icon
+                    ui.add_space(20.0);
 
                     let icon = if !folder.collapsed { "📂" } else { "📁" };
+
+                    let drag_handle = ui.dnd_drag_source(dnd_id, folder_id_payload.clone(), |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("≡")
+                                    .size(14.0)
+                                    .color(Color32::from_gray(120)),
+                            )
+                            .sense(egui::Sense::hover()),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::Grab)
+                        .on_hover_text("Drag to move folder")
+                    });
+
+                    ui.add_space(4.0);
+
                     let label_response = ui.add(
                         egui::Label::new(
                             egui::RichText::new(format!("{} {}", icon, folder.name)).strong(),
@@ -534,36 +571,127 @@ impl SidebarPanel {
             header_response
         });
 
+        let outer_response = folder_response.response;
+
+        // Handle folder drop target with enhanced visual feedback
         if is_drag_target {
-            let folder_rect = folder_response.response.rect;
+            let folder_rect = outer_response.rect;
 
             if let Some(hover_pos) = ui.ctx().pointer_hover_pos() {
                 if folder_rect.contains(hover_pos) {
-                    ui.painter().rect_stroke(
-                        folder_rect,
-                        4.0,
-                        egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(100, 150, 255, 200)),
-                        StrokeKind::Middle,
-                    );
+                    if let Some(payload) =
+                        ui.memory(|mem| mem.data.get_temp::<String>(egui::Id::new("dnd_payload")))
+                    {
+                        let (stroke_color, fill_color, text) = if payload.starts_with("folder:") {
+                            (
+                                Color32::from_rgba_unmultiplied(100, 200, 100, 200),
+                                Color32::from_rgba_unmultiplied(100, 200, 100, 40),
+                                "📁 Move folder here",
+                            )
+                        } else {
+                            (
+                                Color32::from_rgba_unmultiplied(100, 150, 255, 200),
+                                Color32::from_rgba_unmultiplied(100, 150, 255, 40),
+                                "📋 Move list to folder",
+                            )
+                        };
+
+                        ui.painter().rect_stroke(
+                            folder_rect,
+                            4.0,
+                            egui::Stroke::new(3.0, stroke_color),
+                            StrokeKind::Middle,
+                        );
+                        ui.painter().rect_filled(folder_rect, 4.0, fill_color);
+
+                        ui.painter().text(
+                            folder_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            text,
+                            egui::FontId::proportional(10.0),
+                            stroke_color,
+                        );
+                    }
                 }
             }
 
             let folder_sense = ui.interact(
-                folder_rect,
+                outer_response.rect,
                 egui::Id::new("folder_drop").with(&folder.id),
                 egui::Sense::hover(),
             );
 
-            if let Some(list_id) = folder_sense.dnd_release_payload::<String>() {
-                FolderActions::move_list_to_folder(
-                    self.state.clone(),
-                    (*list_id).clone(),
-                    Some(folder_lnk.clone()),
-                );
+            if let Some(payload) = folder_sense.dnd_release_payload::<String>() {
+                if payload.starts_with("folder:") {
+                    let dragged_folder_id = payload.strip_prefix("folder:").unwrap().to_string();
+                    if dragged_folder_id != folder.id {
+                        // Don't allow dropping on itself
+                        FolderActions::move_folder_to_parent(
+                            self.state.clone(),
+                            dragged_folder_id,
+                            Some(folder.id.clone()),
+                        );
+                    }
+                } else {
+                    FolderActions::move_list_to_folder(
+                        self.state.clone(),
+                        (*payload).clone(),
+                        Some(folder_lnk.clone()),
+                    );
+                }
             }
         }
 
         ui.add_space(2.0);
+
+        ui.add_space(2.0);
+    }
+
+    fn render_folder_recursive(
+        &mut self,
+        ui: &mut Ui,
+        folder: crate::resource_downloader::domain::Folder,
+        folder_map: &mut HashMap<String, crate::resource_downloader::domain::Folder>,
+        lists_by_folder: &HashMap<
+            Option<String>,
+            Vec<(ListLnk, ResourceType, String, String, String, String, usize)>,
+        >,
+        open_list: &Option<ListLnk>,
+        pending_list_scroll: &Option<ListLnk>,
+        depth: usize,
+    ) {
+        let folder_lnk = FolderLnk::new(folder.id.clone());
+
+        let lists = lists_by_folder
+            .get(&Some(folder_lnk.id().to_string()))
+            .cloned()
+            .unwrap_or_default();
+
+        self.render_folder(ui, folder.clone(), lists, open_list, pending_list_scroll);
+
+        if !folder.collapsed {
+            let subfolders: Vec<String> = folder_map
+                .values()
+                .filter(|f| f.parent_id.as_ref() == Some(&folder.id))
+                .map(|f| f.id.clone())
+                .collect();
+
+            for subfolder_id in subfolders {
+                if let Some(subfolder) = folder_map.remove(&subfolder_id) {
+                    ui.indent(format!("folder_indent_{}", depth), |ui| {
+                        self.render_folder_recursive(
+                            ui,
+                            subfolder,
+                            folder_map,
+                            lists_by_folder,
+                            open_list,
+                            pending_list_scroll,
+                            depth + 1,
+                        );
+                    });
+                }
+            }
+        }
     }
 
     fn render_list_with_dnd(
