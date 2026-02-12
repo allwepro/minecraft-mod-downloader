@@ -255,3 +255,54 @@ impl NativesExtractor {
         template.replace("${arch}", arch)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::NativesExtractor;
+
+    fn sample_native_file_name() -> &'static str {
+        if cfg!(target_os = "windows") {
+            "lwjgl.dll"
+        } else if cfg!(target_os = "macos") {
+            "liblwjgl.dylib"
+        } else {
+            "liblwjgl.so"
+        }
+    }
+
+    #[test]
+    fn detects_native_file_for_current_platform() {
+        assert!(NativesExtractor::is_native_file(sample_native_file_name()));
+    }
+
+    #[test]
+    fn ignores_meta_inf_native_entries() {
+        let path = format!("META-INF/{}", sample_native_file_name());
+        assert!(!NativesExtractor::is_native_file(&path));
+    }
+
+    #[test]
+    fn ignores_non_native_files() {
+        assert!(!NativesExtractor::is_native_file("readme.txt"));
+    }
+
+    #[test]
+    fn substitute_arch_replaces_placeholder() {
+        let expected_arch = if cfg!(target_pointer_width = "32") {
+            "32"
+        } else {
+            "64"
+        };
+
+        assert_eq!(
+            NativesExtractor::substitute_arch("natives-linux-${arch}"),
+            format!("natives-linux-{}", expected_arch)
+        );
+    }
+
+    #[test]
+    fn substitute_arch_keeps_template_without_placeholder() {
+        let template = "natives-macos-arm64";
+        assert_eq!(NativesExtractor::substitute_arch(template), template);
+    }
+}
