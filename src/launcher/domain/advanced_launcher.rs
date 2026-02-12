@@ -892,7 +892,11 @@ impl AdvancedLauncher {
 #[cfg(test)]
 mod tests {
     use super::AdvancedLauncher;
-    use crate::launcher::domain::version_manifest::{OsRule, Rule};
+    use crate::launcher::domain::version_manifest::{
+        ArgumentValue, Arguments, AssetIndex, OsRule, ResolvedManifest, Rule,
+    };
+    use crate::launcher::{LaunchConfig, LaunchProfile};
+    use std::path::PathBuf;
 
     fn current_os_name() -> &'static str {
         if cfg!(target_os = "windows") {
@@ -901,6 +905,62 @@ mod tests {
             "osx"
         } else {
             "linux"
+        }
+    }
+
+    fn sample_config(minecraft_version: &str) -> LaunchConfig {
+        LaunchConfig {
+            profile: LaunchProfile {
+                minecraft_version: minecraft_version.to_string(),
+                mod_loader: "fabric".to_string(),
+                mod_loader_version: None,
+                java_path: PathBuf::from("/tmp/java"),
+                game_directory: PathBuf::from("/tmp/minecraft"),
+                mod_list_id: None,
+            },
+            username: "player".to_string(),
+            max_memory_mb: 4096,
+            min_memory_mb: 1024,
+        }
+    }
+
+    fn sample_manifest_with_args(
+        game_args: Vec<ArgumentValue>,
+        asset_index_id: &str,
+    ) -> ResolvedManifest {
+        ResolvedManifest {
+            main_class: "net.minecraft.client.main.Main".to_string(),
+            client_jar_id: "1.21.1".to_string(),
+            arguments: Some(Arguments {
+                game: game_args,
+                jvm: vec![],
+            }),
+            minecraft_arguments: None,
+            libraries: vec![],
+            asset_index: AssetIndex {
+                id: asset_index_id.to_string(),
+                sha1: "deadbeef".to_string(),
+                size: 1,
+                total_size: 1,
+                url: "https://example.com/assets.json".to_string(),
+            },
+        }
+    }
+
+    fn sample_manifest_without_args(asset_index_id: &str) -> ResolvedManifest {
+        ResolvedManifest {
+            main_class: "net.minecraft.client.main.Main".to_string(),
+            client_jar_id: "1.21.1".to_string(),
+            arguments: None,
+            minecraft_arguments: None,
+            libraries: vec![],
+            asset_index: AssetIndex {
+                id: asset_index_id.to_string(),
+                sha1: "deadbeef".to_string(),
+                size: 1,
+                total_size: 1,
+                url: "https://example.com/assets.json".to_string(),
+            },
         }
     }
 
@@ -1023,5 +1083,44 @@ mod tests {
                 "-Djna.library.path=/tmp/jna".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn build_game_arguments_fallback_uses_manifest_asset_index_id() {
+        let manifest = sample_manifest_without_args("snapshot-assets-id");
+        let config = sample_config("1.21.11");
+
+        let args = AdvancedLauncher::build_game_arguments(&manifest, &config, "cp")
+            .expect("build_game_arguments should succeed");
+
+        let asset_index_pos = args
+            .iter()
+            .position(|arg| arg == "--assetIndex")
+            .expect("fallback args should include --assetIndex");
+        assert_eq!(
+            args.get(asset_index_pos + 1).map(String::as_str),
+            Some("snapshot-assets-id")
+        );
+    }
+
+    #[test]
+    fn build_game_arguments_substitutes_assets_index_name_from_manifest() {
+        let manifest = sample_manifest_with_args(
+            vec![
+                ArgumentValue::String("--assetIndex".to_string()),
+                ArgumentValue::String("${assets_index_name}".to_string()),
+            ],
+            "legacy-assets-id",
+        );
+        let config = sample_config("1.21.11");
+
+        let args = AdvancedLauncher::build_game_arguments(&manifest, &config, "cp")
+            .expect("build_game_arguments should succeed");
+
+        assert!(
+            args.windows(2)
+                .any(|window| window[0] == "--assetIndex" && window[1] == "legacy-assets-id")
+        );
+        assert!(!args.contains(&config.profile.minecraft_version));
     }
 }
