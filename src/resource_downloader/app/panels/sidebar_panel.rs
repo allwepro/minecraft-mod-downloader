@@ -1,37 +1,57 @@
 use crate::common::prefabs::popup_window::Popup;
 use crate::resource_downloader::app::components::import_options_component::ImportOptionsComponent;
-use crate::resource_downloader::app::modals::create_folder_modal::CreateFolderModal;
+use crate::resource_downloader::app::modals::create_list_group_modal::CreateListGroupModal;
 use crate::resource_downloader::app::modals::create_modal::CreateModal;
 use crate::resource_downloader::app::popups::create_menu_popup::CreateMenuPopup;
-use crate::resource_downloader::app::popups::folder_context_menu::FolderContextMenu;
 use crate::resource_downloader::app::popups::import_popup::ImportPopup;
 use crate::resource_downloader::app::popups::list_context_menu::ListContextMenu;
+use crate::resource_downloader::app::popups::list_group_context_menu::ListGroupContextMenu;
 use crate::resource_downloader::business::SharedRDState;
-use crate::resource_downloader::business::folder_actions::FolderActions;
 use crate::resource_downloader::business::list_actions::ListActions;
-use crate::resource_downloader::domain::{FolderLnk, ListLnk, ResourceType};
+use crate::resource_downloader::business::list_group_actions::ListGroupActions;
+use crate::resource_downloader::domain::{
+    ListGroup, ListGroupLnk, ListLnk, ResourceType, SidebarItem,
+};
 use eframe::egui;
 use egui::{Color32, StrokeKind, Ui};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-// Type aliases to reduce complexity
 type ListItem = (ListLnk, ResourceType, String, String, String, String, usize);
-type ListsByFolder = HashMap<Option<String>, Vec<ListItem>>;
-type FolderMap = HashMap<String, crate::resource_downloader::domain::Folder>;
 
-// Helper struct to reduce argument count in recursive functions
 struct RenderContext<'a> {
     open_list: &'a Option<ListLnk>,
-    pending_list_scroll: &'a Option<ListLnk>,
+    pending_sidebar_scroll: &'a Option<SidebarItem>,
 }
 
 impl<'a> RenderContext<'a> {
-    fn new(open_list: &'a Option<ListLnk>, pending_list_scroll: &'a Option<ListLnk>) -> Self {
+    fn new(
+        open_list: &'a Option<ListLnk>,
+        pending_sidebar_scroll: &'a Option<SidebarItem>,
+    ) -> Self {
         Self {
             open_list,
-            pending_list_scroll,
+            pending_sidebar_scroll,
         }
     }
+}
+
+#[derive(Clone)]
+struct DropTarget {
+    dnd_id: String,
+    rect: egui::Rect,
+    parent_id: Option<ListGroupLnk>,
+    depth: usize,
+}
+
+#[derive(PartialEq)]
+enum DropPosition {
+    Before,
+    After,
+}
+
+struct ClosestTarget {
+    target: DropTarget,
+    position: DropPosition,
 }
 
 pub struct SidebarPanel {
@@ -40,21 +60,13 @@ pub struct SidebarPanel {
     #[allow(dead_code)]
     new_list_modal: CreateModal,
     #[allow(dead_code)]
-    new_folder_modal: CreateFolderModal,
+    new_folder_modal: CreateListGroupModal,
     create_menu_popup: CreateMenuPopup,
     import_popup: ImportPopup,
     context_menu_target: Option<(ListLnk, egui::Rect)>,
-    folder_context_menu_target: Option<(FolderLnk, String, egui::Rect)>,
+    folder_context_menu_target: Option<(ListGroupLnk, String, egui::Rect)>,
     import_options: ImportOptionsComponent,
-    #[allow(dead_code)]
-    drag_state: Option<DragState>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-enum DragState {
-    List(ListLnk),
-    Folder(FolderLnk),
+    drop_targets: Vec<DropTarget>,
 }
 
 impl SidebarPanel {
@@ -63,13 +75,13 @@ impl SidebarPanel {
             state: state.clone(),
             list_search_query: String::new(),
             new_list_modal: CreateModal::new(state.clone()),
-            new_folder_modal: CreateFolderModal::new(state.clone()),
+            new_folder_modal: CreateListGroupModal::new(state.clone()),
             create_menu_popup: CreateMenuPopup::new(state.clone()),
             import_popup: ImportPopup::new(state.clone()),
             context_menu_target: None,
             folder_context_menu_target: None,
             import_options: ImportOptionsComponent::new(state.clone()),
-            drag_state: None,
+            drop_targets: Vec::new(),
         }
     }
 
@@ -147,9 +159,9 @@ impl SidebarPanel {
 
         ui.add_space(5.0);
 
-        let (open_list, pending_list_scroll) = {
+        let (open_list, pending_sidebar_scroll) = {
             let mut state = self.state.write();
-            (state.open_list.clone(), state.pending_list_scroll.take())
+            (state.open_list.clone(), state.pending_sidebar_scroll.take())
         };
 
         let list_items: Vec<ListItem> = {
@@ -214,7 +226,23 @@ impl SidebarPanel {
             }
 
             if is_searching {
-                // Search mode: flat list view
+                let clip_rect = ui.clip_rect();
+                if let Some(pointer_pos) = ui.ctx().pointer_hover_pos()
+                    && clip_rect.contains(pointer_pos)
+                {
+                    let margin = 20.0;
+                    let speed = 5.0;
+                    if pointer_pos.y < clip_rect.min.y + margin {
+                        ui.scroll_with_delta(egui::vec2(0.0, speed));
+                        ui.ctx().request_repaint();
+                    } else if pointer_pos.y > clip_rect.max.y - margin {
+                        ui.scroll_with_delta(egui::vec2(0.0, -speed));
+                        ui.ctx().request_repaint();
+                    }
+                }
+            }
+
+            if is_searching {
                 let query = self.list_search_query.to_lowercase();
                 let filtered_items: Vec<_> = list_items
                     .into_iter()
@@ -230,7 +258,14 @@ impl SidebarPanel {
                 }
 
                 for item in filtered_items {
-                    let response = self.render_row(ui, &item, &open_list, &pending_list_scroll);
+                    let response = self.render_row(
+                        ui,
+                        &item,
+                        &open_list,
+                        &pending_sidebar_scroll
+                            .clone()
+                            .and_then(|a| a.list_lnk().clone()),
+                    );
                     let response = ui.interact(response.rect, response.id, egui::Sense::click());
 
                     if response.hovered() {
@@ -256,7 +291,7 @@ impl SidebarPanel {
                     }
                 }
             } else {
-                self.render_folder_structure(ui, list_items, &open_list, &pending_list_scroll);
+                self.render_sidebar_content(ui, list_items, &open_list, &pending_sidebar_scroll);
             }
         });
 
@@ -273,8 +308,11 @@ impl SidebarPanel {
         }
 
         if let Some((folder_lnk, folder_name, rect)) = &self.folder_context_menu_target {
-            let menu =
-                FolderContextMenu::new(self.state.clone(), folder_lnk.clone(), folder_name.clone());
+            let menu = ListGroupContextMenu::new(
+                self.state.clone(),
+                folder_lnk.clone(),
+                folder_name.clone(),
+            );
             let menu_id = menu.id();
             let pm = self.state.read().popup_manager.clone();
             if pm.is_open(menu_id) {
@@ -286,445 +324,422 @@ impl SidebarPanel {
         }
     }
 
-    fn render_folder_structure(
+    fn render_sidebar_content(
         &mut self,
         ui: &mut Ui,
         list_items: Vec<ListItem>,
         open_list: &Option<ListLnk>,
-        pending_list_scroll: &Option<ListLnk>,
+        pending_sidebar_scroll: &Option<SidebarItem>,
     ) {
-        let (folders, folder_assignments, mut folder_order) = {
+        let (folders, list_group_assignments, mut sidebar_order) = {
             let state = self.state.read();
             let config = state.config.read();
             (
-                config.folders.clone(),
-                config.folder_assignments.clone(),
-                config.folder_order.clone(),
+                config.list_groups.clone(),
+                config.list_group_assignments.clone(),
+                config.sidebar_ui_order.clone(),
             )
         };
 
-        let mut lists_by_folder: HashMap<Option<String>, Vec<_>> = HashMap::new();
-        for item in list_items {
-            let folder_id = folder_assignments.get(&item.0.to_string()).cloned();
-            lists_by_folder.entry(folder_id).or_default().push(item);
+        // Build lookup maps
+        let folder_map: HashMap<ListGroupLnk, ListGroup> =
+            folders.iter().map(|f| (f.lnk.clone(), f.clone())).collect();
+
+        let list_map: HashMap<ListLnk, ListItem> = list_items
+            .iter()
+            .map(|item| (item.0.clone(), item.clone()))
+            .collect();
+
+        if sidebar_order.is_empty() {
+            let mut new_order = Vec::new();
+
+            for list_group in &folders {
+                new_order.push(SidebarItem::from(&list_group.lnk));
+            }
+            for list in &list_items {
+                new_order.push(SidebarItem::from(&list.0));
+            }
+
+            sidebar_order = new_order.clone();
+
+            ListActions::set_sidebar_ui_order(self.state.clone(), new_order);
         }
 
-        for (folder_id, lists) in lists_by_folder.iter_mut() {
-            if folder_id.is_none() {
-                // Root level lists use global order
-                let (changed, order) = {
-                    let state = self.state.read();
-                    let config = state.config.read();
-                    let mut order = config.list_order.clone();
-                    let available: HashSet<String> =
-                        lists.iter().map(|i| i.0.to_string()).collect();
-                    let mut changed = false;
+        let mut changed = false;
+        for folder in &folders {
+            if !sidebar_order.contains(&SidebarItem::from(&folder.lnk)) {
+                sidebar_order.push(SidebarItem::from(&folder.lnk));
+                changed = true;
+            }
+        }
+        for list in &list_items {
+            if !sidebar_order.contains(&SidebarItem::from(&list.0)) {
+                sidebar_order.push(SidebarItem::from(&list.0));
+                changed = true;
+            }
+        }
+        if changed {
+            ListActions::set_sidebar_ui_order(self.state.clone(), sidebar_order.clone());
+        }
 
-                    let initial_len = order.len();
-                    order.retain(|id| available.contains(id));
-                    if order.len() != initial_len {
-                        changed = true;
-                    }
+        let mut items_by_parent: HashMap<Option<ListGroupLnk>, Vec<SidebarItem>> = HashMap::new();
 
-                    let current_order_set: HashSet<String> = order.iter().cloned().collect();
-                    let mut new_items: Vec<_> = lists
-                        .iter()
-                        .filter(|i| !current_order_set.contains(&i.0.to_string()))
-                        .collect();
+        for list_group in folders {
+            items_by_parent
+                .entry(list_group.parent_id.clone())
+                .or_default()
+                .push(SidebarItem::ListGroup(list_group.lnk.clone()));
+        }
 
-                    if !new_items.is_empty() {
-                        changed = true;
-                        new_items.sort_by(|a, b| a.3.to_lowercase().cmp(&b.3.to_lowercase()));
-                        for item in new_items {
-                            order.push(item.0.to_string());
-                        }
-                    }
-                    (changed, order)
-                };
+        for list in list_items {
+            let parent = list_group_assignments.get(&list.0).cloned();
+            items_by_parent
+                .entry(parent)
+                .or_default()
+                .push(SidebarItem::List(list.0.clone()));
+        }
 
-                if changed {
-                    ListActions::set_list_order(self.state.clone(), order.clone());
+        for items in items_by_parent.values_mut() {
+            items.sort_by_key(|item| {
+                sidebar_order
+                    .iter()
+                    .position(|id| id == item)
+                    .unwrap_or(usize::MAX)
+            });
+        }
+
+        let render_ctx = RenderContext::new(open_list, pending_sidebar_scroll);
+
+        self.drop_targets.clear();
+
+        let is_dragging = ui.input(|i| i.pointer.is_decidedly_dragging());
+        let pointer_pos = ui.ctx().pointer_hover_pos();
+
+        self.render_mixed_list(
+            ui,
+            &items_by_parent,
+            &folder_map,
+            &list_map,
+            None,
+            &render_ctx,
+            0,
+        );
+
+        let has_payload = ui.ctx().memory(|mem| {
+            mem.data
+                .get_temp::<String>(egui::Id::new("dnd_last_payload"))
+                .is_some()
+        });
+
+        if is_dragging
+            && has_payload
+            && let Some(pos) = pointer_pos
+            && let Some(closest) = self.find_closest_target(pos)
+        {
+            self.visualize_drop_target(ui, &closest);
+        }
+
+        let was_dragging = ui.ctx().memory(|mem| {
+            mem.data
+                .get_temp::<String>(egui::Id::new("dnd_last_payload"))
+                .is_some()
+        });
+
+        if was_dragging
+            && ui.input(|i| i.pointer.any_released())
+            && let Some(pos) = pointer_pos
+        {
+            let payload_opt = ui.ctx().memory(|mem| {
+                mem.data
+                    .get_temp::<String>(egui::Id::new("dnd_last_payload"))
+            });
+
+            if let Some(payload) = payload_opt {
+                if let Some(closest) = self.find_closest_target(pos) {
+                    self.apply_drop(&closest, &payload);
                 }
 
-                let mut item_map: HashMap<String, _> =
-                    lists.drain(..).map(|i| (i.0.to_string(), i)).collect();
-                *lists = order
-                    .into_iter()
-                    .filter_map(|id| item_map.remove(&id))
-                    .collect();
-            } else {
-                lists.sort_by(|a, b| a.3.to_lowercase().cmp(&b.3.to_lowercase()));
+                ui.ctx().memory_mut(|mem| {
+                    mem.data.remove::<String>(egui::Id::new("dnd_last_payload"));
+                });
             }
         }
+    }
 
-        // Clean up folder order
-        {
-            let available_folders: HashSet<String> = folders.iter().map(|f| f.id.clone()).collect();
-            let initial_len = folder_order.len();
-            folder_order.retain(|id| available_folders.contains(id));
+    #[allow(clippy::too_many_arguments)]
+    fn render_mixed_list(
+        &mut self,
+        ui: &mut Ui,
+        items_by_parent: &HashMap<Option<ListGroupLnk>, Vec<SidebarItem>>,
+        folder_map: &HashMap<ListGroupLnk, ListGroup>,
+        list_map: &HashMap<ListLnk, ListItem>,
+        parent_id: Option<ListGroupLnk>,
+        ctx: &RenderContext,
+        depth: usize,
+    ) {
+        let empty_vec = Vec::new();
+        let items = items_by_parent.get(&parent_id).unwrap_or(&empty_vec);
 
-            if folder_order.len() != initial_len {
-                let mut missing: Vec<_> = available_folders
-                    .iter()
-                    .filter(|id| !folder_order.contains(id))
-                    .cloned()
-                    .collect();
-                missing.sort();
-                folder_order.extend(missing);
-                FolderActions::set_folder_order(self.state.clone(), folder_order.clone());
+        for (index, item) in items.iter().enumerate() {
+            let is_last_in_group = index == items.len() - 1;
+
+            match item {
+                SidebarItem::List(list_lnk) => {
+                    if let Some(list_item) = list_map.get(list_lnk) {
+                        self.render_list_with_dnd(
+                            ui,
+                            list_item,
+                            ctx.open_list,
+                            &ctx.pending_sidebar_scroll
+                                .as_ref()
+                                .and_then(|s| s.list_lnk()),
+                            parent_id.clone(),
+                            depth,
+                        );
+                    }
+                }
+                SidebarItem::ListGroup(lg_lnk) => {
+                    if let Some(list_group) = folder_map.get(lg_lnk) {
+                        self.render_list_group_new(
+                            ui,
+                            list_group.clone(),
+                            items_by_parent,
+                            folder_map,
+                            list_map,
+                            ctx,
+                            depth,
+                            is_last_in_group,
+                        );
+                    }
+                }
             }
         }
+    }
 
-        let mut folder_map: HashMap<String, _> =
-            folders.into_iter().map(|f| (f.id.clone(), f)).collect();
+    #[allow(clippy::too_many_arguments)]
+    fn render_list_group_new(
+        &mut self,
+        ui: &mut Ui,
+        list_group: ListGroup,
+        items_by_parent: &HashMap<Option<ListGroupLnk>, Vec<SidebarItem>>,
+        folder_map: &HashMap<ListGroupLnk, ListGroup>,
+        list_map: &HashMap<ListLnk, ListItem>,
+        ctx: &RenderContext,
+        depth: usize,
+        is_last_in_group: bool,
+    ) {
+        let lg_lnk = list_group.lnk.clone();
+        let id = ui.make_persistent_id("folder").with(&list_group.lnk);
+        let payload = format!("folder:{}", list_group.lnk);
 
-        let render_ctx = RenderContext::new(open_list, pending_list_scroll);
+        if ui.ctx().is_being_dragged(id) {
+            ui.ctx().memory_mut(|mem| {
+                mem.data
+                    .insert_temp(egui::Id::new("dnd_last_payload"), payload.clone());
+            });
+        }
 
-        for folder_id in folder_order.clone() {
-            if let Some(folder) = folder_map.get(&folder_id) {
-                // Only render root-level folders (no parent)
-                if folder.parent_id.is_none()
-                    && let Some(folder) = folder_map.remove(&folder_id)
-                {
-                    self.render_folder_recursive(
-                        ui,
-                        folder,
-                        &mut folder_map,
-                        &lists_by_folder,
-                        &render_ctx,
-                        0, // depth level
+        let mut collapsing = egui::collapsing_header::CollapsingState::load_with_default_open(
+            ui.ctx(),
+            id,
+            !list_group.collapsed,
+        );
+
+        let mut arrow_clicked = false;
+
+        let folder_response = ui
+            .horizontal(|ui| {
+                let arrow = ui.add(
+                    egui::Button::new(if collapsing.is_open() {
+                        "🔽"
+                    } else {
+                        "▶️"
+                    })
+                    .frame(false)
+                    .small(),
+                );
+                if arrow.clicked() {
+                    arrow_clicked = true;
+                }
+                let inner_response = ui.dnd_drag_source(id, payload.clone(), |ui| {
+                    ui.horizontal(|ui| {
+                        let icon = if collapsing.is_open() { "📂" } else { "📁" };
+
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("{} {}", icon, list_group.name))
+                                    .strong(),
+                            )
+                            .selectable(false),
+                        );
+                    })
+                    .response
+                });
+
+                let drag_response = inner_response
+                    .response
+                    .interact(egui::Sense::click())
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+                if drag_response.clicked() && !arrow_clicked {
+                    if let Some(lg) = { self.state.read().open_list_group.clone() }
+                        && lg == lg_lnk
+                    {
+                        self.state.write().set_open_list_group(None);
+                    } else {
+                        self.state.write().set_open_list_group(Some(lg_lnk.clone()));
+                    }
+                }
+
+                if drag_response.secondary_clicked() {
+                    self.folder_context_menu_target =
+                        Some((lg_lnk.clone(), list_group.name.clone(), drag_response.rect));
+                    let menu_id = egui::Id::new("list_group_context_menu").with(&lg_lnk);
+                    self.state.read().popup_manager.toggle(menu_id);
+                }
+
+                if drag_response.double_clicked() {
+                    collapsing.toggle(ui);
+                    ListGroupActions::toggle_list_group_collapsed(
+                        self.state.clone(),
+                        lg_lnk.clone(),
                     );
                 }
-            }
+
+                drag_response
+            })
+            .inner;
+
+        if let Some(Some(lg_lnk)) = ctx
+            .pending_sidebar_scroll
+            .clone()
+            .map(|s| s.list_group_lnk())
+            && lg_lnk == list_group.lnk
+        {
+            folder_response.scroll_to_me(Some(egui::Align::Center));
         }
 
-        // Render root-level lists
-        if let Some(root_lists) = lists_by_folder.get(&None) {
-            for item in root_lists {
-                self.render_list_with_dnd(ui, item, open_list, pending_list_scroll);
-            }
+        self.drop_targets.push(DropTarget {
+            dnd_id: list_group.lnk.to_context_id(),
+            rect: folder_response.rect,
+            parent_id: list_group.parent_id.clone(),
+            depth,
+        });
+
+        if arrow_clicked {
+            collapsing.toggle(ui);
+            ListGroupActions::toggle_list_group_collapsed(self.state.clone(), lg_lnk.clone());
         }
 
-        if ui.input(|i| i.pointer.is_decidedly_dragging()) {
-            ui.add_space(8.0);
+        let is_open = collapsing.is_open();
 
-            let drop_zone_height = 40.0;
-            let drop_zone = ui.allocate_response(
+        collapsing.show_body_unindented(ui, |ui| {
+            ui.indent(id, |ui| {
+                self.render_mixed_list(
+                    ui,
+                    items_by_parent,
+                    folder_map,
+                    list_map,
+                    Some(list_group.lnk.clone()),
+                    ctx,
+                    depth + 1,
+                );
+
+                if is_open {
+                    let drop_zone_height = 8.0;
+                    let drop_zone_response = ui.allocate_response(
+                        egui::vec2(ui.available_width(), drop_zone_height),
+                        egui::Sense::hover(),
+                    );
+
+                    self.drop_targets.push(DropTarget {
+                        dnd_id: format!("{}_inside_end", list_group.lnk),
+                        rect: drop_zone_response.rect,
+                        parent_id: Some(list_group.lnk.clone()),
+                        depth: depth + 1,
+                    });
+                }
+            });
+        });
+
+        if is_last_in_group {
+            let drop_zone_height = 4.0;
+            let drop_zone_response = ui.allocate_response(
                 egui::vec2(ui.available_width(), drop_zone_height),
                 egui::Sense::hover(),
             );
 
-            if let Some(payload) = drop_zone.dnd_hover_payload::<String>() {
-                let (text, color) = if payload.starts_with("folder:") {
-                    (
-                        "📁 Drop folder to move to root",
-                        Color32::from_rgba_unmultiplied(100, 200, 100, 150),
-                    )
-                } else {
-                    (
-                        "📋 Drop list to remove from folder",
-                        Color32::from_rgba_unmultiplied(150, 150, 150, 150),
-                    )
-                };
-
-                ui.painter().rect_stroke(
-                    drop_zone.rect,
-                    4.0,
-                    egui::Stroke::new(2.0, color),
-                    StrokeKind::Middle,
-                );
-                ui.painter().rect_filled(
-                    drop_zone.rect,
-                    4.0,
-                    Color32::from_rgba_unmultiplied(80, 80, 80, 30),
-                );
-
-                let font_id = egui::FontId::proportional(12.0);
-                ui.painter().text(
-                    drop_zone.rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    text,
-                    font_id,
-                    color,
-                );
-            }
-
-            if let Some(payload) = drop_zone.dnd_release_payload::<String>() {
-                if payload.starts_with("folder:") {
-                    let folder_id = payload.strip_prefix("folder:").unwrap().to_string();
-                    FolderActions::move_folder_to_parent(self.state.clone(), folder_id, None);
-                } else {
-                    FolderActions::move_list_to_folder(
-                        self.state.clone(),
-                        (*payload).clone(),
-                        None,
-                    );
-                }
-            }
-        }
-
-        let remaining_height = ui.available_height();
-        if remaining_height > 10.0 {
-            let empty_area = ui.allocate_response(
-                egui::vec2(ui.available_width(), remaining_height),
-                egui::Sense::click(),
-            );
-
-            if empty_area.clicked() {
-                self.state.write().set_open_folder(None);
-            }
+            self.drop_targets.push(DropTarget {
+                dnd_id: format!("{}_after", list_group.lnk),
+                rect: drop_zone_response.rect,
+                parent_id: list_group.parent_id.clone(),
+                depth,
+            });
         }
     }
 
-    fn render_folder(
-        &mut self,
-        ui: &mut Ui,
-        folder: crate::resource_downloader::domain::Folder,
-        lists: Vec<ListItem>,
-        open_list: &Option<ListLnk>,
-        pending_list_scroll: &Option<ListLnk>,
-    ) {
-        let folder_lnk = FolderLnk::new(folder.id.clone());
-        let list_count = lists.len();
-
-        let is_folder_selected = {
-            let state = self.state.read();
-            state.open_folder.as_ref() == Some(&folder_lnk)
-        };
-
-        let is_list_in_folder_selected = if let Some(selected_list) = open_list {
-            lists.iter().any(|(list_lnk, ..)| list_lnk == selected_list)
+    fn parse_payload(&self, payload: &str) -> (String, bool) {
+        if let Some(stripped) = payload.strip_prefix("folder:") {
+            (stripped.to_string(), true)
         } else {
-            false
-        };
-
-        ui.add_space(2.0);
-
-        let mut folder_frame = egui::Frame::default()
-            .inner_margin(egui::Margin {
-                left: 4,
-                right: 8,
-                top: 4,
-                bottom: 4,
-            })
-            .corner_radius(4.0);
-
-        if is_folder_selected {
-            folder_frame = folder_frame
-                .fill(ui.visuals().faint_bg_color)
-                .stroke(egui::Stroke::new(1.0, Color32::from_gray(100)));
-        } else if is_list_in_folder_selected {
-            folder_frame = folder_frame
-                .fill(Color32::from_rgba_unmultiplied(100, 150, 200, 30)) // Blue background
-                .stroke(egui::Stroke::new(
-                    2.0,
-                    Color32::from_rgba_unmultiplied(100, 150, 200, 150),
-                )); // Blue border
+            (payload.to_string(), false)
         }
-
-        let is_drag_target = ui.input(|i| i.pointer.is_decidedly_dragging());
-
-        let folder_id_payload = format!("folder:{}", folder.id);
-        let dnd_id = ui.make_persistent_id("folder_dnd").with(&folder.id);
-
-        let folder_response = folder_frame.show(ui, |ui| {
-            let header = egui::CollapsingHeader::new("")
-                .id_salt(&folder.id)
-                .default_open(!folder.collapsed)
-                .show_background(false);
-
-            let header_response = header.show(ui, |ui| {
-                ui.indent(&folder.id, |ui| {
-                    for item in &lists {
-                        self.render_list_with_dnd(ui, item, open_list, pending_list_scroll);
-                    }
-                });
-            });
-
-            let header_rect = header_response.header_response.rect;
-
-            ui.scope_builder(egui::UiBuilder::new().max_rect(header_rect), |ui| {
-                ui.horizontal(|ui| {
-                    ui.add_space(20.0);
-
-                    let icon = if !folder.collapsed { "📂" } else { "📁" };
-
-                    let _drag_handle =
-                        ui.dnd_drag_source(dnd_id, folder_id_payload.clone(), |ui| {
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new("≡")
-                                        .size(14.0)
-                                        .color(Color32::from_gray(120)),
-                                )
-                                .sense(egui::Sense::hover()),
-                            )
-                            .on_hover_cursor(egui::CursorIcon::Grab)
-                            .on_hover_text("Drag to move folder")
-                        });
-
-                    ui.add_space(4.0);
-
-                    let label_response = ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(format!("{} {}", icon, folder.name)).strong(),
-                        )
-                        .sense(egui::Sense::click()),
-                    );
-
-                    egui::Frame::default()
-                        .fill(Color32::from_rgba_unmultiplied(100, 150, 200, 50))
-                        .stroke(egui::Stroke::new(1.0, Color32::from_rgb(100, 150, 200)))
-                        .corner_radius(8.0)
-                        .inner_margin(egui::Margin::symmetric(6, 2))
-                        .show(ui, |ui| {
-                            ui.label(
-                                egui::RichText::new(list_count.to_string())
-                                    .small()
-                                    .color(Color32::from_rgb(200, 220, 255)),
-                            );
-                        });
-
-                    if label_response.clicked() {
-                        self.state.write().set_open_folder(Some(folder_lnk.clone()));
-                    }
-
-                    if label_response.secondary_clicked() {
-                        self.folder_context_menu_target =
-                            Some((folder_lnk.clone(), folder.name.clone(), label_response.rect));
-                        let menu_id = egui::Id::new("folder_context_menu").with(&folder.id);
-                        self.state.read().popup_manager.toggle(menu_id);
-                    }
-                });
-            });
-
-            if header_response.header_response.clicked() {
-                FolderActions::toggle_folder_collapsed(self.state.clone(), folder_lnk.clone());
-            }
-
-            header_response
-        });
-
-        let outer_response = folder_response.response;
-
-        // Handle folder drop target with enhanced visual feedback
-        if is_drag_target {
-            let folder_rect = outer_response.rect;
-
-            if let Some(hover_pos) = ui.ctx().pointer_hover_pos()
-                && folder_rect.contains(hover_pos)
-                && let Some(payload) =
-                    ui.memory(|mem| mem.data.get_temp::<String>(egui::Id::new("dnd_payload")))
-            {
-                let (stroke_color, fill_color, text) = if payload.starts_with("folder:") {
-                    (
-                        Color32::from_rgba_unmultiplied(100, 200, 100, 200),
-                        Color32::from_rgba_unmultiplied(100, 200, 100, 40),
-                        "📁 Move folder here",
-                    )
-                } else {
-                    (
-                        Color32::from_rgba_unmultiplied(100, 150, 255, 200),
-                        Color32::from_rgba_unmultiplied(100, 150, 255, 40),
-                        "📋 Move list to folder",
-                    )
-                };
-
-                ui.painter().rect_stroke(
-                    folder_rect,
-                    4.0,
-                    egui::Stroke::new(3.0, stroke_color),
-                    StrokeKind::Middle,
-                );
-                ui.painter().rect_filled(folder_rect, 4.0, fill_color);
-
-                ui.painter().text(
-                    folder_rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    text,
-                    egui::FontId::proportional(10.0),
-                    stroke_color,
-                );
-            }
-
-            let folder_sense = ui.interact(
-                outer_response.rect,
-                egui::Id::new("folder_drop").with(&folder.id),
-                egui::Sense::hover(),
-            );
-
-            if let Some(payload) = folder_sense.dnd_release_payload::<String>() {
-                if payload.starts_with("folder:") {
-                    let dragged_folder_id = payload.strip_prefix("folder:").unwrap().to_string();
-                    if dragged_folder_id != folder.id {
-                        // Don't allow dropping on itself
-                        FolderActions::move_folder_to_parent(
-                            self.state.clone(),
-                            dragged_folder_id,
-                            Some(folder.id.clone()),
-                        );
-                    }
-                } else {
-                    FolderActions::move_list_to_folder(
-                        self.state.clone(),
-                        (*payload).clone(),
-                        Some(folder_lnk.clone()),
-                    );
-                }
-            }
-        }
-
-        ui.add_space(2.0);
-
-        ui.add_space(2.0);
     }
 
-    fn render_folder_recursive(
+    fn move_item(
         &mut self,
-        ui: &mut Ui,
-        folder: crate::resource_downloader::domain::Folder,
-        folder_map: &mut FolderMap,
-        lists_by_folder: &ListsByFolder,
-        ctx: &RenderContext,
-        depth: usize,
+        item: SidebarItem,
+        new_parent_lg: Option<ListGroupLnk>,
+        insert_after: Option<SidebarItem>,
     ) {
-        let folder_lnk = FolderLnk::new(folder.id.clone());
+        let state = self.state.read();
+        let mut config = state.config.read().clone();
+        drop(state);
 
-        let lists = lists_by_folder
-            .get(&Some(folder_lnk.id().to_string()))
-            .cloned()
-            .unwrap_or_default();
+        let is_list_group = config
+            .list_groups
+            .iter()
+            .any(|f| item.match_list_group(&f.lnk));
 
-        self.render_folder(
-            ui,
-            folder.clone(),
-            lists,
-            ctx.open_list,
-            ctx.pending_list_scroll,
-        );
-
-        if !folder.collapsed {
-            let subfolders: Vec<String> = folder_map
-                .values()
-                .filter(|f| f.parent_id.as_ref() == Some(&folder.id))
-                .map(|f| f.id.clone())
-                .collect();
-
-            for subfolder_id in subfolders {
-                if let Some(subfolder) = folder_map.remove(&subfolder_id) {
-                    ui.indent(format!("folder_indent_{}", depth), |ui| {
-                        self.render_folder_recursive(
-                            ui,
-                            subfolder,
-                            folder_map,
-                            lists_by_folder,
-                            ctx,
-                            depth + 1,
-                        );
-                    });
-                }
+        if is_list_group {
+            if let Some(folder) = config
+                .list_groups
+                .iter_mut()
+                .find(|f| item.match_list_group(&f.lnk))
+                && new_parent_lg.as_ref().is_some()
+                && item.match_list_group(new_parent_lg.as_ref().unwrap())
+            {
+                folder.parent_id = new_parent_lg.clone();
             }
+        } else if let Some(parent) = new_parent_lg.clone() {
+            config
+                .list_group_assignments
+                .insert(item.list_lnk().unwrap(), parent);
+        } else {
+            config
+                .list_group_assignments
+                .remove(&item.list_lnk().unwrap());
         }
+
+        config.sidebar_ui_order.retain(|id| id != &item);
+
+        if let Some(after_id) = insert_after {
+            if let Some(pos) = config
+                .sidebar_ui_order
+                .iter()
+                .position(|id| id == &after_id)
+            {
+                config.sidebar_ui_order.insert(pos + 1, item);
+            } else {
+                config.sidebar_ui_order.push(item);
+            }
+        } else {
+            config.sidebar_ui_order.insert(0, item);
+        }
+
+        let state_guard = self.state.write();
+        *state_guard.config.write() = config.clone();
+        state_guard.dispatch(crate::resource_downloader::business::Effect::SaveConfig { config });
     }
 
     fn render_list_with_dnd(
@@ -733,9 +748,18 @@ impl SidebarPanel {
         item: &ListItem,
         open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
+        parent_id: Option<ListGroupLnk>,
+        depth: usize,
     ) {
         let item_id = ui.make_persistent_id("list_dnd").with(&item.0);
         let payload = item.0.to_string();
+
+        if ui.ctx().is_being_dragged(item_id) {
+            ui.ctx().memory_mut(|mem| {
+                mem.data
+                    .insert_temp(egui::Id::new("dnd_last_payload"), payload.clone());
+            });
+        }
 
         let inner_response = ui.dnd_drag_source(item_id, payload, |ui| {
             self.render_row(ui, item, open_list, pending_list_scroll)
@@ -745,6 +769,13 @@ impl SidebarPanel {
             .response
             .interact(egui::Sense::click())
             .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+        self.drop_targets.push(DropTarget {
+            dnd_id: item.0.to_string(),
+            rect: drag_response.rect,
+            parent_id: parent_id.clone(),
+            depth,
+        });
 
         if drag_response.hovered() {
             ui.painter().rect_stroke(
@@ -865,5 +896,353 @@ impl SidebarPanel {
         }
 
         response
+    }
+
+    fn find_closest_target(&self, pointer_pos: egui::Pos2) -> Option<ClosestTarget> {
+        let mut closest: Option<ClosestTarget> = None;
+        let mut min_distance = f32::MAX;
+        const MIN_DISTANCE_THRESHOLD: f32 = 100.0;
+
+        for (index, target) in self.drop_targets.iter().enumerate() {
+            let rect = target.rect;
+            let is_last = index == self.drop_targets.len() - 1;
+            let is_virtual =
+                target.dnd_id.ends_with("_after") || target.dnd_id.ends_with("_inside_end");
+
+            let dist_to_top = (pointer_pos.y - rect.min.y).abs();
+
+            if dist_to_top < min_distance {
+                min_distance = dist_to_top;
+                closest = Some(ClosestTarget {
+                    target: target.clone(),
+                    position: DropPosition::Before,
+                });
+            }
+
+            if is_last && !is_virtual {
+                let dist_to_bottom = (pointer_pos.y - rect.max.y).abs();
+
+                if dist_to_bottom < min_distance {
+                    min_distance = dist_to_bottom;
+                    closest = Some(ClosestTarget {
+                        target: target.clone(),
+                        position: DropPosition::After,
+                    });
+                }
+            }
+        }
+
+        if min_distance < MIN_DISTANCE_THRESHOLD {
+            closest
+        } else {
+            None
+        }
+    }
+
+    fn visualize_drop_target(&self, ui: &mut Ui, closest: &ClosestTarget) {
+        let rect = closest.target.rect;
+        let indent_step = 15.0;
+
+        match closest.position {
+            DropPosition::Before => {
+                let y = rect.min.y;
+                let x_start = rect.min.x + (closest.target.depth as f32 * indent_step);
+                let color = Color32::from_rgb(100, 150, 255);
+
+                ui.painter().line_segment(
+                    [egui::pos2(x_start, y), egui::pos2(rect.max.x, y)],
+                    egui::Stroke::new(2.0, color),
+                );
+                ui.painter()
+                    .circle_filled(egui::pos2(x_start, y), 3.0, color);
+            }
+            DropPosition::After => {
+                let y = rect.max.y;
+                let x_start = rect.min.x + (closest.target.depth as f32 * indent_step);
+                let color = Color32::from_rgb(100, 150, 255);
+
+                ui.painter().line_segment(
+                    [egui::pos2(x_start, y), egui::pos2(rect.max.x, y)],
+                    egui::Stroke::new(2.0, color),
+                );
+                ui.painter()
+                    .circle_filled(egui::pos2(x_start, y), 3.0, color);
+            }
+        }
+    }
+
+    fn apply_drop(&mut self, closest: &ClosestTarget, payload: &str) {
+        let (item_id, is_folder_drag) = self.parse_payload(payload);
+
+        let (actual_target_id, is_inside_end) = if closest.target.dnd_id.ends_with("_inside_end") {
+            (
+                closest
+                    .target
+                    .dnd_id
+                    .trim_end_matches("_inside_end")
+                    .to_string(),
+                true,
+            )
+        } else if closest.target.dnd_id.ends_with("_after") {
+            (
+                closest.target.dnd_id.trim_end_matches("_after").to_string(),
+                false,
+            )
+        } else {
+            (closest.target.dnd_id.clone(), false)
+        };
+
+        if item_id == actual_target_id {
+            return;
+        }
+        let sidebar_item = {
+            self.state
+                .read()
+                .config
+                .read()
+                .sidebar_ui_order
+                .iter()
+                .find(|i| i.to_context_id() == item_id)
+                .unwrap()
+                .clone()
+        };
+        let actual_target_item = {
+            self.state
+                .read()
+                .config
+                .read()
+                .sidebar_ui_order
+                .iter()
+                .find(|i| i.to_context_id() == actual_target_id)
+                .unwrap()
+                .clone()
+        };
+
+        if is_folder_drag
+            && let Some(ref target_parent) = closest.target.parent_id
+            && self.is_descendant_of(target_parent, &sidebar_item)
+        {
+            return;
+        }
+
+        if is_inside_end {
+            let state = self.state.read();
+            let config = state.config.read();
+
+            let current_parent = if is_folder_drag {
+                config
+                    .list_groups
+                    .iter()
+                    .find(|f| f.lnk.to_context_id() == item_id)
+                    .and_then(|f| f.parent_id.clone())
+            } else {
+                config
+                    .list_group_assignments
+                    .get(&ListLnk::new(item_id.clone()))
+                    .cloned()
+            };
+
+            if current_parent.map(|a| a.to_context_id()) == Some(actual_target_id.clone()) {
+                let children_in_order: Vec<SidebarItem> = config
+                    .sidebar_ui_order
+                    .iter()
+                    .filter(|id| {
+                        let item_parent = if let Some(folder) = config
+                            .list_groups
+                            .iter()
+                            .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
+                        {
+                            folder.parent_id.clone()
+                        } else {
+                            config
+                                .list_group_assignments
+                                .get(&id.list_lnk().unwrap())
+                                .cloned()
+                        };
+                        item_parent.map(|a| a.to_context_id()) == Some(actual_target_id.clone())
+                    })
+                    .cloned()
+                    .collect();
+
+                if children_in_order.last().map(|a| a.to_context_id()) == Some(item_id.clone()) {
+                    drop(config);
+                    drop(state);
+                    return;
+                }
+            }
+
+            let children_in_order: Vec<SidebarItem> = config
+                .sidebar_ui_order
+                .iter()
+                .filter(|id| {
+                    let item_parent = if let Some(list_group) = config
+                        .list_groups
+                        .iter()
+                        .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
+                    {
+                        list_group.parent_id.clone()
+                    } else {
+                        config
+                            .list_group_assignments
+                            .get(&id.list_lnk().unwrap())
+                            .cloned()
+                    };
+                    item_parent.map(|a| a.to_context_id()) == Some(actual_target_id.clone())
+                })
+                .cloned()
+                .collect();
+
+            drop(config);
+            drop(state);
+
+            let insert_after = children_in_order.last().cloned();
+
+            self.move_item(
+                sidebar_item,
+                Some(ListGroupLnk::from(actual_target_id)),
+                insert_after,
+            );
+            return;
+        }
+
+        match closest.position {
+            DropPosition::Before => {
+                if closest.target.dnd_id.ends_with("_after")
+                    || closest.target.dnd_id.ends_with("_inside_end")
+                {
+                    self.move_item(
+                        sidebar_item,
+                        closest.target.parent_id.clone(),
+                        Some(actual_target_item),
+                    );
+                    return;
+                }
+
+                let state = self.state.read();
+                let config = state.config.read();
+
+                let siblings_in_order: Vec<SidebarItem> = config
+                    .sidebar_ui_order
+                    .iter()
+                    .filter(|id| {
+                        let item_parent = if let Some(folder) = config
+                            .list_groups
+                            .iter()
+                            .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
+                        {
+                            folder.parent_id.clone()
+                        } else {
+                            config
+                                .list_group_assignments
+                                .get(&id.list_lnk().unwrap())
+                                .cloned()
+                        };
+                        item_parent == closest.target.parent_id
+                    })
+                    .cloned()
+                    .collect();
+
+                drop(config);
+                drop(state);
+
+                let target_pos = siblings_in_order
+                    .iter()
+                    .position(|id| id.to_context_id() == actual_target_id);
+                let insert_after = if let Some(pos) = target_pos
+                    && pos > 0
+                {
+                    Some(siblings_in_order[pos - 1].clone())
+                } else {
+                    None
+                };
+
+                let current_pos = siblings_in_order
+                    .iter()
+                    .position(|id| id.to_context_id() == item_id);
+                if let Some(curr_pos) = current_pos
+                    && let Some(tgt_pos) = target_pos
+                    && (curr_pos == tgt_pos || curr_pos + 1 == tgt_pos)
+                {
+                    return;
+                }
+
+                self.move_item(sidebar_item, closest.target.parent_id.clone(), insert_after);
+            }
+            DropPosition::After => {
+                let state = self.state.read();
+                let config = state.config.read();
+
+                let siblings_in_order: Vec<SidebarItem> = config
+                    .sidebar_ui_order
+                    .iter()
+                    .filter(|id| {
+                        let item_parent = if let Some(folder) = config
+                            .list_groups
+                            .iter()
+                            .find(|f| Some(f.lnk.clone()) == id.list_group_lnk())
+                        {
+                            folder.parent_id.clone()
+                        } else {
+                            config
+                                .list_group_assignments
+                                .get(&id.list_lnk().unwrap())
+                                .cloned()
+                        };
+                        item_parent == closest.target.parent_id
+                    })
+                    .cloned()
+                    .collect();
+
+                drop(config);
+                drop(state);
+
+                let current_pos = siblings_in_order
+                    .iter()
+                    .position(|id| id.to_context_id() == item_id);
+                let target_pos = siblings_in_order
+                    .iter()
+                    .position(|id| id.to_context_id() == actual_target_id);
+
+                if let Some(curr_pos) = current_pos
+                    && let Some(tgt_pos) = target_pos
+                    && curr_pos == tgt_pos + 1
+                {
+                    return;
+                }
+
+                self.move_item(
+                    sidebar_item,
+                    closest.target.parent_id.clone(),
+                    Some(actual_target_item),
+                );
+            }
+        }
+    }
+
+    fn is_descendant_of(
+        &self,
+        potential_descendant: &ListGroupLnk,
+        potential_ancestor: &SidebarItem,
+    ) -> bool {
+        if potential_ancestor.match_list_group(potential_descendant) {
+            return true;
+        }
+
+        let state = self.state.read();
+        let config = state.config.read();
+
+        let mut current = potential_descendant;
+        while let Some(folder) = config.list_groups.iter().find(|f| f.lnk == *current) {
+            if let Some(parent_id) = &folder.parent_id {
+                if potential_ancestor.match_list_group(potential_descendant) {
+                    return true;
+                }
+                current = parent_id;
+            } else {
+                break;
+            }
+        }
+
+        false
     }
 }

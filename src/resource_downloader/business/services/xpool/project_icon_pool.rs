@@ -47,7 +47,7 @@ impl ProjectIconPool {
 
         for project in loading_list {
             let cache_ctx = CacheContext {
-                id: project.to_context_id(),
+                id: Some(project.to_context_id()),
                 resource_type: None,
                 version: None,
                 loader: None,
@@ -96,7 +96,7 @@ impl ProjectIconPool {
         }
 
         let cache_ctx = CacheContext {
-            id: project.to_context_id(),
+            id: Some(project.to_context_id()),
             resource_type: None,
             version: None,
             loader: None,

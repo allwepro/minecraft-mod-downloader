@@ -263,7 +263,7 @@ impl RDRuntime {
                                     loader,
                                     download_dir,
                                     projects,
-                                    lnk,
+                                    list_lnk: lnk,
                                     list: list_arc,
                                 })
                                 .await;
@@ -322,7 +322,7 @@ impl RDRuntime {
 
                     let _ = tx
                         .send(InternalEvent::ListDuplicated {
-                            list: lnk,
+                            list_lnk: lnk,
                             dup_lnk,
                             dup_list: dup_arc,
                         })
@@ -830,7 +830,7 @@ impl RDRuntime {
                             let _ = tx
                                 .send(InternalEvent::LegacyListImported {
                                     path,
-                                    list: lnk,
+                                    list_lnk: lnk,
                                     list_data: shared,
                                     version,
                                     loader,
@@ -1053,9 +1053,7 @@ impl RDRuntime {
                                     {
                                         named_results.push((proj_lnk, meta.name));
                                     } else {
-                                        let name = proj_lnk
-                                            .to_context_id()
-                                            .unwrap_or("Unknown".to_string());
+                                        let name = proj_lnk.to_context_id();
                                         named_results.push((proj_lnk, name));
                                     }
                                 }
@@ -1090,7 +1088,7 @@ impl RDRuntime {
 
                 self.rt_handle.spawn(async move {
                     let project_strings: Vec<String> =
-                        projects.iter().filter_map(|p| p.to_context_id()).collect();
+                        projects.iter().map(|p| p.to_context_id()).collect();
 
                     let new_id = ProjectList::generate_id();
                     let mut new_list =
@@ -1106,10 +1104,9 @@ impl RDRuntime {
                             .get_metadata_blocking(proj_lnk.clone(), resource_type)
                             .await
                             .unwrap_or(None)
-                            && let Some(id) = proj_lnk.to_context_id()
                         {
                             new_list.add_project(Project::new(
-                                id,
+                                proj_lnk.to_context_id(),
                                 resource_type,
                                 true,
                                 rtpm.name,
@@ -1131,7 +1128,7 @@ impl RDRuntime {
                                     loader,
                                     download_dir,
                                     projects: project_strings,
-                                    lnk,
+                                    list_lnk: lnk,
                                     list: list_arc,
                                 })
                                 .await;

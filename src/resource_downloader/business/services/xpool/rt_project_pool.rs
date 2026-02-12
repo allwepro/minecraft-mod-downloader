@@ -332,7 +332,7 @@ impl RTProjectPool {
         data: RTProjectData,
     ) {
         let ctx = CacheContext {
-            id: project.to_context_id(),
+            id: Some(project.to_context_id()),
             resource_type: Some(resource_type),
             version: None,
             loader: None,
@@ -386,7 +386,7 @@ impl RTProjectPool {
         let resource_type_owned = *resource_type;
         (
             CacheContext {
-                id: project.to_context_id(),
+                id: Some(project.to_context_id()),
                 resource_type: Some(*resource_type),
                 version: None,
                 loader: None,
@@ -417,7 +417,7 @@ impl RTProjectPool {
         let loader_owned = loader.clone();
         (
             CacheContext {
-                id: project.to_context_id(),
+                id: Some(project.to_context_id()),
                 resource_type: Some(resource_type),
                 version: version.clone(),
                 loader: loader.clone(),

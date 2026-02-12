@@ -377,7 +377,7 @@ impl ResourceProvider for ModrinthProvider {
         let (project, data) = self
             .fetch_project(
                 context,
-                project.to_context_id().unwrap(),
+                project.to_context_id(),
                 resource_type,
                 version,
                 loader,
