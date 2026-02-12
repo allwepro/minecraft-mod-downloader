@@ -1,6 +1,7 @@
 pub(crate) mod cache;
 mod effects;
 mod events;
+pub mod folder_actions;
 pub mod list_actions;
 mod list_pool;
 pub mod project_actions;

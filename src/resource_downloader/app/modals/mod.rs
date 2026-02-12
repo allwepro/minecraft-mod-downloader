@@ -1,5 +1,7 @@
+pub(crate) mod create_folder_modal;
 pub(crate) mod create_modal;
 pub(crate) mod folder_import_modal;
+pub(crate) mod folder_settings_modal;
 pub(crate) mod import_modal;
 pub(crate) mod legacy_import_modal;
 pub(crate) mod legacy_import_progress_modal;

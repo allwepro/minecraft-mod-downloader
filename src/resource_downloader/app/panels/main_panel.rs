@@ -65,10 +65,11 @@ impl MainPanel {
             self.debug_overlays = !self.debug_overlays;
         }
 
-        let (open_list_lnk, found_files_map, active_scans, pending_scroll) = {
+        let (open_list_lnk, open_folder_lnk, found_files_map, active_scans, pending_scroll) = {
             let mut s = self.state.write();
             (
                 s.open_list.clone(),
+                s.open_folder.clone(),
                 s.found_files.clone(),
                 s.active_scans.clone(),
                 s.pending_scroll.take(),
@@ -89,6 +90,11 @@ impl MainPanel {
         egui::CentralPanel::default().show(ctx, |ui| {
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.selected_projects.clear();
+            }
+
+            if let Some(folder_lnk) = open_folder_lnk {
+                self.show_folder_settings(ui, folder_lnk);
+                return;
             }
 
             let lnk = match &open_list_lnk {
@@ -1492,5 +1498,139 @@ impl MainPanel {
             });
         });
         ui.separator();
+    }
+
+    fn show_folder_settings(
+        &mut self,
+        ui: &mut Ui,
+        folder_lnk: crate::resource_downloader::domain::FolderLnk,
+    ) {
+        use crate::resource_downloader::business::folder_actions::FolderActions;
+
+        let (folder_name, list_count) = {
+            let state = self.state.read();
+            let config = state.config.read();
+            let folder = config.folders.iter().find(|f| f.id == folder_lnk.id());
+            let name = folder
+                .map(|f| f.name.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+            let count = config
+                .folder_assignments
+                .values()
+                .filter(|fid| *fid == folder_lnk.id())
+                .count();
+            (name, count)
+        };
+
+        ui.horizontal(|ui| {
+            ui.heading(format!("📁 {}", folder_name));
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("🗑  Delete Folder").clicked() {
+                    FolderActions::delete_folder(self.state.clone(), folder_lnk.clone());
+                }
+
+                if ui.button("👥  Duplicate").clicked() {
+                    FolderActions::duplicate_folder(self.state.clone(), folder_lnk.clone());
+                }
+            });
+        });
+
+        ui.separator();
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.add_space(8.0);
+
+            egui::Frame::default()
+                .fill(ui.visuals().faint_bg_color)
+                .stroke(egui::Stroke::new(1.0, Color32::from_gray(60)))
+                .corner_radius(8.0)
+                .inner_margin(egui::Margin::same(16))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.heading("Folder Information");
+                    ui.add_space(12.0);
+
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("📋 Lists in folder:").size(16.0));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                egui::RichText::new(list_count.to_string())
+                                    .size(20.0)
+                                    .strong()
+                                    .color(Color32::from_rgb(100, 200, 255)),
+                            );
+                        });
+                    });
+
+                    ui.add_space(8.0);
+
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("🆔 Folder ID:").size(14.0));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                egui::RichText::new(folder_lnk.id())
+                                    .size(12.0)
+                                    .weak()
+                                    .monospace(),
+                            );
+                        });
+                    });
+                });
+
+            ui.add_space(16.0);
+
+            egui::Frame::default()
+                .fill(ui.visuals().faint_bg_color)
+                .stroke(egui::Stroke::new(1.0, Color32::from_gray(60)))
+                .corner_radius(8.0)
+                .inner_margin(egui::Margin::same(16))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.heading("Folder Name");
+                    ui.add_space(12.0);
+
+                    ui.horizontal(|ui| {
+                        let mut new_name = folder_name.clone();
+                        let text_width = ui.available_width() - 120.0;
+                        let _response = ui.add(
+                            egui::TextEdit::singleline(&mut new_name)
+                                .desired_width(text_width)
+                                .hint_text("Enter folder name..."),
+                        );
+
+                        if ui.button("💾 Rename").clicked()
+                            && !new_name.trim().is_empty()
+                            && new_name != folder_name
+                        {
+                            FolderActions::rename_folder(
+                                self.state.clone(),
+                                folder_lnk.clone(),
+                                new_name.trim().to_string(),
+                            );
+                        }
+                    });
+                });
+
+            ui.add_space(16.0);
+
+
+            egui::Frame::default()
+                .fill(ui.visuals().faint_bg_color)
+                .stroke(egui::Stroke::new(1.0, Color32::from_gray(60)))
+                .corner_radius(8.0)
+                .inner_margin(egui::Margin::same(16))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.heading("Actions");
+                    ui.add_space(12.0);
+
+                    ui.label("Organize your lists by dragging them into this folder from the sidebar.");
+                    ui.add_space(8.0);
+                    ui.label(
+                        "You can also use the context menu (right-click) on any list to move it to this folder.",
+                    );
+                });
+        });
     }
 }
