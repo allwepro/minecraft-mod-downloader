@@ -462,6 +462,18 @@ impl SidebarPanel {
                 }
             }
         }
+
+        let remaining_height = ui.available_height();
+        if remaining_height > 10.0 {
+            let empty_area = ui.allocate_response(
+                egui::vec2(ui.available_width(), remaining_height),
+                egui::Sense::click(),
+            );
+
+            if empty_area.clicked() {
+                self.state.write().set_open_folder(None);
+            }
+        }
     }
 
     fn render_folder(
