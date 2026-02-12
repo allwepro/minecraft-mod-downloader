@@ -1603,7 +1603,7 @@ impl MainPanel {
 
                     ui.horizontal(|ui| {
                         let text_width = ui.available_width() - 120.0;
-                        let response = ui.add(
+                        let _response = ui.add(
                             egui::TextEdit::singleline(&mut self.folder_rename_input)
                                 .desired_width(text_width)
                                 .hint_text("Enter folder name..."),
