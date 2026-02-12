@@ -366,6 +366,19 @@ impl RDState {
                 self.list_pool.insert_arc(list);
                 self.request_full_refresh();
                 self.pending_list_scroll = Some(lnk.clone());
+
+                if let Some(folder_lnk) = &self.open_folder {
+                    let mut config = self.config.write();
+                    config
+                        .folder_assignments
+                        .insert(lnk.to_string(), folder_lnk.id().to_string());
+                    drop(config);
+
+                    self.dispatch(Effect::SaveConfig {
+                        config: self.config.read().clone(),
+                    });
+                }
+
                 Some(Event::ListCreated {
                     name,
                     resource_type,
@@ -399,6 +412,19 @@ impl RDState {
             } => {
                 self.list_pool.insert_arc(list);
                 self.pending_list_scroll = Some(list_lnk.clone());
+
+                if let Some(folder_lnk) = &self.open_folder {
+                    let mut config = self.config.write();
+                    config
+                        .folder_assignments
+                        .insert(list_lnk.to_string(), folder_lnk.id().to_string());
+                    drop(config);
+
+                    self.dispatch(Effect::SaveConfig {
+                        config: self.config.read().clone(),
+                    });
+                }
+
                 Some(Event::ListImported {
                     list: list_lnk,
                     path,
@@ -415,6 +441,19 @@ impl RDState {
             } => {
                 self.list_pool.insert_arc(list_data);
                 self.pending_list_scroll = Some(list.clone());
+
+                if let Some(folder_lnk) = &self.open_folder {
+                    let mut config = self.config.write();
+                    config
+                        .folder_assignments
+                        .insert(list.to_string(), folder_lnk.id().to_string());
+                    drop(config);
+
+                    self.dispatch(Effect::SaveConfig {
+                        config: self.config.read().clone(),
+                    });
+                }
+
                 Some(Event::LegacyListImported {
                     path,
                     version,
