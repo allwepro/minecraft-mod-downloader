@@ -1,5 +1,5 @@
 use crate::common::app::App;
-use crate::common::program_args::{ArgRegistryBuilder, SharedArgRegistry};
+use crate::common::cli::program_args::SharedArgRegistry;
 use crate::common::ui::helper::modal_manager::SharedModalManager;
 use crate::common::ui::helper::notification_manager::SharedNotificationManager;
 use crate::common::ui::helper::pop_up_manager::SharedPopupManager;
@@ -13,10 +13,11 @@ use crate::resource_downloader::app::notifications::fail_notification::FailedNot
 use crate::resource_downloader::app::panels::main_panel::MainPanel;
 use crate::resource_downloader::app::panels::sidebar_panel::SidebarPanel;
 use crate::resource_downloader::business::services::{ApiService, UpdateFn};
-use crate::resource_downloader::business::{Effect, Event, InternalEvent, RDState, SharedRDState};
+use crate::resource_downloader::business::{Effect, Event, InternalEvent, RMState, SharedRDState};
 use crate::resource_downloader::infra::{
-    ConfigManager, GameDetection, LegacyListService, ListFileManager, RDRuntime,
+    ConfigManager, GameDetection, LegacyListService, ListFileManager, RMRuntime,
 };
+use crate::resource_downloader::rm_api::SharedRMAPI;
 use eframe::egui;
 use egui::{Context, Ui};
 use parking_lot::RwLock;
@@ -25,7 +26,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-pub struct RDHandler {
+pub struct RMHandler {
     _rt_handle: tokio::runtime::Handle,
     state: SharedRDState,
     update_fn: UpdateFn,
@@ -40,17 +41,14 @@ pub struct RDHandler {
     last_connectivity_check: Option<Instant>,
 }
 
-impl RDHandler {
-    pub fn args(arb: &mut ArgRegistryBuilder) {
-        arb.add("p", "path", "The path where the program data are saved.");
-    }
-
+impl RMHandler {
     pub fn new(
         rt_handle: tokio::runtime::Handle,
         modal_manager: SharedModalManager,
         popup_manager: SharedPopupManager,
         notification_manager: SharedNotificationManager,
         args_registry: SharedArgRegistry,
+        rmapi: SharedRMAPI,
     ) -> Self {
         // 1. Communication Channels
         let (effect_sx, effect_rx) = mpsc::channel::<Effect>(1024);
@@ -74,7 +72,7 @@ impl RDHandler {
         let legacy_list_manager = Arc::new(LegacyListService::new(api_service.clone()));
 
         // 3. Runtime and State
-        let runtime_fn = RDRuntime::create(
+        let runtime_fn = RMRuntime::create(
             rt_handle.clone(),
             api_service.clone(),
             effect_rx,
@@ -85,7 +83,7 @@ impl RDHandler {
             legacy_list_manager,
         );
 
-        let state = Arc::new(RwLock::new(RDState::new(
+        let state = Arc::new(RwLock::new(RMState::new(
             rt_handle.clone(),
             modal_manager.clone(),
             popup_manager.clone(),
@@ -114,6 +112,11 @@ impl RDHandler {
         // 5. Trigger Initial Business Logic
         state.write().initialize();
 
+        // 6. Connect RMAPI
+        {
+            rmapi.write().set_state(state.clone());
+        }
+
         Self {
             _rt_handle: rt_handle,
             state: state.clone(),
@@ -129,7 +132,7 @@ impl RDHandler {
     }
 }
 
-impl ViewController for RDHandler {
+impl ViewController for RMHandler {
     fn is_loaded(&self) -> bool {
         !self.state.read().loading
     }

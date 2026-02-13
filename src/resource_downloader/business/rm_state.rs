@@ -61,9 +61,9 @@ pub struct ClipboardContent {
     pub is_cut: bool,
 }
 
-pub type SharedRDState = Arc<RwLock<RDState>>;
+pub type SharedRDState = Arc<RwLock<RMState>>;
 
-pub struct RDState {
+pub struct RMState {
     rt_handle: tokio::runtime::Handle,
     event_rx: mpsc::Receiver<InternalEvent>,
     effect_sx: mpsc::Sender<Effect>,
@@ -97,7 +97,7 @@ pub struct RDState {
     pub last_clicked_sidebar_item: Option<SidebarItem>,
 }
 
-impl RDState {
+impl RMState {
     pub fn new(
         rt_handle: tokio::runtime::Handle,
         modal_manager: SharedModalManager,

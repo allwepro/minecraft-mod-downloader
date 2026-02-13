@@ -1,5 +1,5 @@
 use crate::resource_downloader::business::cache::ArtifactCallback;
-use crate::resource_downloader::business::rd_state::FolderImportCandidate;
+use crate::resource_downloader::business::rm_state::FolderImportCandidate;
 use crate::resource_downloader::domain::{
     AppConfig, GameLoader, GameVersion, ListGroupLnk, ListLnk, ProjectList, ProjectLnk,
     ProjectVersion, RTProjectData, ResourceType,
