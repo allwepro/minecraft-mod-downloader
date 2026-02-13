@@ -1,6 +1,7 @@
 use crate::resource_downloader::business::cache::ArtifactCallback;
 use crate::resource_downloader::domain::{
-    AppConfig, GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ResourceType,
+    AppConfig, GameLoader, GameVersion, ListGroupLnk, ListLnk, ProjectList, ProjectLnk,
+    ResourceType,
 };
 use parking_lot::RwLock;
 use std::path::PathBuf;
@@ -34,6 +35,7 @@ pub enum Effect {
 
     DuplicateList {
         list: Arc<RwLock<ProjectList>>,
+        target_parent: Option<ListGroupLnk>,
     },
 
     DeleteList {

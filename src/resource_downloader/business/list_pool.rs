@@ -1,6 +1,7 @@
 use crate::resource_downloader::business::Effect;
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, MutationResult, ProjectList, ProjectLnk, ResourceType,
+    GameLoader, GameVersion, ListGroupLnk, ListLnk, MutationResult, ProjectList, ProjectLnk,
+    ResourceType,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -63,8 +64,11 @@ impl ListPool {
     pub fn save(&self, lnk: &ListLnk) {
         self.send_list_effect(lnk, |arc| Effect::SaveList { list: arc });
     }
-    pub fn duplicate(&self, lnk: &ListLnk) {
-        self.send_list_effect(lnk, |arc| Effect::DuplicateList { list: arc });
+    pub fn duplicate(&self, lnk: &ListLnk, target_parent: Option<ListGroupLnk>) {
+        self.send_list_effect(lnk, |arc| Effect::DuplicateList {
+            list: arc,
+            target_parent,
+        });
     }
     pub fn delete(&self, lnk: &ListLnk) {
         let _ = self

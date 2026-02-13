@@ -306,7 +306,10 @@ impl RDRuntime {
                 });
             }
 
-            Effect::DuplicateList { list } => {
+            Effect::DuplicateList {
+                list,
+                target_parent,
+            } => {
                 self.rt_handle.spawn(async move {
                     let (lnk, content) = {
                         let guard = list.read();
@@ -325,6 +328,7 @@ impl RDRuntime {
                             list_lnk: lnk,
                             dup_lnk,
                             dup_list: dup_arc,
+                            target_parent,
                         })
                         .await;
                 });

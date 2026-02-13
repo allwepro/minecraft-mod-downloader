@@ -1,8 +1,8 @@
 use crate::resource_downloader::business::cache::ArtifactCallback;
 use crate::resource_downloader::business::rd_state::FolderImportCandidate;
 use crate::resource_downloader::domain::{
-    AppConfig, GameLoader, GameVersion, ListLnk, ProjectList, ProjectLnk, ProjectVersion,
-    RTProjectData, ResourceType,
+    AppConfig, GameLoader, GameVersion, ListGroupLnk, ListLnk, ProjectList, ProjectLnk,
+    ProjectVersion, RTProjectData, ResourceType,
 };
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -248,6 +248,7 @@ pub enum InternalEvent {
         list_lnk: ListLnk,
         dup_lnk: ListLnk,
         dup_list: Arc<RwLock<ProjectList>>,
+        target_parent: Option<ListGroupLnk>,
     },
     ListDeleted {
         list: ListLnk,
