@@ -1,6 +1,7 @@
 use crate::common::app::App;
 use crate::common::app::Tab::{Launcher, ResourceDownloader};
 use crate::common::ui::app_icon::show_app_icon;
+use crate::common::ui::ash_ui::AshUi;
 use crate::common::ui::structs::view_controller::ViewController;
 use eframe::egui;
 use eframe::epaint::Color32;
@@ -22,27 +23,26 @@ impl TopPanel {
                 ui.add_space(2.0);
                 ui.heading("&");
                 ui.add_space(2.0);
-                if tab_button(
-                    ui,
-                    "Resource Downloader",
-                    app.open_tab == ResourceDownloader,
-                )
-                .clicked()
+                if tab_button(ui, "Resource Manager", app.open_tab == ResourceDownloader).clicked()
                 {
                     app.open_tab = ResourceDownloader;
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let actions = match app.open_tab {
-                        ResourceDownloader => app.rd_manager.get_top_bar_actions(),
-                        Launcher => vec![], //app.launcher_manager.get_top_bar_actions()
-                    };
 
-                    for action in actions {
-                        let btn = ui.button(&action.label).on_hover_text(&action.tooltip);
-                        if btn.clicked() {
-                            (action.callback)(ctx);
+                ui.separator();
+                ui.ash_vert(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let actions = match app.open_tab {
+                            ResourceDownloader => app.rd_manager.get_top_bar_actions(),
+                            Launcher => vec![], //app.launcher_manager.get_top_bar_actions()
+                        };
+
+                        for action in actions {
+                            let btn = ui.button(&action.label).on_hover_text(&action.tooltip);
+                            if btn.clicked() {
+                                (action.callback)(ctx);
+                            }
                         }
-                    }
+                    });
                 });
             });
         });

@@ -9,6 +9,7 @@ use crate::common::ui::structs::view_controller::ViewController;
 use crate::common::ui::top_panel::TopPanel;
 use crate::resource_downloader::app::rd_handler::RDHandler;
 use eframe::{egui, glow};
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialOrd, PartialEq)]
 pub enum Tab {
@@ -229,5 +230,11 @@ impl App {
                 ui.add(egui::Spinner::new().size(50.0));
             });
         });
+    }
+
+    pub fn get_app_dir() -> PathBuf {
+        dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("flux-launcher")
     }
 }
