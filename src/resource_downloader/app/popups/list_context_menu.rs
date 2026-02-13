@@ -2,7 +2,7 @@ use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::business::list_group_actions::ListGroupActions;
-use crate::resource_downloader::domain::ListLnk;
+use crate::resource_downloader::domain::{ListLnk, SidebarItem};
 use eframe::egui;
 use egui::{Color32, Id, Ui};
 
@@ -108,7 +108,24 @@ impl Popup for ListContextMenu {
             );
 
             if ui.add(delete_btn).clicked() {
-                ListActions::delete_list(self.state.clone(), list_lnk.clone());
+                let selected_items = {
+                    let state = self.state.read();
+                    if state
+                        .selected_sidebar_items
+                        .contains(&SidebarItem::List(list_lnk.clone()))
+                    {
+                        state
+                            .selected_sidebar_items
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    } else {
+                        vec![SidebarItem::List(list_lnk.clone())]
+                    }
+                };
+
+                ListActions::delete_items(self.state.clone(), selected_items);
+                self.state.write().selected_sidebar_items.clear();
                 *open = false;
             }
         });

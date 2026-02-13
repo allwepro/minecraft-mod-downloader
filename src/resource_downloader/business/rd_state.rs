@@ -92,6 +92,9 @@ pub struct RDState {
 
     pub pending_scroll: Option<(ListLnk, ProjectLnk)>,
     pub pending_sidebar_scroll: Option<SidebarItem>,
+
+    pub selected_sidebar_items: HashSet<SidebarItem>,
+    pub last_clicked_sidebar_item: Option<SidebarItem>,
 }
 
 impl RDState {
@@ -133,6 +136,9 @@ impl RDState {
             folder_import_session: None,
             pending_scroll: None,
             pending_sidebar_scroll: None,
+
+            selected_sidebar_items: HashSet::new(),
+            last_clicked_sidebar_item: None,
         }
     }
 
@@ -346,6 +352,9 @@ impl RDState {
                 {
                     self.set_open_list_no_save(Some(last_open.clone()));
                     self.pending_sidebar_scroll = Some(SidebarItem::from(last_open));
+                    self.selected_sidebar_items
+                        .insert(SidebarItem::from(last_open));
+                    self.last_clicked_sidebar_item = Some(SidebarItem::from(last_open));
                 }
 
                 Some(Event::Initialized {

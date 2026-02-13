@@ -2,6 +2,8 @@ use crate::resource_downloader::business::{Effect, SharedRDState};
 use crate::resource_downloader::domain::{ListGroup, ListGroupLnk, ListLnk, SidebarItem};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::list_actions::ListActions;
+
 pub struct ListGroupActions;
 
 impl ListGroupActions {
@@ -59,44 +61,7 @@ impl ListGroupActions {
     }
 
     pub fn delete_list_group(state: SharedRDState, lg_lnk: ListGroupLnk) {
-        {
-            let state_guard = state.write();
-            let mut config = state_guard.config.write();
-
-            let parent_id = config
-                .list_groups
-                .iter()
-                .find(|f| f.lnk == lg_lnk)
-                .and_then(|f| f.parent_id.clone());
-
-            for group in config.list_groups.iter_mut() {
-                if group.parent_id.as_ref() == Some(&lg_lnk) {
-                    group.parent_id = parent_id.clone();
-                }
-            }
-
-            if let Some(target_parent) = &parent_id {
-                for fid in config.list_group_assignments.values_mut() {
-                    if *fid == lg_lnk {
-                        *fid = target_parent.clone();
-                    }
-                }
-            } else {
-                config
-                    .list_group_assignments
-                    .retain(|_, fid| *fid != lg_lnk);
-            }
-
-            config.list_groups.retain(|f| f.lnk != lg_lnk);
-            config
-                .sidebar_ui_order
-                .retain(|i| !i.match_list_group(&lg_lnk));
-        }
-
-        let state_guard = state.read();
-        state_guard.dispatch(Effect::SaveConfig {
-            config: state_guard.config.read().clone(),
-        });
+        ListActions::delete_items(state, vec![SidebarItem::ListGroup(lg_lnk)]);
     }
 
     pub fn duplicate_list_group(state: SharedRDState, lg_lnk: ListGroupLnk) {

@@ -69,6 +69,7 @@ pub struct SidebarPanel {
     import_options: ImportOptionsComponent,
     drop_targets: Vec<DropTarget>,
     hover_group_start: Option<(ListGroupLnk, f64)>,
+    visible_items: Vec<SidebarItem>,
 }
 
 impl SidebarPanel {
@@ -85,6 +86,7 @@ impl SidebarPanel {
             import_options: ImportOptionsComponent::new(state.clone()),
             drop_targets: Vec::new(),
             hover_group_start: None,
+            visible_items: Vec::new(),
         }
     }
 
@@ -188,6 +190,80 @@ impl SidebarPanel {
         let total_lists = list_items.len();
         let is_searching = !self.list_search_query.is_empty();
 
+        let (list_groups, list_group_assignments, sidebar_order) = {
+            let state = self.state.read();
+            let config = state.config.read();
+            (
+                config.list_groups.clone(),
+                config.list_group_assignments.clone(),
+                config.sidebar_ui_order.clone(),
+            )
+        };
+
+        if is_searching {
+            let query = self.list_search_query.to_lowercase();
+            self.visible_items = list_items
+                .iter()
+                .filter(|item| item.3.to_lowercase().contains(&query))
+                .map(|item| SidebarItem::List(item.0.clone()))
+                .collect();
+        } else {
+            let list_group_map: HashMap<ListGroupLnk, ListGroup> = list_groups
+                .iter()
+                .map(|f| (f.lnk.clone(), f.clone()))
+                .collect();
+
+            let mut items_by_parent: HashMap<Option<ListGroupLnk>, Vec<SidebarItem>> =
+                HashMap::new();
+            for item in &sidebar_order {
+                match item {
+                    SidebarItem::List(l_lnk) => {
+                        if list_group_assignments.contains_key(l_lnk)
+                            || list_items.iter().any(|li| &li.0 == l_lnk)
+                        {
+                            let parent = list_group_assignments.get(l_lnk).cloned();
+                            items_by_parent
+                                .entry(parent)
+                                .or_default()
+                                .push(item.clone());
+                        }
+                    }
+                    SidebarItem::ListGroup(lg_lnk) => {
+                        if let Some(group) = list_group_map.get(lg_lnk) {
+                            items_by_parent
+                                .entry(group.parent_id.clone())
+                                .or_default()
+                                .push(item.clone());
+                        }
+                    }
+                }
+            }
+
+            let mut flattened_visible = Vec::new();
+            self.collect_visible_items_recursive(
+                None,
+                &items_by_parent,
+                &list_group_map,
+                ui.ctx(),
+                &mut flattened_visible,
+            );
+            self.visible_items = flattened_visible;
+        }
+
+        if ui.input(|i| i.key_pressed(egui::Key::Delete)) {
+            let selected: Vec<_> = self
+                .state
+                .read()
+                .selected_sidebar_items
+                .iter()
+                .cloned()
+                .collect();
+            if !selected.is_empty() {
+                ListActions::delete_items(self.state.clone(), selected);
+                self.state.write().selected_sidebar_items.clear();
+            }
+        }
+
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.set_width(ui.available_width());
 
@@ -249,6 +325,11 @@ impl SidebarPanel {
                     &open_list_group,
                     &pending_sidebar_scroll,
                 );
+            }
+
+            let bg_response = ui.allocate_response(ui.available_size(), egui::Sense::click());
+            if bg_response.clicked() {
+                self.state.write().selected_sidebar_items.clear();
             }
         });
 
@@ -390,28 +471,26 @@ impl SidebarPanel {
 
         let mut items_by_parent: HashMap<Option<ListGroupLnk>, Vec<SidebarItem>> = HashMap::new();
 
-        for list_group in list_groups {
-            items_by_parent
-                .entry(list_group.parent_id.clone())
-                .or_default()
-                .push(SidebarItem::ListGroup(list_group.lnk.clone()));
-        }
-
-        for list in list_items {
-            let parent = list_group_assignments.get(&list.0).cloned();
-            items_by_parent
-                .entry(parent)
-                .or_default()
-                .push(SidebarItem::List(list.0.clone()));
-        }
-
-        for items in items_by_parent.values_mut() {
-            items.sort_by_key(|item| {
-                sidebar_order
-                    .iter()
-                    .position(|id| id == item)
-                    .unwrap_or(usize::MAX)
-            });
+        for item in &sidebar_order {
+            match item {
+                SidebarItem::List(l_lnk) => {
+                    if list_map.contains_key(l_lnk) {
+                        let parent = list_group_assignments.get(l_lnk).cloned();
+                        items_by_parent
+                            .entry(parent)
+                            .or_default()
+                            .push(item.clone());
+                    }
+                }
+                SidebarItem::ListGroup(lg_lnk) => {
+                    if let Some(group) = list_group_map.get(lg_lnk) {
+                        items_by_parent
+                            .entry(group.parent_id.clone())
+                            .or_default()
+                            .push(item.clone());
+                    }
+                }
+            }
         }
 
         let render_ctx = RenderContext::new(
@@ -527,7 +606,7 @@ impl SidebarPanel {
         is_last_in_group: bool,
     ) {
         let lg_lnk = list_group.lnk.clone();
-        let id = ui.make_persistent_id("list_group").with(&list_group.lnk);
+        let id = egui::Id::new("sidebar_list_group").with(&list_group.lnk);
         let payload = format!("list_group:{}", list_group.lnk);
 
         if ui.ctx().is_being_dragged(id) {
@@ -549,19 +628,28 @@ impl SidebarPanel {
 
         let mut arrow_clicked = false;
 
-        let is_selected = ctx
+        let is_open = ctx
             .open_list_group
             .as_ref()
             .is_some_and(|l| l == &list_group.lnk);
+
+        let is_selected = {
+            let state = self.state.read();
+            state
+                .selected_sidebar_items
+                .contains(&SidebarItem::ListGroup(list_group.lnk.clone()))
+        };
 
         let mut frame = egui::Frame::default()
             .inner_margin(egui::Margin::symmetric(4, 1))
             .corner_radius(4);
 
-        if is_selected {
+        if is_open {
             frame = frame
                 .fill(ui.visuals().faint_bg_color)
                 .stroke(egui::Stroke::new(1.0, Color32::from_gray(100)));
+        } else if is_selected {
+            frame = frame.fill(ui.visuals().widgets.active.bg_fill.gamma_multiply(0.3));
         }
 
         let list_group_response = frame
@@ -653,16 +741,23 @@ impl SidebarPanel {
                     }
 
                     if drag_response.clicked() && !arrow_clicked {
-                        if let Some(lg) = { self.state.read().open_list_group.clone() }
-                            && lg == lg_lnk
-                        {
-                            self.state.write().set_open_list_group(None);
-                        } else {
-                            self.state.write().set_open_list_group(Some(lg_lnk.clone()));
-                        }
+                        let modifiers = ui.input(|i| i.modifiers);
+                        self.handle_sidebar_item_click(
+                            SidebarItem::ListGroup(lg_lnk.clone()),
+                            modifiers,
+                        );
                     }
 
                     if drag_response.secondary_clicked() {
+                        {
+                            let mut state = self.state.write();
+                            let item_sid = SidebarItem::ListGroup(lg_lnk.clone());
+                            if !state.selected_sidebar_items.contains(&item_sid) {
+                                state.selected_sidebar_items.clear();
+                                state.selected_sidebar_items.insert(item_sid.clone());
+                                state.last_clicked_sidebar_item = Some(item_sid);
+                            }
+                        }
                         self.list_group_context_menu_target =
                             Some((lg_lnk.clone(), list_group.name.clone(), drag_response.rect));
                         let menu_id = egui::Id::new("list_group_context_menu").with(&lg_lnk);
@@ -851,10 +946,6 @@ impl SidebarPanel {
         self.apply_row_interactions(ui, drag_response, item, open_list);
     }
 
-    fn handle_list_click(&self, list: &ListLnk, _open_list: &Option<ListLnk>) {
-        ListActions::toggle_open_list(self.state.clone(), list);
-    }
-
     fn render_row(
         &self,
         ui: &mut Ui,
@@ -863,8 +954,15 @@ impl SidebarPanel {
         pending_list_scroll: &Option<ListLnk>,
     ) -> egui::Response {
         let (list, resource_type, icon, name, version, loader, count) = item;
-        let is_selected = open_list.clone().is_some_and(|l| l == *list);
+        let is_open = open_list.clone().is_some_and(|l| l == *list);
         let should_scroll = pending_list_scroll.as_ref().is_some_and(|l| l == list);
+
+        let is_selected = {
+            let state = self.state.read();
+            state
+                .selected_sidebar_items
+                .contains(&SidebarItem::List(list.clone()))
+        };
 
         let padding = egui::Margin {
             left: 8,
@@ -876,10 +974,12 @@ impl SidebarPanel {
             .inner_margin(padding)
             .corner_radius(4);
 
-        if is_selected {
+        if is_open {
             frame = frame
                 .fill(ui.visuals().faint_bg_color)
                 .stroke(egui::Stroke::new(1.0, Color32::from_gray(100)));
+        } else if is_selected {
+            frame = frame.fill(ui.visuals().widgets.active.bg_fill.gamma_multiply(0.3));
         }
 
         let response = frame
@@ -1311,7 +1411,7 @@ impl SidebarPanel {
         ui: &mut Ui,
         response: egui::Response,
         item: &ListItem,
-        open_list: &Option<ListLnk>,
+        _open_list: &Option<ListLnk>,
     ) {
         if response.hovered() {
             ui.painter().rect_stroke(
@@ -1321,15 +1421,27 @@ impl SidebarPanel {
                 StrokeKind::Middle,
             );
         }
+
         if response.clicked() {
-            self.handle_list_click(&item.0, open_list);
+            let modifiers = ui.input(|i| i.modifiers);
+            self.handle_sidebar_item_click(SidebarItem::List(item.0.clone()), modifiers);
         }
+
         if let Some((target_lnk, _)) = &self.context_menu_target
             && target_lnk == &item.0
         {
             self.context_menu_target = Some((item.0.clone(), response.rect));
         }
         if response.secondary_clicked() {
+            {
+                let mut state = self.state.write();
+                let item_sid = SidebarItem::List(item.0.clone());
+                if !state.selected_sidebar_items.contains(&item_sid) {
+                    state.selected_sidebar_items.clear();
+                    state.selected_sidebar_items.insert(item_sid.clone());
+                    state.last_clicked_sidebar_item = Some(item_sid);
+                }
+            }
             self.context_menu_target = Some((item.0.clone(), response.rect));
             let menu_id = egui::Id::new("list_context_menu").with(&item.0);
             self.state.read().popup_manager.toggle(menu_id);
@@ -1372,6 +1484,97 @@ impl SidebarPanel {
             })
             .cloned()
             .collect()
+    }
+
+    fn handle_sidebar_item_click(&self, item: SidebarItem, modifiers: egui::Modifiers) {
+        let mut state = self.state.write();
+
+        if modifiers.shift {
+            if let Some(last) = &state.last_clicked_sidebar_item {
+                let flattened = &self.visible_items;
+                if let (Some(start_idx), Some(end_idx)) = (
+                    flattened.iter().position(|i| i == last),
+                    flattened.iter().position(|i| i == &item),
+                ) {
+                    if !modifiers.ctrl && !modifiers.command {
+                        state.selected_sidebar_items.clear();
+                    }
+
+                    let range = if start_idx < end_idx {
+                        start_idx..=end_idx
+                    } else {
+                        end_idx..=start_idx
+                    };
+
+                    for idx in range {
+                        state.selected_sidebar_items.insert(flattened[idx].clone());
+                    }
+                } else {
+                    state.selected_sidebar_items.insert(item);
+                }
+            } else {
+                state.selected_sidebar_items.insert(item);
+            }
+        } else if modifiers.command || modifiers.ctrl {
+            if state.selected_sidebar_items.contains(&item) {
+                state.selected_sidebar_items.remove(&item);
+            } else {
+                state.selected_sidebar_items.insert(item.clone());
+            }
+            state.last_clicked_sidebar_item = Some(item);
+        } else {
+            state.selected_sidebar_items.clear();
+            state.selected_sidebar_items.insert(item.clone());
+            state.last_clicked_sidebar_item = Some(item.clone());
+
+            match &item {
+                SidebarItem::List(l_lnk) => {
+                    drop(state);
+                    ListActions::toggle_open_list(self.state.clone(), l_lnk);
+                }
+                SidebarItem::ListGroup(lg_lnk) => {
+                    state.set_open_list_group(Some(lg_lnk.clone()));
+                }
+            }
+        }
+    }
+
+    fn collect_visible_items_recursive(
+        &self,
+        parent_id: Option<ListGroupLnk>,
+        items_by_parent: &HashMap<Option<ListGroupLnk>, Vec<SidebarItem>>,
+        list_group_map: &HashMap<ListGroupLnk, ListGroup>,
+        ctx: &egui::Context,
+        out: &mut Vec<SidebarItem>,
+    ) {
+        if let Some(items) = items_by_parent.get(&parent_id) {
+            for item in items {
+                out.push(item.clone());
+                if let SidebarItem::ListGroup(lg_lnk) = item {
+                    let id = egui::Id::new("sidebar_list_group").with(lg_lnk);
+                    let is_open = if let Some(group) = list_group_map.get(lg_lnk) {
+                        egui::collapsing_header::CollapsingState::load_with_default_open(
+                            ctx,
+                            id,
+                            !group.collapsed,
+                        )
+                        .is_open()
+                    } else {
+                        false
+                    };
+
+                    if is_open {
+                        self.collect_visible_items_recursive(
+                            Some(lg_lnk.clone()),
+                            items_by_parent,
+                            list_group_map,
+                            ctx,
+                            out,
+                        );
+                    }
+                }
+            }
+        }
     }
 
     fn count_lists_recursive(
