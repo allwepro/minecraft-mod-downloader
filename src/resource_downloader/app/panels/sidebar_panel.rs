@@ -267,7 +267,7 @@ impl SidebarPanel {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.set_width(ui.available_width());
 
-            if total_lists == 0 {
+            if total_lists == 0 && list_groups.is_empty() {
                 ui.vertical_centered(|ui| {
                     ui.add_space(80.0);
                     ui.label(egui::RichText::new("No lists yet!").weak());

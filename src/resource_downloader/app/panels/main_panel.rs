@@ -13,7 +13,7 @@ use crate::resource_downloader::business::list_group_actions::ListGroupActions;
 use crate::resource_downloader::business::project_actions::ProjectActions;
 use crate::resource_downloader::domain::{
     FilterMode, GameLoader, GameVersion, ListGroupLnk, ListLnk, OrderMode, ProjectDependencyType,
-    ProjectList, ProjectLnk, ResourceType, SidebarItem, SortMode,
+    ProjectList, ProjectLnk, ResourceType, SortMode,
 };
 use crate::{
     clear_project_metadata, clear_project_versiondata, get_list, get_list_type,
@@ -101,18 +101,6 @@ impl MainPanel {
                 self.selected_projects.clear();
             }
 
-            if let Some(open_list_lnk) = &open_list_lnk
-                && ui.input(|i| i.key_pressed(egui::Key::Delete))
-                && !self.selected_projects.is_empty()
-            {
-                ProjectActions::delete_projects(
-                    self.state.clone(),
-                    open_list_lnk.clone(),
-                    self.selected_projects.iter().cloned().collect(),
-                );
-                self.selected_projects.clear();
-            }
-
             if let Some(lg_lnk) = open_list_group_lnk {
                 self.show_list_group_settings(ui, lg_lnk);
                 return;
@@ -171,116 +159,85 @@ impl MainPanel {
                 )
             };
 
-            ui.horizontal(|ui| {
-                if self.rename_input_open {
-                    let res = ui.text_edit_singleline(&mut self.rename_input);
-                    if (res.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                        || ui.button("✔").clicked()
-                    {
-                        ListActions::rename_list(
-                            self.state.clone(),
-                            lnk.clone(),
-                            self.rename_input.clone(),
-                        );
-                        self.rename_input_open = false;
-                    }
-                    if ui.button("❌").clicked() {
-                        self.rename_input_open = false;
-                    }
-                } else {
-                    ui.heading(format!("{} {}", content_type.emoji(), list_name));
-                    ui.add_space(1.0);
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{} (+ {}) | {} | {}",
-                            manual_prj_count,
-                            proj_count - manual_prj_count,
-                            ver.name,
-                            loader.name
-                        ))
-                        .small()
-                        .weak(),
-                    );
-
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let selected_sidebar = {
-                            let state = self.state.read();
-                            if state
-                                .selected_sidebar_items
-                                .contains(&SidebarItem::List(lnk.clone()))
-                            {
-                                Some(
-                                    state
-                                        .selected_sidebar_items
-                                        .iter()
-                                        .cloned()
-                                        .collect::<Vec<_>>(),
-                                )
-                            } else {
-                                None
-                            }
-                        };
-
-                        let delete_label = if let Some(items) = &selected_sidebar {
-                            if items.len() > 1 {
-                                format!("🗑 Delete {} selected", items.len())
-                            } else {
-                                "🗑 Delete".to_string()
-                            }
-                        } else {
-                            "🗑 Delete".to_string()
-                        };
-
-                        if ui
-                            .add(egui::Button::new(
-                                egui::RichText::new(delete_label).color(Color32::LIGHT_RED),
-                            ))
-                            .clicked()
+            ui.ash_vert(|ui| {
+                ui.horizontal(|ui| {
+                    if self.rename_input_open {
+                        let res = ui.text_edit_singleline(&mut self.rename_input);
+                        if (res.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                            || ui.button("✔").clicked()
                         {
-                            if let Some(items) = selected_sidebar {
-                                ListActions::delete_items(self.state.clone(), items);
-                                self.state.write().selected_sidebar_items.clear();
-                            } else {
+                            ListActions::rename_list(
+                                self.state.clone(),
+                                lnk.clone(),
+                                self.rename_input.clone(),
+                            );
+                            self.rename_input_open = false;
+                        }
+                        if ui.button("❌").clicked() {
+                            self.rename_input_open = false;
+                        }
+                    } else {
+                        ui.heading(format!("{} {}", content_type.emoji(), list_name));
+                        ui.add_space(1.0);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} (+ {}) | {} | {}",
+                                manual_prj_count,
+                                proj_count - manual_prj_count,
+                                ver.name,
+                                loader.name
+                            ))
+                            .small()
+                            .weak(),
+                        );
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui
+                                .add(egui::Button::new(
+                                    egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
+                                ))
+                                .clicked()
+                            {
                                 ListActions::delete_list(self.state.clone(), lnk.clone());
                             }
-                        }
-                        if ui.add(egui::Button::new("✏ Rename")).clicked() {
-                            self.rename_input = list_name.clone();
-                            self.rename_input_open = true;
-                        }
-                        if ui.add(egui::Button::new("👥 Duplicate")).clicked() {
-                            ListActions::duplicate_list(self.state.clone(), lnk.clone());
-                        }
-                        if ui.add(egui::Button::new("📂 Open Folder")).clicked() {
-                            ListActions::open_folder(self.state.clone(), lnk.clone());
-                        }
-
-                        if ui.add(egui::Button::new("📤 Export")).clicked()
-                            && let Some(path) = Dialogs::save_export_list_file(
-                                &list_name,
-                                content_type == ResourceType::Mod,
-                            )
-                        {
-                            let ext = path.extension().and_then(|s| s.to_str());
-                            if ext == Some("toml") || ext == Some("mmd") {
-                                ListActions::export_list(self.state.clone(), lnk.clone(), path);
-                            } else if content_type == ResourceType::Mod {
-                                ListActions::export_legacy_list(
-                                    self.state.clone(),
-                                    lnk.clone(),
-                                    path,
-                                    ver.clone(),
-                                    loader.clone(),
-                                );
+                            if ui.add(egui::Button::new("✏ Rename")).clicked() {
+                                self.rename_input = list_name.clone();
+                                self.rename_input_open = true;
                             }
-                        }
+                            if ui.add(egui::Button::new("👥 Duplicate")).clicked() {
+                                ListActions::duplicate_list(self.state.clone(), lnk.clone());
+                            }
+                            if ui.add(egui::Button::new("📂 Open Folder")).clicked() {
+                                ListActions::open_folder(self.state.clone(), lnk.clone());
+                            }
 
-                        if ui.button("⚙ List Settings").clicked() {
-                            let sm = ListSettingsModal::new(self.state.clone(), lnk.clone());
-                            self.state.read().submit_modal(Box::new(sm));
-                        }
-                    });
-                }
+                            if ui.add(egui::Button::new("📤 Export")).clicked()
+                                && let Some(path) = Dialogs::save_export_list_file(
+                                    &list_name,
+                                    content_type == ResourceType::Mod,
+                                )
+                            {
+                                let ext = path.extension().and_then(|s| s.to_str());
+                                if ext == Some("toml") || ext == Some("mmd") {
+                                    ListActions::export_list(self.state.clone(), lnk.clone(), path);
+                                } else if content_type == ResourceType::Mod {
+                                    ListActions::export_legacy_list(
+                                        self.state.clone(),
+                                        lnk.clone(),
+                                        path,
+                                        ver.clone(),
+                                        loader.clone(),
+                                    );
+                                }
+                            }
+
+                            if ui.button("⚙ List Settings").clicked() {
+                                let sm = ListSettingsModal::new(self.state.clone(), lnk.clone());
+                                self.state.read().submit_modal(Box::new(sm));
+                            }
+                        });
+                    }
+                });
             });
 
             ui.separator();
@@ -334,117 +291,74 @@ impl MainPanel {
 
             let offline_mode = self.state.read().offline_mode;
 
-            let left_rect = ui
-                .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        let add_btn = egui::Button::new(
-                            egui::RichText::new(format!("➕ Add {}", content_type.display_name()))
+            ui.ash_vert(|ui| {
+                let left_rect = ui
+                    .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            let add_btn = egui::Button::new(
+                                egui::RichText::new(format!(
+                                    "➕ Add {}",
+                                    content_type.display_name()
+                                ))
                                 .color(if offline_mode {
                                     Color32::GRAY
                                 } else {
                                     Color32::LIGHT_GREEN
                                 }),
-                        );
-
-                        let res = ui
-                            .add_enabled(!offline_mode, add_btn)
-                            .on_disabled_hover_text("Disabled in offline mode");
-
-                        if res.clicked() {
-                            let sm = SearchModal::new(
-                                self.state.clone(),
-                                lnk.clone(),
-                                content_type,
-                                ver.clone(),
-                                loader.clone(),
-                            );
-                            self.state.read().submit_modal(Box::new(sm));
-                        }
-
-                        if !self.selected_projects.is_empty() {
-                            ui.add_space(8.0);
-                            let del_selected_btn = egui::Button::new(
-                                egui::RichText::new(format!(
-                                    "🗑 Delete {} selected",
-                                    self.selected_projects.len()
-                                ))
-                                .color(Color32::LIGHT_RED),
                             );
 
-                            if ui.add(del_selected_btn).clicked() {
-                                ProjectActions::delete_projects(
+                            let res = ui
+                                .add_enabled(!offline_mode, add_btn)
+                                .on_disabled_hover_text("Disabled in offline mode");
+
+                            if res.clicked() {
+                                let sm = SearchModal::new(
                                     self.state.clone(),
                                     lnk.clone(),
-                                    self.selected_projects.iter().cloned().collect(),
+                                    content_type,
+                                    ver.clone(),
+                                    loader.clone(),
                                 );
-                                self.selected_projects.clear();
+                                self.state.read().submit_modal(Box::new(sm));
                             }
-                        }
+                        })
+                        .response
+                        .rect
                     })
-                    .response
-                    .rect
-                })
-                .inner;
+                    .inner;
 
-            let right_rect = ui
-                .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let missing: Vec<ProjectLnk> = {
-                            filtered
-                                .iter()
-                                .filter(|p| {
-                                    let list = list_arc.read();
-                                    if let Some(proj) = list.get_project(p) {
-                                        let is_downloaded = proj.get_version().is_some_and(|v| {
-                                            found_hashes.contains(&v.artifact_hash)
-                                        });
-                                        !list.is_project_archived(p) && !is_downloaded
-                                    } else {
-                                        false
-                                    }
-                                })
-                                .cloned()
-                                .collect()
-                        };
+                let right_rect = ui
+                    .scope_builder(egui::UiBuilder::new().max_rect(full_rect), |ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let missing: Vec<ProjectLnk> = {
+                                filtered
+                                    .iter()
+                                    .filter(|p| {
+                                        let list = list_arc.read();
+                                        if let Some(proj) = list.get_project(p) {
+                                            let is_downloaded =
+                                                proj.get_version().is_some_and(|v| {
+                                                    found_hashes.contains(&v.artifact_hash)
+                                                });
+                                            !list.is_project_archived(p) && !is_downloaded
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                    .cloned()
+                                    .collect()
+                            };
 
-                        let mut combined_res: Option<egui::Response>;
+                            let mut combined_res: Option<egui::Response>;
 
-                        let res1 = ui
-                            .add_enabled(
-                                !missing.is_empty() && !offline_mode,
-                                egui::Button::new(egui::RichText::new("⬇ Download All").color(
-                                    if offline_mode {
-                                        Color32::GRAY
-                                    } else {
-                                        Color32::LIGHT_BLUE
-                                    },
-                                )),
-                            )
-                            .on_disabled_hover_text(if offline_mode {
-                                "Disabled in offline mode"
-                            } else {
-                                ""
-                            });
-
-                        if res1.clicked() {
-                            ProjectActions::download_projects_latest(
-                                self.state.clone(),
-                                lnk.clone(),
-                                missing,
-                                &found_hashes,
-                            );
-                        }
-                        combined_res = Some(res1);
-
-                        if !auto_update_enabled && any_updates_available {
-                            let res2 = ui
+                            let res1 = ui
                                 .add_enabled(
-                                    !offline_mode,
-                                    egui::Button::new(egui::RichText::new("🔄 Update All").color(
+                                    !missing.is_empty() && !offline_mode,
+                                    egui::Button::new(egui::RichText::new("⬇ Download All").color(
                                         if offline_mode {
                                             Color32::GRAY
                                         } else {
-                                            Color32::from_rgb(0, 150, 240)
+                                            Color32::LIGHT_BLUE
                                         },
                                     )),
                                 )
@@ -452,108 +366,167 @@ impl MainPanel {
                                     "Disabled in offline mode"
                                 } else {
                                     ""
-                                })
-                                .on_hover_text("Update all projects to their latest versions");
+                                });
 
-                            if res2.clicked() {
-                                ProjectActions::update_all_projects(
+                            if res1.clicked() {
+                                ProjectActions::download_projects_latest(
                                     self.state.clone(),
                                     lnk.clone(),
+                                    missing,
+                                    &found_hashes,
                                 );
                             }
+                            combined_res = Some(res1);
 
-                            if let Some(res) = combined_res {
-                                combined_res = Some(res.union(res2));
-                            } else {
-                                combined_res = Some(res2);
+                            if !auto_update_enabled && any_updates_available {
+                                let res2 = ui
+                                    .add_enabled(
+                                        !offline_mode,
+                                        egui::Button::new(
+                                            egui::RichText::new("🔄 Update All").color(
+                                                if offline_mode {
+                                                    Color32::GRAY
+                                                } else {
+                                                    Color32::from_rgb(0, 150, 240)
+                                                },
+                                            ),
+                                        ),
+                                    )
+                                    .on_disabled_hover_text(if offline_mode {
+                                        "Disabled in offline mode"
+                                    } else {
+                                        ""
+                                    })
+                                    .on_hover_text("Update all projects to their latest versions");
+
+                                if res2.clicked() {
+                                    ProjectActions::update_all_projects(
+                                        self.state.clone(),
+                                        lnk.clone(),
+                                    );
+                                }
+
+                                if let Some(res) = combined_res {
+                                    combined_res = Some(res.union(res2));
+                                } else {
+                                    combined_res = Some(res2);
+                                }
                             }
-                        }
 
-                        combined_res.map(|r| r.rect).unwrap_or(egui::Rect::NOTHING)
+                            if self.selected_projects.len() > 1 {
+                                ui.add_space(8.0);
+                                let del_selected_btn = egui::Button::new(
+                                    egui::RichText::new(format!(
+                                        "🗑 Delete {} selected",
+                                        self.selected_projects.len()
+                                    ))
+                                    .color(Color32::LIGHT_RED),
+                                );
+
+                                let res3 = ui.add(del_selected_btn);
+
+                                if res3.clicked() {
+                                    ProjectActions::delete_projects(
+                                        self.state.clone(),
+                                        lnk.clone(),
+                                        self.selected_projects.iter().cloned().collect(),
+                                    );
+                                    self.selected_projects.clear();
+                                }
+
+                                if let Some(res) = combined_res {
+                                    combined_res = Some(res.union(res3));
+                                } else {
+                                    combined_res = Some(res3);
+                                }
+                            }
+
+                            combined_res.map(|r| r.rect).unwrap_or(egui::Rect::NOTHING)
+                        })
+                        .inner
                     })
-                    .inner
-                })
-                .inner;
+                    .inner;
 
-            let mut measure_ui = ui.new_child(
-                egui::UiBuilder::new()
-                    .max_rect(ui.available_rect_before_wrap())
-                    .layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .ui_stack_info(egui::UiStackInfo::default()),
-            );
-            measure_ui.set_clip_rect(egui::Rect::ZERO);
+                let mut measure_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(ui.available_rect_before_wrap())
+                        .layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .ui_stack_info(egui::UiStackInfo::default()),
+                );
+                measure_ui.set_clip_rect(egui::Rect::ZERO);
 
-            let measure_res = measure_ui.scope(|ui| {
-                self.render_header_controls(ui, &list_arc, &content_type, true);
-            });
-            let controls_width = measure_res.response.rect.width();
+                let measure_res = measure_ui.scope(|ui| {
+                    self.render_header_controls(ui, &list_arc, &content_type, true);
+                });
+                let controls_width = measure_res.response.rect.width();
 
-            let left_boundary = if left_rect.is_positive() {
-                left_rect.max.x + 12.0
-            } else {
-                full_rect.min.x
-            };
-            let right_boundary = if right_rect.is_positive() {
-                right_rect.min.x - 12.0
-            } else {
-                full_rect.max.x
-            };
+                let left_boundary = if left_rect.is_positive() {
+                    left_rect.max.x + 12.0
+                } else {
+                    full_rect.min.x
+                };
+                let right_boundary = if right_rect.is_positive() {
+                    right_rect.min.x - 12.0
+                } else {
+                    full_rect.max.x
+                };
 
-            let available_center = (left_boundary + right_boundary) / 2.0;
-            let ideal_center_x = if (available_center - full_rect.center().x).abs() < 50.0 {
-                full_rect.center().x
-            } else {
-                available_center
-            };
+                let available_center = (left_boundary + right_boundary) / 2.0;
+                let ideal_center_x = if (available_center - full_rect.center().x).abs() < 50.0 {
+                    full_rect.center().x
+                } else {
+                    available_center
+                };
 
-            let ideal_left = ideal_center_x - (controls_width / 2.0);
-            let mut final_left = ideal_left.max(left_boundary);
+                let ideal_left = ideal_center_x - (controls_width / 2.0);
+                let mut final_left = ideal_left.max(left_boundary);
 
-            if final_left + controls_width > right_boundary {
-                final_left = right_boundary - controls_width;
-                if final_left < left_boundary {
-                    final_left = left_boundary;
+                if final_left + controls_width > right_boundary {
+                    final_left = right_boundary - controls_width;
+                    if final_left < left_boundary {
+                        final_left = left_boundary;
+                    }
                 }
-            }
 
-            let final_width = controls_width.min(available_center);
+                let final_width = controls_width.min(available_center);
 
-            let center_rect = egui::Rect::from_min_size(
-                egui::pos2(final_left, full_rect.min.y),
-                egui::vec2(final_width, full_rect.height()),
-            );
+                let center_rect = egui::Rect::from_min_size(
+                    egui::pos2(final_left, full_rect.min.y),
+                    egui::vec2(final_width, full_rect.height()),
+                );
 
-            if self.debug_overlays {
-                let painter = ui.ctx().debug_painter();
-                painter.rect_filled(
-                    full_rect,
-                    0.0,
-                    Color32::from_rgba_unmultiplied(0, 0, 255, 20),
-                ); // Blue overlay for header
-                if left_rect.is_positive() {
+                if self.debug_overlays {
+                    let painter = ui.ctx().debug_painter();
                     painter.rect_filled(
-                        left_rect,
+                        full_rect,
                         0.0,
-                        Color32::from_rgba_unmultiplied(0, 255, 0, 40),
-                    ); // Green overlay for left buttons
-                }
-                if right_rect.is_positive() {
+                        Color32::from_rgba_unmultiplied(0, 0, 255, 20),
+                    ); // Blue overlay for header
+                    if left_rect.is_positive() {
+                        painter.rect_filled(
+                            left_rect,
+                            0.0,
+                            Color32::from_rgba_unmultiplied(0, 255, 0, 40),
+                        ); // Green overlay for left buttons
+                    }
+                    if right_rect.is_positive() {
+                        painter.rect_filled(
+                            right_rect,
+                            0.0,
+                            Color32::from_rgba_unmultiplied(255, 0, 0, 40),
+                        ); // Red overlay for right buttons
+                    }
                     painter.rect_filled(
-                        right_rect,
+                        center_rect,
                         0.0,
-                        Color32::from_rgba_unmultiplied(255, 0, 0, 40),
-                    ); // Red overlay for right buttons
+                        Color32::from_rgba_unmultiplied(255, 255, 0, 40),
+                    ); // Yellow overlay for center controls
                 }
-                painter.rect_filled(
-                    center_rect,
-                    0.0,
-                    Color32::from_rgba_unmultiplied(255, 255, 0, 40),
-                ); // Yellow overlay for center controls
-            }
 
-            ui.scope_builder(egui::UiBuilder::new().max_rect(center_rect), |ui| {
-                ui.centered_and_justified(|ui| {
-                    self.render_header_controls(ui, &list_arc, &content_type, false);
+                ui.scope_builder(egui::UiBuilder::new().max_rect(center_rect), |ui| {
+                    ui.centered_and_justified(|ui| {
+                        self.render_header_controls(ui, &list_arc, &content_type, false);
+                    });
                 });
             });
 
@@ -615,11 +588,6 @@ impl MainPanel {
                         .into_iter()
                         .partition(|p| !list_arc.read().is_project_archived(p));
 
-                    let mut visual_order = active.clone();
-                    if show_archived {
-                        visual_order.extend(archived.clone());
-                    }
-
                     for (idx, p_lnk) in active.iter().enumerate() {
                         self.render_project_entry(
                             ui,
@@ -634,7 +602,7 @@ impl MainPanel {
                             &dir,
                             false,
                             &active_scans,
-                            &visual_order,
+                            &active,
                             idx,
                         );
                     }
@@ -670,7 +638,7 @@ impl MainPanel {
                                     &dir,
                                     false,
                                     &active_scans,
-                                    &visual_order,
+                                    &archived,
                                     active.len() + idx,
                                 );
                             }
@@ -1242,8 +1210,15 @@ impl MainPanel {
             .response;
 
         if !is_dependency {
-            let primary_clicked = response.clicked();
-            let secondary_clicked = response.secondary_clicked();
+            let is_button_clicked = ui.ctx().is_using_pointer();
+
+            let primary_clicked = response.hovered()
+                && ui.input(|i| i.pointer.primary_clicked())
+                && !is_button_clicked;
+
+            let secondary_clicked = response.hovered()
+                && ui.input(|i| i.pointer.secondary_clicked())
+                && !is_button_clicked;
 
             if primary_clicked {
                 let modifiers = ui.input(|i| i.modifiers);
@@ -1380,10 +1355,10 @@ impl MainPanel {
                 }
             });
 
-            ui.add(
-                egui::TextEdit::singleline(&mut self.search_query)
-                    .hint_text(format!("🔍 Search {}s...", content_type.display_name()))
-                    .desired_width(200.0),
+            ui.ash_vert_text_edit(
+                &mut self.search_query,
+                format!("🔍 Search {}s...", content_type.display_name()).as_str(),
+                200.0,
             );
             if ui
                 .add_enabled(!self.search_query.is_empty(), egui::Button::new("❌"))
@@ -1601,7 +1576,7 @@ impl MainPanel {
             (name, count)
         };
 
-        ui.ash_lite(|ui| {
+        ui.ash_vert(|ui| {
             ui.horizontal(|ui| {
                 if self.list_group_rename_input_open {
                     let res = ui.text_edit_singleline(&mut self.list_group_rename_input);
@@ -1628,49 +1603,13 @@ impl MainPanel {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let selected_sidebar = {
-                            let state = self.state.read();
-                            if state
-                                .selected_sidebar_items
-                                .contains(&SidebarItem::ListGroup(lg_lnk.clone()))
-                            {
-                                Some(
-                                    state
-                                        .selected_sidebar_items
-                                        .iter()
-                                        .cloned()
-                                        .collect::<Vec<_>>(),
-                                )
-                            } else {
-                                None
-                            }
-                        };
-
-                        let delete_label = if let Some(items) = &selected_sidebar {
-                            if items.len() > 1 {
-                                format!("🗑 Delete {} selected", items.len())
-                            } else {
-                                "🗑 Delete".to_string()
-                            }
-                        } else {
-                            "🗑 Delete".to_string()
-                        };
-
                         if ui
                             .add(egui::Button::new(
-                                egui::RichText::new(delete_label).color(Color32::LIGHT_RED),
+                                egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
                             ))
                             .clicked()
                         {
-                            if let Some(items) = selected_sidebar {
-                                ListActions::delete_items(self.state.clone(), items);
-                                self.state.write().selected_sidebar_items.clear();
-                            } else {
-                                ListGroupActions::delete_list_group(
-                                    self.state.clone(),
-                                    lg_lnk.clone(),
-                                );
-                            }
+                            ListGroupActions::delete_list_group(self.state.clone(), lg_lnk.clone());
                         }
                         if ui.add(egui::Button::new("✏ Rename")).clicked() {
                             self.list_group_rename_input = folder_name.clone();

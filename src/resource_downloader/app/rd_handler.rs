@@ -1,3 +1,4 @@
+use crate::common::app::App;
 use crate::common::program_args::{ArgRegistryBuilder, SharedArgRegistry};
 use crate::common::ui::helper::modal_manager::SharedModalManager;
 use crate::common::ui::helper::notification_manager::SharedNotificationManager;
@@ -57,11 +58,9 @@ impl RDHandler {
 
         // 2. Infrastructure
         let config_dir = if let Some(path) = args_registry.get("path") {
-            PathBuf::from(path)
+            PathBuf::from(path).join("resource-manager")
         } else {
-            dirs::config_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("flux-launcher")
+            App::get_app_dir().join("resource-manager")
         };
 
         let game_detection = Arc::new(GameDetection::new());
