@@ -585,6 +585,37 @@ impl SidebarPanel {
                                 )
                                 .selectable(false),
                             );
+
+                            if !collapsing.is_open() {
+                                let list_count =
+                                    Self::count_lists_recursive(&lg_lnk, items_by_parent);
+                                if list_count > 0 {
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            let highlight_color = Color32::from_rgb(100, 200, 255);
+                                            egui::Frame::default()
+                                                .fill(highlight_color.gamma_multiply(0.1))
+                                                .stroke(egui::Stroke::new(
+                                                    1.0,
+                                                    highlight_color.gamma_multiply(0.2),
+                                                ))
+                                                .corner_radius(4)
+                                                .inner_margin(egui::Margin::symmetric(5, 0))
+                                                .show(ui, |ui| {
+                                                    ui.add(egui::Label::new(
+                                                        egui::RichText::new(format!(
+                                                            "{}",
+                                                            list_count
+                                                        ))
+                                                        .color(highlight_color)
+                                                        .strong(),
+                                                    ));
+                                                });
+                                        },
+                                    );
+                                }
+                            }
                         })
                         .response
                     });
@@ -1341,5 +1372,23 @@ impl SidebarPanel {
             })
             .cloned()
             .collect()
+    }
+
+    fn count_lists_recursive(
+        group_lnk: &ListGroupLnk,
+        items_by_parent: &HashMap<Option<ListGroupLnk>, Vec<SidebarItem>>,
+    ) -> usize {
+        let mut count = 0;
+        if let Some(items) = items_by_parent.get(&Some(group_lnk.clone())) {
+            for item in items {
+                match item {
+                    SidebarItem::List(_) => count += 1,
+                    SidebarItem::ListGroup(sub_lnk) => {
+                        count += Self::count_lists_recursive(sub_lnk, items_by_parent);
+                    }
+                }
+            }
+        }
+        count
     }
 }
