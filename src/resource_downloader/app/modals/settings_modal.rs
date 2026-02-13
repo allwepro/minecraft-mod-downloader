@@ -8,6 +8,7 @@ pub struct SettingsModal {
     state: SharedRDState,
     save_on_close: bool,
     default_list_name: String,
+    default_list_group_name: String,
     show_advanced_options: bool,
     cache_types: (bool, bool, bool, bool, bool, bool, bool, bool),
 }
@@ -18,6 +19,7 @@ impl SettingsModal {
             state,
             save_on_close: false,
             default_list_name: String::new(),
+            default_list_group_name: String::new(),
             show_advanced_options: false,
             cache_types: (false, false, false, false, false, false, false, false),
         }
@@ -36,6 +38,9 @@ impl ModalWindow for SettingsModal {
     fn render_contents(&mut self, ui: &mut Ui, open: &mut bool) {
         ui.label("Default list name:");
         ui.text_edit_singleline(&mut self.default_list_name);
+
+        ui.label("Default list group name:");
+        ui.text_edit_singleline(&mut self.default_list_group_name);
 
         ui.add_space(10.0);
 
@@ -67,15 +72,23 @@ impl ModalWindow for SettingsModal {
 
     fn on_open(&mut self) {
         self.save_on_close = false;
-        self.default_list_name = self.state.read().config.read().default_list_name.clone();
+        let state = self.state.read();
+        let config = state.config.read();
+        self.default_list_name = config.default_list_name.clone();
+        self.default_list_group_name = config.default_list_group_name.clone();
     }
 
     fn on_close(&mut self) {
         if !self.save_on_close {
             return;
         }
-        self.state.read().config.write().default_list_name = self.default_list_name.clone();
-        self.state.write().save_config();
+        let state = self.state.write();
+        {
+            let mut config = state.config.write();
+            config.default_list_name = self.default_list_name.clone();
+            config.default_list_group_name = self.default_list_group_name.clone();
+        }
+        state.save_config();
     }
 }
 

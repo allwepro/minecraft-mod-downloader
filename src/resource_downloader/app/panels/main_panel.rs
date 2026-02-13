@@ -1,3 +1,4 @@
+use crate::common::ui::ash_ui::AshUi;
 use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::app::dialogs::Dialogs;
 use crate::resource_downloader::app::modals::list_group_settings_modal::ListGroupSettingsModal;
@@ -101,7 +102,7 @@ impl MainPanel {
             }
 
             if let Some(lg_lnk) = open_list_group_lnk {
-                self.show_folder_settings(ui, lg_lnk);
+                self.show_list_group_settings(ui, lg_lnk);
                 return;
             }
 
@@ -1517,82 +1518,84 @@ impl MainPanel {
         ui.separator();
     }
 
-    fn show_folder_settings(&mut self, ui: &mut Ui, folder_lnk: ListGroupLnk) {
+    fn show_list_group_settings(&mut self, ui: &mut Ui, lg_lnk: ListGroupLnk) {
         let (folder_name, list_count) = {
             let state = self.state.read();
             let config = state.config.read();
-            let folder = config.list_groups.iter().find(|f| f.lnk == folder_lnk);
+            let folder = config.list_groups.iter().find(|f| f.lnk == lg_lnk);
             let name = folder
                 .map(|f| f.name.clone())
                 .unwrap_or_else(|| "Unknown".to_string());
             let count = config
                 .list_group_assignments
                 .values()
-                .filter(|fid| **fid == folder_lnk)
+                .filter(|fid| **fid == lg_lnk)
                 .count();
             (name, count)
         };
 
-        ui.horizontal(|ui| {
-            if self.list_group_rename_input_open {
-                let res = ui.text_edit_singleline(&mut self.list_group_rename_input);
-                if (res.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                    || ui.button("✔").clicked()
-                {
-                    ListGroupActions::rename_list_group(
-                        self.state.clone(),
-                        folder_lnk.clone(),
-                        self.list_group_rename_input.clone(),
-                    );
-                    self.list_group_rename_input_open = false;
-                }
-                if ui.button("❌").clicked() {
-                    self.list_group_rename_input_open = false;
-                }
-            } else {
-                ui.heading(format!("📁 {}", folder_name));
-                ui.add_space(1.0);
-                ui.label(
-                    egui::RichText::new(format!("{} list(s)", list_count))
-                        .small()
-                        .weak(),
-                );
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .add(egui::Button::new(
-                            egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
-                        ))
-                        .clicked()
+        ui.ash_lite(|ui| {
+            ui.horizontal(|ui| {
+                if self.list_group_rename_input_open {
+                    let res = ui.text_edit_singleline(&mut self.list_group_rename_input);
+                    if (res.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                        || ui.button("✔").clicked()
                     {
-                        ListGroupActions::delete_list_group(self.state.clone(), folder_lnk.clone());
-                    }
-                    if ui.add(egui::Button::new("✏ Rename")).clicked() {
-                        self.list_group_rename_input = folder_name.clone();
-                        self.list_group_rename_input_open = true;
-                    }
-                    if ui.add(egui::Button::new("👥 Duplicate")).clicked() {
-                        ListGroupActions::duplicate_list_group(
+                        ListGroupActions::rename_list_group(
                             self.state.clone(),
-                            folder_lnk.clone(),
+                            lg_lnk.clone(),
+                            self.list_group_rename_input.clone(),
                         );
+                        self.list_group_rename_input_open = false;
                     }
-                    if ui.button("⚙ Group Settings").clicked() {
-                        let sm =
-                            ListGroupSettingsModal::new(self.state.clone(), folder_lnk.clone());
-                        self.state.read().submit_modal(Box::new(sm));
+                    if ui.button("❌").clicked() {
+                        self.list_group_rename_input_open = false;
                     }
+                } else {
+                    ui.heading(format!("📁 {}", folder_name));
+                    ui.add_space(1.0);
+                    ui.label(
+                        egui::RichText::new(format!("{} list(s)", list_count))
+                            .small()
+                            .weak(),
+                    );
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(egui::Button::new(
+                                egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
+                            ))
+                            .clicked()
+                        {
+                            ListGroupActions::delete_list_group(self.state.clone(), lg_lnk.clone());
+                        }
+                        if ui.add(egui::Button::new("✏ Rename")).clicked() {
+                            self.list_group_rename_input = folder_name.clone();
+                            self.list_group_rename_input_open = true;
+                        }
+                        if ui.add(egui::Button::new("👥 Duplicate")).clicked() {
+                            ListGroupActions::duplicate_list_group(
+                                self.state.clone(),
+                                lg_lnk.clone(),
+                            );
+                        }
+                        if ui.button("⚙ Group Settings").clicked() {
+                            let sm =
+                                ListGroupSettingsModal::new(self.state.clone(), lg_lnk.clone());
+                            self.state.read().submit_modal(Box::new(sm));
+                        }
+                    });
+                }
+            });
+
+            ui.separator();
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.add_space(8.0);
+                ui.vertical_centered(|ui| {
+                    ui.add_space(80.0);
+                    ui.label(egui::RichText::new("Select a list to view its contents").weak());
                 });
-            }
-        });
-
-        ui.separator();
-
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.add_space(8.0);
-            ui.vertical_centered(|ui| {
-                ui.add_space(80.0);
-                ui.label(egui::RichText::new("Select a list to view its contents").weak());
             });
         });
     }
