@@ -21,7 +21,7 @@ use tokio::sync::mpsc;
 
 pub type AsyncRunFn = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
-pub struct RDRuntime {
+pub struct RMRuntime {
     rt_handle: tokio::runtime::Handle,
     game_detection: Arc<GameDetection>,
     config_manager: Arc<ConfigManager>,
@@ -33,7 +33,7 @@ pub struct RDRuntime {
     file_index_cache: Arc<RwLock<FileIndexCache>>,
 }
 
-impl RDRuntime {
+impl RMRuntime {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         rt_handle: tokio::runtime::Handle,
@@ -608,7 +608,7 @@ impl RDRuntime {
                         let sem_clone = hashing_semaphore.clone();
                         hashing_join_set.spawn(async move {
                             let _permit = sem_clone.acquire().await;
-                            let sha1_hash = RDRuntime::hash_file(path_clone).await?;
+                            let sha1_hash = RMRuntime::hash_file(path_clone).await?;
                             Ok((path, sha1_hash, size, modified))
                         });
                     }

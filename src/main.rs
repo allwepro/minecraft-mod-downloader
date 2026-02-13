@@ -1,9 +1,11 @@
 mod common;
+mod launcher;
 mod resource_downloader;
 
 use crate::common::app::App;
-use crate::common::program_args::{ArgRegistryBuilder, SharedArgRegistry};
-use crate::resource_downloader::app::rd_handler::RDHandler;
+use crate::common::cli::program_args::{ArgRegistryBuilder, SharedArgRegistry};
+use crate::common::cli::structs::args_supplier::ArgsSupplier;
+use crate::resource_downloader::RMCLI;
 use common::ui::app_icon::get_app_icon;
 use eframe::NativeOptions;
 use std::env;
@@ -13,14 +15,18 @@ fn main() -> eframe::Result<()> {
     env_logger::init();
 
     let args: Vec<String> = env::args().collect();
+    let arg_suppliers: Vec<Box<dyn ArgsSupplier>> = vec![Box::new(RMCLI)];
     let args_registry: SharedArgRegistry = {
         let mut arb = ArgRegistryBuilder::new();
-        RDHandler::args(&mut arb);
+        for mut arg_supplier in arg_suppliers {
+            arg_supplier.supply(&mut arb);
+        }
         arb.add("h", "help", "Lists the help commands");
         arb.build(args)
     };
     if args_registry.get("help").is_some() {
         args_registry.print_help();
+        return Ok(());
     }
 
     let runtime = Runtime::new().expect("Failed to create Tokio runtime");
@@ -29,13 +35,13 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 700.0])
             .with_min_inner_size([1000.0, 400.0])
-            .with_title("Flux Launcher & Resource Downloader")
+            .with_title("Flux Launcher & Resource Manager")
             .with_icon(get_app_icon()),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Flux Launcher & Resource Downloader",
+        "Flux Launcher & Resource Manager",
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);

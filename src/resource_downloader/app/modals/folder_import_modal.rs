@@ -5,7 +5,7 @@ use crate::resource_downloader::app::modals::search_modal::{
     SearchCloseCallback, SearchModal, SearchSelectionCallback,
 };
 use crate::resource_downloader::business::SharedRDState;
-use crate::resource_downloader::business::rd_state::FolderImportSession;
+use crate::resource_downloader::business::rm_state::FolderImportSession;
 use crate::resource_downloader::domain::{RESOURCE_TYPES, ResourceType};
 use crate::{get_default_dir, get_project_metadata};
 use egui::{Color32, Id, ScrollArea, Ui};

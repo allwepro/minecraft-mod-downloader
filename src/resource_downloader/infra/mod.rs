@@ -7,16 +7,16 @@ mod config_manager;
 mod game_detection;
 mod legacy_list;
 mod lists_manager;
-mod rd_runtime;
 mod resource_detector;
+mod rm_runtime;
 pub(crate) mod xcache;
 
 pub use config_manager::ConfigManager;
 pub use game_detection::GameDetection;
 pub use legacy_list::LegacyListService;
 pub use lists_manager::ListFileManager;
-pub use rd_runtime::RDRuntime;
 pub use resource_detector::ResourceDetector;
+pub use rm_runtime::RMRuntime;
 
 #[derive(Clone)]
 pub struct ConnectionLimiter {
