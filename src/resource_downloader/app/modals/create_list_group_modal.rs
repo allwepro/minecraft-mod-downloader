@@ -96,7 +96,13 @@ impl ModalWindow for CreateListGroupModal {
 
     fn on_open(&mut self) {
         if self.edit_mode.is_none() {
-            self.lg_name = "New Group".to_string();
+            self.lg_name = self
+                .state
+                .read()
+                .config
+                .read()
+                .default_list_group_name
+                .clone();
         }
         self.save_on_close = false;
     }

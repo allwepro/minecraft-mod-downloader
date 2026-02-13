@@ -221,6 +221,8 @@ pub struct ListGroup {
 pub struct AppConfig {
     #[serde(default = "default_list_name")]
     pub default_list_name: String,
+    #[serde(default = "default_list_group_name")]
+    pub default_list_group_name: String,
     pub last_open_list_id: Option<ListLnk>,
     #[serde(default)]
     pub list_groups: Vec<ListGroup>,
@@ -230,6 +232,27 @@ pub struct AppConfig {
     pub sidebar_ui_order: Vec<SidebarItem>,
 }
 
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            default_list_name: default_list_name(),
+            default_list_group_name: default_list_group_name(),
+            last_open_list_id: None,
+            list_groups: Vec::new(),
+            list_group_assignments: HashMap::new(),
+            sidebar_ui_order: Vec::new(),
+        }
+    }
+}
+
+fn default_list_name() -> String {
+    "New List".to_string()
+}
+
+fn default_list_group_name() -> String {
+    "New Group".to_string()
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SidebarItem {
     List(ListLnk),
@@ -237,9 +260,11 @@ pub enum SidebarItem {
 }
 
 impl SidebarItem {
+    #[allow(dead_code)]
     pub fn match_list(&self, lnk: &ListLnk) -> bool {
         matches!(self, Self::List(g) if g == lnk)
     }
+    #[allow(dead_code)]
     pub fn match_list_group(&self, lnk: &ListGroupLnk) -> bool {
         matches!(self, Self::ListGroup(g) if g == lnk)
     }
@@ -275,20 +300,4 @@ impl From<&ListGroupLnk> for SidebarItem {
     fn from(lnk: &ListGroupLnk) -> Self {
         SidebarItem::ListGroup(lnk.clone())
     }
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            default_list_name: default_list_name(),
-            last_open_list_id: None,
-            list_groups: Vec::new(),
-            list_group_assignments: HashMap::new(),
-            sidebar_ui_order: Vec::new(),
-        }
-    }
-}
-
-fn default_list_name() -> String {
-    "New List".to_string()
 }
