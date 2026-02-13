@@ -367,27 +367,10 @@ impl RDState {
                 self.list_pool.insert_arc(list);
                 self.request_full_refresh();
 
-                {
-                    let mut config = self.config.write();
-
-                    config
-                        .sidebar_ui_order
-                        .insert(0, SidebarItem::from(&list_lnk));
-
-                    if let Some(lg_lnk) = &self.open_list_group {
-                        config
-                            .list_group_assignments
-                            .insert(list_lnk.clone(), lg_lnk.clone());
-                    }
-
-                    drop(config);
-                }
+                self.insert_sidebar_item(SidebarItem::List(list_lnk.clone()), false);
 
                 self.pending_sidebar_scroll = Some(SidebarItem::from(&list_lnk));
 
-                self.dispatch(Effect::SaveConfig {
-                    config: self.config.read().clone(),
-                });
                 Some(Event::ListCreated {
                     name,
                     resource_type,
@@ -425,7 +408,7 @@ impl RDState {
                     if let Some(parent) = config.list_group_assignments.get(&list_lnk).cloned() {
                         config
                             .list_group_assignments
-                            .insert(dup_lnk.clone(), parent.clone());
+                            .insert(dup_lnk.clone(), parent);
                     }
                 }
 
@@ -446,26 +429,9 @@ impl RDState {
                 path,
             } => {
                 self.list_pool.insert_arc(list);
+                self.request_full_refresh();
 
-                {
-                    let mut config = self.config.write();
-
-                    config
-                        .sidebar_ui_order
-                        .insert(0, SidebarItem::from(&list_lnk));
-
-                    if let Some(lg_lnk) = &self.open_list_group {
-                        config
-                            .list_group_assignments
-                            .insert(list_lnk.clone(), lg_lnk.clone());
-                    }
-
-                    drop(config);
-
-                    self.dispatch(Effect::SaveConfig {
-                        config: self.config.read().clone(),
-                    });
-                }
+                self.insert_sidebar_item(SidebarItem::List(list_lnk.clone()), false);
 
                 self.pending_sidebar_scroll = Some(SidebarItem::from(&list_lnk));
 
@@ -484,18 +450,9 @@ impl RDState {
                 unresolved,
             } => {
                 self.list_pool.insert_arc(list_data);
+                self.request_full_refresh();
 
-                if let Some(lg_lnk) = &self.open_list_group {
-                    let mut config = self.config.write();
-                    config
-                        .list_group_assignments
-                        .insert(list_lnk.clone(), lg_lnk.clone());
-                    drop(config);
-
-                    self.dispatch(Effect::SaveConfig {
-                        config: self.config.read().clone(),
-                    });
-                }
+                self.insert_sidebar_item(SidebarItem::List(list_lnk.clone()), false);
 
                 self.pending_sidebar_scroll = Some(SidebarItem::from(&list_lnk));
 
@@ -713,6 +670,69 @@ impl RDState {
         self.open_list_group = list_group;
         self.save_config();
         self.request_full_refresh();
+    }
+
+    pub fn insert_sidebar_item(&self, new_item: SidebarItem, _is_duplication: bool) {
+        {
+            let mut config = self.config.write();
+            let mut inserted = false;
+
+            let context_group = self.open_list_group.clone().or_else(|| {
+                self.open_list
+                    .as_ref()
+                    .and_then(|l| config.list_group_assignments.get(l))
+                    .cloned()
+            });
+
+            if let Some(lg_lnk) = context_group {
+                match &new_item {
+                    SidebarItem::List(l_lnk) => {
+                        config
+                            .list_group_assignments
+                            .insert(l_lnk.clone(), lg_lnk.clone());
+                    }
+                    SidebarItem::ListGroup(new_lg_lnk) => {
+                        if let Some(new_lg) =
+                            config.list_groups.iter_mut().find(|f| f.lnk == *new_lg_lnk)
+                        {
+                            new_lg.parent_id = Some(lg_lnk.clone());
+                        }
+                    }
+                }
+
+                let first_child_pos = config.sidebar_ui_order.iter().position(|item| match item {
+                    SidebarItem::List(l) => config.list_group_assignments.get(l) == Some(&lg_lnk),
+                    SidebarItem::ListGroup(g) => {
+                        config
+                            .list_groups
+                            .iter()
+                            .find(|lg| lg.lnk == *g)
+                            .and_then(|lg| lg.parent_id.as_ref())
+                            == Some(&lg_lnk)
+                    }
+                });
+
+                if let Some(first_pos) = first_child_pos {
+                    config.sidebar_ui_order.insert(first_pos, new_item.clone());
+                    inserted = true;
+                } else if let Some(group_pos) = config
+                    .sidebar_ui_order
+                    .iter()
+                    .position(|i| i.match_list_group(&lg_lnk))
+                {
+                    config
+                        .sidebar_ui_order
+                        .insert(group_pos + 1, new_item.clone());
+                    inserted = true;
+                }
+            }
+
+            if !inserted {
+                config.sidebar_ui_order.insert(0, new_item);
+            }
+        }
+
+        self.save_config();
     }
 
     pub fn save_config(&self) {

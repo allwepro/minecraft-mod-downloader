@@ -20,31 +20,26 @@ impl ListGroupActions {
         parent_id: Option<ListGroupLnk>,
     ) -> ListGroupLnk {
         let lg_id = Self::generate_list_group_id();
-        let lg = ListGroup {
-            lnk: lg_id.clone(),
-            name,
-            collapsed: false,
-            parent_id,
-        };
+
+        {
+            let s = state.read();
+            let mut config = s.config.write();
+            config.list_groups.push(ListGroup {
+                lnk: lg_id.clone(),
+                name,
+                collapsed: false,
+                parent_id,
+            });
+        }
+
+        state
+            .read()
+            .insert_sidebar_item(SidebarItem::ListGroup(lg_id.clone()), false);
 
         {
             let mut state_guard = state.write();
-            let mut config = state_guard.config.write();
-            config.list_groups.push(lg);
-
-            config
-                .sidebar_ui_order
-                .insert(0, SidebarItem::ListGroup(lg_id.clone()));
-
-            drop(config);
-
             state_guard.pending_sidebar_scroll = Some(SidebarItem::from(&lg_id));
         }
-
-        let state_guard = state.read();
-        state_guard.dispatch(Effect::SaveConfig {
-            config: state_guard.config.read().clone(),
-        });
 
         lg_id
     }
@@ -69,9 +64,34 @@ impl ListGroupActions {
             let state_guard = state.write();
             let mut config = state_guard.config.write();
 
-            config.list_groups.retain(|f| f.lnk != lg_lnk);
+            let parent_id = config
+                .list_groups
+                .iter()
+                .find(|f| f.lnk == lg_lnk)
+                .and_then(|f| f.parent_id.clone());
 
-            config.list_group_assignments.retain(|_, fid| fid != lg_lnk);
+            for group in config.list_groups.iter_mut() {
+                if group.parent_id.as_ref() == Some(&lg_lnk) {
+                    group.parent_id = parent_id.clone();
+                }
+            }
+
+            if let Some(target_parent) = &parent_id {
+                for fid in config.list_group_assignments.values_mut() {
+                    if *fid == lg_lnk {
+                        *fid = target_parent.clone();
+                    }
+                }
+            } else {
+                config
+                    .list_group_assignments
+                    .retain(|_, fid| *fid != lg_lnk);
+            }
+
+            config.list_groups.retain(|f| f.lnk != lg_lnk);
+            config
+                .sidebar_ui_order
+                .retain(|i| !i.match_list_group(&lg_lnk));
         }
 
         let state_guard = state.read();
@@ -107,19 +127,15 @@ impl ListGroupActions {
                 };
                 config.list_groups.push(new_list_group);
 
-                let original_id = lg_lnk.clone();
+                let item_to_insert = SidebarItem::from(&new_lg_id);
                 if let Some(pos) = config
                     .sidebar_ui_order
                     .iter()
                     .position(|id| id.match_list_group(&lg_lnk))
                 {
-                    config
-                        .sidebar_ui_order
-                        .insert(pos + 1, SidebarItem::from(&original_id));
+                    config.sidebar_ui_order.insert(pos + 1, item_to_insert);
                 } else {
-                    config
-                        .sidebar_ui_order
-                        .insert(0, SidebarItem::from(&new_lg_id));
+                    config.sidebar_ui_order.insert(0, item_to_insert);
                 }
 
                 let list_ids: Vec<ListLnk> = config
