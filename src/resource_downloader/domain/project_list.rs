@@ -3,10 +3,10 @@ use crate::resource_downloader::domain::{
     FilterMode, GameLoader, GameVersion, ListLnk, OrderMode, Project, ProjectLnk, ProjectVersion,
     ResourceType, SortMode, SortSettings,
 };
-use crate::resource_downloader::infra::cache::time_now;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListMetadata {
@@ -69,7 +69,11 @@ pub struct ProjectList {
 #[allow(dead_code)]
 impl ProjectList {
     pub fn generate_id() -> String {
-        format!("list_{}", time_now())
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        format!("list_{}", timestamp)
     }
 
     pub fn is_lnk(&self, list_lnk: &ListLnk) -> bool {

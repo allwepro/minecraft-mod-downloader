@@ -385,6 +385,7 @@ impl RDState {
                 list_lnk,
                 dup_lnk,
                 dup_list,
+                target_parent,
             } => {
                 self.list_pool.insert_arc(dup_list);
 
@@ -405,13 +406,17 @@ impl RDState {
                             .insert(0, SidebarItem::from(&dup_lnk));
                     }
 
-                    if let Some(parent) = config.list_group_assignments.get(&list_lnk).cloned() {
+                    let effective_parent = target_parent
+                        .or_else(|| config.list_group_assignments.get(&list_lnk).cloned());
+
+                    if let Some(parent) = effective_parent {
                         config
                             .list_group_assignments
                             .insert(dup_lnk.clone(), parent);
                     }
                 }
 
+                self.save_config();
                 self.pending_sidebar_scroll = Some(SidebarItem::from(&dup_lnk));
 
                 Some(Event::ListDuplicated {
