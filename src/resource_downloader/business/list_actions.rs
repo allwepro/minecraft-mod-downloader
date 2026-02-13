@@ -83,7 +83,7 @@ impl ListActions {
     }
 
     pub fn duplicate_list(state: SharedRDState, list_lnk: ListLnk) {
-        state.read().list_pool.duplicate(&list_lnk);
+        state.read().list_pool.duplicate(&list_lnk, None);
     }
 
     pub fn open_folder(state: SharedRDState, list_lnk: ListLnk) {
