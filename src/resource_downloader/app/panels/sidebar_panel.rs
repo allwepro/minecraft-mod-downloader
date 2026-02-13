@@ -240,7 +240,7 @@ impl SidebarPanel {
             }
 
             let mut flattened_visible = Vec::new();
-            self.collect_visible_items_recursive(
+            Self::collect_visible_items_recursive(
                 None,
                 &items_by_parent,
                 &list_group_map,
@@ -1540,7 +1540,6 @@ impl SidebarPanel {
     }
 
     fn collect_visible_items_recursive(
-        &self,
         parent_id: Option<ListGroupLnk>,
         items_by_parent: &HashMap<Option<ListGroupLnk>, Vec<SidebarItem>>,
         list_group_map: &HashMap<ListGroupLnk, ListGroup>,
@@ -1564,7 +1563,7 @@ impl SidebarPanel {
                     };
 
                     if is_open {
-                        self.collect_visible_items_recursive(
+                        Self::collect_visible_items_recursive(
                             Some(lg_lnk.clone()),
                             items_by_parent,
                             list_group_map,
