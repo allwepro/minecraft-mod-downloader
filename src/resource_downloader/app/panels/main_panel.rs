@@ -13,7 +13,7 @@ use crate::resource_downloader::business::list_group_actions::ListGroupActions;
 use crate::resource_downloader::business::project_actions::ProjectActions;
 use crate::resource_downloader::domain::{
     FilterMode, GameLoader, GameVersion, ListGroupLnk, ListLnk, OrderMode, ProjectDependencyType,
-    ProjectList, ProjectLnk, ResourceType, SortMode,
+    ProjectList, ProjectLnk, ResourceType, SidebarItem, SortMode,
 };
 use crate::{
     clear_project_metadata, clear_project_versiondata, get_list, get_list_type,
@@ -98,6 +98,18 @@ impl MainPanel {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.selected_projects.clear();
+            }
+
+            if let Some(open_list_lnk) = &open_list_lnk
+                && ui.input(|i| i.key_pressed(egui::Key::Delete))
+                && !self.selected_projects.is_empty()
+            {
+                ProjectActions::delete_projects(
+                    self.state.clone(),
+                    open_list_lnk.clone(),
+                    self.selected_projects.iter().cloned().collect(),
+                );
                 self.selected_projects.clear();
             }
 
@@ -191,13 +203,46 @@ impl MainPanel {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let selected_sidebar = {
+                            let state = self.state.read();
+                            if state
+                                .selected_sidebar_items
+                                .contains(&SidebarItem::List(lnk.clone()))
+                            {
+                                Some(
+                                    state
+                                        .selected_sidebar_items
+                                        .iter()
+                                        .cloned()
+                                        .collect::<Vec<_>>(),
+                                )
+                            } else {
+                                None
+                            }
+                        };
+
+                        let delete_label = if let Some(items) = &selected_sidebar {
+                            if items.len() > 1 {
+                                format!("🗑 Delete {} selected", items.len())
+                            } else {
+                                "🗑 Delete".to_string()
+                            }
+                        } else {
+                            "🗑 Delete".to_string()
+                        };
+
                         if ui
                             .add(egui::Button::new(
-                                egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
+                                egui::RichText::new(delete_label).color(Color32::LIGHT_RED),
                             ))
                             .clicked()
                         {
-                            ListActions::delete_list(self.state.clone(), lnk.clone());
+                            if let Some(items) = selected_sidebar {
+                                ListActions::delete_items(self.state.clone(), items);
+                                self.state.write().selected_sidebar_items.clear();
+                            } else {
+                                ListActions::delete_list(self.state.clone(), lnk.clone());
+                            }
                         }
                         if ui.add(egui::Button::new("✏ Rename")).clicked() {
                             self.rename_input = list_name.clone();
@@ -314,6 +359,26 @@ impl MainPanel {
                                 loader.clone(),
                             );
                             self.state.read().submit_modal(Box::new(sm));
+                        }
+
+                        if !self.selected_projects.is_empty() {
+                            ui.add_space(8.0);
+                            let del_selected_btn = egui::Button::new(
+                                egui::RichText::new(format!(
+                                    "🗑 Delete {} selected",
+                                    self.selected_projects.len()
+                                ))
+                                .color(Color32::LIGHT_RED),
+                            );
+
+                            if ui.add(del_selected_btn).clicked() {
+                                ProjectActions::delete_projects(
+                                    self.state.clone(),
+                                    lnk.clone(),
+                                    self.selected_projects.iter().cloned().collect(),
+                                );
+                                self.selected_projects.clear();
+                            }
                         }
                     })
                     .response
@@ -550,6 +615,11 @@ impl MainPanel {
                         .into_iter()
                         .partition(|p| !list_arc.read().is_project_archived(p));
 
+                    let mut visual_order = active.clone();
+                    if show_archived {
+                        visual_order.extend(archived.clone());
+                    }
+
                     for (idx, p_lnk) in active.iter().enumerate() {
                         self.render_project_entry(
                             ui,
@@ -564,7 +634,7 @@ impl MainPanel {
                             &dir,
                             false,
                             &active_scans,
-                            &active,
+                            &visual_order,
                             idx,
                         );
                     }
@@ -600,8 +670,8 @@ impl MainPanel {
                                     &dir,
                                     false,
                                     &active_scans,
-                                    &archived,
-                                    idx,
+                                    &visual_order,
+                                    active.len() + idx,
                                 );
                             }
                         }
@@ -1172,15 +1242,8 @@ impl MainPanel {
             .response;
 
         if !is_dependency {
-            let is_button_clicked = ui.ctx().is_using_pointer();
-
-            let primary_clicked = response.hovered()
-                && ui.input(|i| i.pointer.primary_clicked())
-                && !is_button_clicked;
-
-            let secondary_clicked = response.hovered()
-                && ui.input(|i| i.pointer.secondary_clicked())
-                && !is_button_clicked;
+            let primary_clicked = response.clicked();
+            let secondary_clicked = response.secondary_clicked();
 
             if primary_clicked {
                 let modifiers = ui.input(|i| i.modifiers);
@@ -1188,13 +1251,17 @@ impl MainPanel {
                     && let Some(last_id) = self.last_selected.as_ref()
                 {
                     if let Some(last_idx) = ordered_list.iter().position(|id| id == last_id) {
+                        if !modifiers.ctrl && !modifiers.command {
+                            self.selected_projects.clear();
+                        }
+
                         let start = last_idx.min(current_idx);
                         let end = last_idx.max(current_idx);
                         for item in ordered_list.iter().take(end + 1).skip(start) {
                             self.selected_projects.insert(item.clone());
                         }
                     }
-                } else if modifiers.command {
+                } else if modifiers.command || modifiers.ctrl {
                     if is_selected {
                         self.selected_projects.remove(p_lnk);
                     } else {
@@ -1561,13 +1628,49 @@ impl MainPanel {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let selected_sidebar = {
+                            let state = self.state.read();
+                            if state
+                                .selected_sidebar_items
+                                .contains(&SidebarItem::ListGroup(lg_lnk.clone()))
+                            {
+                                Some(
+                                    state
+                                        .selected_sidebar_items
+                                        .iter()
+                                        .cloned()
+                                        .collect::<Vec<_>>(),
+                                )
+                            } else {
+                                None
+                            }
+                        };
+
+                        let delete_label = if let Some(items) = &selected_sidebar {
+                            if items.len() > 1 {
+                                format!("🗑 Delete {} selected", items.len())
+                            } else {
+                                "🗑 Delete".to_string()
+                            }
+                        } else {
+                            "🗑 Delete".to_string()
+                        };
+
                         if ui
                             .add(egui::Button::new(
-                                egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
+                                egui::RichText::new(delete_label).color(Color32::LIGHT_RED),
                             ))
                             .clicked()
                         {
-                            ListGroupActions::delete_list_group(self.state.clone(), lg_lnk.clone());
+                            if let Some(items) = selected_sidebar {
+                                ListActions::delete_items(self.state.clone(), items);
+                                self.state.write().selected_sidebar_items.clear();
+                            } else {
+                                ListGroupActions::delete_list_group(
+                                    self.state.clone(),
+                                    lg_lnk.clone(),
+                                );
+                            }
                         }
                         if ui.add(egui::Button::new("✏ Rename")).clicked() {
                             self.list_group_rename_input = folder_name.clone();

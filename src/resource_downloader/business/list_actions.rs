@@ -73,13 +73,73 @@ impl ListActions {
     }
 
     pub fn delete_list(state: SharedRDState, list_lnk: ListLnk) {
+        Self::delete_items(state, vec![SidebarItem::List(list_lnk)]);
+    }
+
+    pub fn delete_items(state: SharedRDState, items: Vec<SidebarItem>) {
+        let mut config_changed = false;
         {
             let mut s = state.write();
-            if s.open_list.as_ref() == Some(&list_lnk) {
-                s.set_open_list_no_save(None);
+            let config_arc = s.config.clone();
+            let mut config = config_arc.write();
+
+            for item in &items {
+                match item {
+                    SidebarItem::List(list_lnk) => {
+                        if s.open_list.as_ref() == Some(list_lnk) {
+                            s.open_list = None;
+                            config.last_open_list_id = None;
+                        }
+                        config.sidebar_ui_order.retain(|i| !i.match_list(list_lnk));
+                        config.list_group_assignments.remove(list_lnk);
+                        config_changed = true;
+                        s.list_pool.delete(list_lnk);
+                    }
+                    SidebarItem::ListGroup(lg_lnk) => {
+                        if s.open_list_group.as_ref() == Some(lg_lnk) {
+                            s.open_list_group = None;
+                        }
+
+                        let parent_id = config
+                            .list_groups
+                            .iter()
+                            .find(|f| &f.lnk == lg_lnk)
+                            .and_then(|f| f.parent_id.clone());
+
+                        for group in config.list_groups.iter_mut() {
+                            if group.parent_id.as_ref() == Some(lg_lnk) {
+                                group.parent_id = parent_id.clone();
+                            }
+                        }
+
+                        if let Some(target_parent) = &parent_id {
+                            for fid in config.list_group_assignments.values_mut() {
+                                if fid == lg_lnk {
+                                    *fid = target_parent.clone();
+                                }
+                            }
+                        } else {
+                            config.list_group_assignments.retain(|_, fid| fid != lg_lnk);
+                        }
+
+                        config.list_groups.retain(|f| &f.lnk != lg_lnk);
+                        config
+                            .sidebar_ui_order
+                            .retain(|i| !i.match_list_group(lg_lnk));
+                        config_changed = true;
+                    }
+                }
             }
         }
-        state.read().list_pool.delete(&list_lnk);
+
+        if config_changed {
+            let state_guard = state.read();
+            state_guard.dispatch(Effect::SaveConfig {
+                config: state_guard.config.read().clone(),
+            });
+            drop(state_guard);
+            state.write().request_full_refresh();
+        }
     }
 
     pub fn duplicate_list(state: SharedRDState, list_lnk: ListLnk) {
