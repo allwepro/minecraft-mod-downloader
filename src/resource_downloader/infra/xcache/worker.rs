@@ -98,6 +98,16 @@ impl CoreCacheWorker {
                         let _ = cleanup_disk_all(dir).await;
                     });
                 }
+                CacheCommand::DeleteAll { tys } => {
+                    for ty in tys {
+                        let sub_dir = self.cache_dir.join(ty.config().sub_dir);
+                        if sub_dir.exists()
+                            && let Err(e) = tokio::fs::remove_dir_all(&sub_dir).await
+                        {
+                            log::error!("Failed to delete cache for {ty:?}: {e}");
+                        }
+                    }
+                }
             }
         }
     }

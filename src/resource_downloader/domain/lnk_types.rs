@@ -145,10 +145,8 @@ impl PartialEq<ListGroupLnk> for &mut ListGroupLnk {
 }
 
 impl From<String> for ListGroupLnk {
-    fn from(folder_id: String) -> Self {
-        Self {
-            group_id: folder_id,
-        }
+    fn from(lg_id: String) -> Self {
+        Self { group_id: lg_id }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::common::prefabs::modal_window::ModalWindow;
+use crate::common::ui::structs::modal_window::ModalWindow;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::list_group_actions::ListGroupActions;
 use crate::resource_downloader::domain::ListGroupLnk;
@@ -68,6 +68,8 @@ impl ModalWindow for CreateListGroupModal {
         ui.label("Group Name:");
         let response = ui.text_edit_singleline(&mut self.lg_name);
 
+        let enter_pressed = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+
         if response.changed() && self.lg_name.starts_with(' ') {
             self.lg_name = self.lg_name.trim_start().to_string();
         }
@@ -85,6 +87,7 @@ impl ModalWindow for CreateListGroupModal {
         if ui
             .add_enabled(can_save, egui::Button::new(button_text))
             .clicked()
+            || (can_save && enter_pressed)
         {
             self.save_on_close = true;
             *open = false;

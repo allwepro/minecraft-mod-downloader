@@ -80,6 +80,12 @@ impl ArtifactWorker {
                         let _ = cleanup_disk_cache(&cache_dir).await;
                     });
                 }
+                ArtifactCommand::DeleteAll => {
+                    let cache_dir = self.cache_dir.clone();
+                    if let Err(e) = tokio::fs::remove_dir_all(&cache_dir).await {
+                        log::error!("Failed to delete cache for artifacts: {e}");
+                    }
+                }
             }
         }
     }

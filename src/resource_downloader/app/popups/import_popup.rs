@@ -1,4 +1,4 @@
-use crate::common::prefabs::popup_window::Popup;
+use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::app::components::import_options_component::ImportOptionsComponent;
 use crate::resource_downloader::business::SharedRDState;
 use egui::{Id, Ui};

@@ -2,9 +2,9 @@ mod common;
 mod resource_downloader;
 
 use crate::common::app::App;
-use crate::common::app_icon::get_app_icon;
 use crate::common::program_args::{ArgRegistryBuilder, SharedArgRegistry};
 use crate::resource_downloader::app::rd_handler::RDHandler;
+use common::ui::app_icon::get_app_icon;
 use eframe::NativeOptions;
 use std::env;
 use tokio::runtime::Runtime;

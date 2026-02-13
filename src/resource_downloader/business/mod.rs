@@ -117,6 +117,18 @@ macro_rules! get_project_versions_best {
 }
 
 #[macro_export]
+macro_rules! clear_project_versiondata {
+    ($state:expr, $project:expr, $resource_type:expr, $opt_game_version:expr, $opt_game_loader:expr) => {
+        $state.read().api().rt_project_pool.clear_versiondata(
+            $project,
+            $resource_type,
+            $opt_game_version,
+            $opt_game_loader,
+        )
+    };
+}
+
+#[macro_export]
 macro_rules! search_projects {
     ($state:expr, $query:expr, $resource_type:expr, $opt_game_version:expr, $opt_game_loader:expr) => {
         $state.read().api().rt_project_pool.search(

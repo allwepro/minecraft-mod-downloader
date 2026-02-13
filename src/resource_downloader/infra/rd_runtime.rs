@@ -124,7 +124,7 @@ impl RDRuntime {
                         return;
                     }
 
-                    let cache_path = cm.get_cache_dir().join("file_index.json");
+                    let cache_path = FileIndexCache::path(cm.get_cache_dir());
                     if let Ok(loaded_cache) = FileIndexCache::load(&cache_path).await {
                         let mut cache = fic.write();
                         *cache = loaded_cache;
@@ -509,9 +509,6 @@ impl RDRuntime {
                 directory,
                 file_extension,
             } => {
-                let fic = self.file_index_cache.clone();
-                let cm = self.config_manager.clone();
-                let tx = self.event_tx.clone();
                 self.rt_handle.spawn(async move {
                     let mut files = Vec::new();
                     let mut files_to_hash = Vec::new();
@@ -548,7 +545,7 @@ impl RDRuntime {
                                 }
 
                                 let size = metadata.len();
-                                let modified = file_index::get_system_time_secs(
+                                let modified = file_index::get_time_secs(
                                     metadata.modified().unwrap_or(std::time::UNIX_EPOCH),
                                 );
 
@@ -648,7 +645,7 @@ impl RDRuntime {
 
                     if cache_changed {
                         let cache_to_save = fic.read().clone();
-                        let cache_path = cm.get_cache_dir().join("file_index.json");
+                        let cache_path = FileIndexCache::path(cm.get_cache_dir());
                         let _ = cache_to_save.save(&cache_path).await;
                     }
 
@@ -930,9 +927,6 @@ impl RDRuntime {
                 path,
                 resource_type,
             } => {
-                let api = api.clone();
-                let tx = self.event_tx.clone();
-
                 let _ = tx
                     .send(InternalEvent::FolderImportProgress {
                         total: 4,
@@ -1025,9 +1019,6 @@ impl RDRuntime {
                 version,
                 loader,
             } => {
-                let api = api.clone();
-                let tx = self.event_tx.clone();
-
                 self.rt_handle.spawn(async move {
                     let mut results_map = HashMap::new();
 
@@ -1082,10 +1073,6 @@ impl RDRuntime {
                 download_dir,
                 projects,
             } => {
-                let lm = self.list_manager.clone();
-                let api_clone = api.clone();
-                let tx = self.event_tx.clone();
-
                 self.rt_handle.spawn(async move {
                     let project_strings: Vec<String> =
                         projects.iter().map(|p| p.to_context_id()).collect();
@@ -1099,7 +1086,7 @@ impl RDRuntime {
                     );
 
                     for proj_lnk in &projects {
-                        if let Some(rtpm) = api_clone
+                        if let Some(rtpm) = api
                             .rt_project_pool
                             .get_metadata_blocking(proj_lnk.clone(), resource_type)
                             .await
@@ -1147,6 +1134,17 @@ impl RDRuntime {
                                 .await;
                         }
                     }
+                });
+            }
+            Effect::ClearFileIndexCache => {
+                {
+                    let mut cache = fic.write();
+                    cache.clear();
+                }
+                self.rt_handle.spawn(async move {
+                    let cache_to_save = fic.read().clone();
+                    let cache_path = FileIndexCache::path(cm.get_cache_dir());
+                    let _ = cache_to_save.save(&cache_path).await;
                 });
             }
         }
