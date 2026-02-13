@@ -1,4 +1,4 @@
-use crate::common::prefabs::notification_window::Notification;
+use crate::common::ui::structs::notification_window::Notification;
 
 pub struct FailedNotification {
     pub title: String,

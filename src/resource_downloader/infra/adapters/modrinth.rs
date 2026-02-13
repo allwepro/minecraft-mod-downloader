@@ -22,12 +22,12 @@ struct ModrinthSearchedProject {
     project_id: String,
     slug: String,
     title: String,
-    description: String,
-    author: String,
+    description: Option<String>,
+    author: Option<String>,
     downloads: u32,
     #[serde(default)]
     versions: Vec<String>,
-    icon_url: String,
+    icon_url: Option<String>,
     #[serde(default)]
     categories: Vec<String>,
 }
@@ -37,10 +37,10 @@ struct ModrinthProjectDetails {
     id: String,
     slug: String,
     title: String,
-    description: String,
-    icon_url: String,
+    description: Option<String>,
+    icon_url: Option<String>,
     #[serde(default)]
-    team: String,
+    team: Option<String>,
     #[serde(default)]
     game_versions: Vec<String>,
     #[serde(default)]
@@ -137,6 +137,7 @@ impl ResourceProvider for ModrinthProvider {
             .header("User-Agent", self.user_agent.clone())
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await?;
 
@@ -162,6 +163,7 @@ impl ResourceProvider for ModrinthProvider {
             .header("User-Agent", self.user_agent.clone())
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await?;
 
@@ -300,6 +302,7 @@ impl ResourceProvider for ModrinthProvider {
             .header("User-Agent", self.user_agent.clone())
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await?;
 
@@ -321,9 +324,9 @@ impl ResourceProvider for ModrinthProvider {
             let project_data = RTProjectData {
                 slug: hit.slug.clone(),
                 name: hit.title,
-                description: hit.description,
-                author: hit.author,
-                icon_url: hit.icon_url,
+                description: hit.description.unwrap_or_default(),
+                author: hit.author.unwrap_or_default(),
+                icon_url: hit.icon_url.unwrap_or_default(),
                 download_count: hit.downloads,
                 supported_versions: hit
                     .versions
@@ -421,6 +424,7 @@ impl ResourceProvider for ModrinthProvider {
             .header("User-Agent", self.user_agent.clone())
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await?;
 
@@ -482,12 +486,20 @@ impl ResourceProvider for ModrinthProvider {
             .header("User-Agent", self.user_agent.clone())
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await?;
 
-        let icon_url = project_details.icon_url;
+        let icon_url = project_details
+            .icon_url
+            .ok_or_else(|| anyhow::anyhow!("Project {} has no icon URL", project))?;
 
-        let resp = reqwest::get(icon_url).await?;
+        let resp = self
+            .client
+            .get(&icon_url)
+            .send()
+            .await?
+            .error_for_status()?;
         Ok(resp.bytes().await?)
     }
 
@@ -510,6 +522,7 @@ impl ResourceProvider for ModrinthProvider {
             .header("User-Agent", self.user_agent.clone())
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await?;
 
@@ -582,17 +595,19 @@ impl ModrinthProvider {
             .get(&project_url)
             .header("User-Agent", self.user_agent.clone())
             .send()
-            .await?;
+            .await?
+            .error_for_status()?;
         let project_text = project_response.text().await?;
         let project_details: ModrinthProjectDetails = serde_json::from_str(&project_text)
-            .map_err(|e| anyhow::anyhow!("Failed to parse project: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse project ({}): {e}", id_or_slug))?;
 
         let author = match self
             .client
             .get(&team_url)
             .header("User-Agent", self.user_agent.clone())
             .send()
-            .await
+            .await?
+            .error_for_status()
         {
             Ok(resp) => {
                 #[derive(Deserialize)]
@@ -609,11 +624,11 @@ impl ModrinthProvider {
                         .into_iter()
                         .find(|m| m.role == "Owner")
                         .map(|m| m.user.username.clone())
-                        .unwrap_or_else(|| project_details.team.clone()),
-                    Err(_) => project_details.team.clone(),
+                        .unwrap_or_else(|| project_details.team.clone().unwrap_or_default()),
+                    Err(_) => project_details.team.clone().unwrap_or_default(),
                 }
             }
-            Err(_) => project_details.team.clone(),
+            Err(_) => project_details.team.clone().unwrap_or_default(),
         };
 
         let mut loaders = Vec::new();
@@ -632,9 +647,9 @@ impl ModrinthProvider {
             RTProjectData {
                 slug: project_details.slug,
                 name: project_details.title,
-                description: project_details.description,
+                description: project_details.description.unwrap_or_default(),
                 author,
-                icon_url: project_details.icon_url,
+                icon_url: project_details.icon_url.unwrap_or_default(),
                 supported_versions: project_details
                     .game_versions
                     .into_iter()

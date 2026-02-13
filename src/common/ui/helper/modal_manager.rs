@@ -1,4 +1,4 @@
-use crate::common::prefabs::modal_window::ModalWindow;
+use crate::common::ui::structs::modal_window::ModalWindow;
 use eframe::egui;
 use parking_lot::RwLock;
 use std::sync::Arc;

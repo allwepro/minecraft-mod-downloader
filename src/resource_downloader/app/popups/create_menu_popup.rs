@@ -1,8 +1,9 @@
-use crate::common::prefabs::popup_window::Popup;
+use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::app::modals::create_list_group_modal::CreateListGroupModal;
 use crate::resource_downloader::app::modals::create_modal::CreateModal;
 use crate::resource_downloader::business::SharedRDState;
 use eframe::egui;
+use eframe::epaint::Color32;
 use egui::{Id, Ui};
 
 #[derive(Clone)]
@@ -32,7 +33,14 @@ impl Popup for CreateMenuPopup {
         ui.spacing_mut().item_spacing.y = 4.0;
 
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-            if ui.button("📋  New List").clicked() {
+            if ui
+                .add(
+                    egui::Button::new("📋  New List")
+                        .min_size(egui::vec2(150.0, 0.0))
+                        .fill(Color32::TRANSPARENT),
+                )
+                .clicked()
+            {
                 self.state
                     .read()
                     .modal_manager
@@ -40,7 +48,14 @@ impl Popup for CreateMenuPopup {
                 *open = false;
             }
 
-            if ui.button("📁  New Group").clicked() {
+            if ui
+                .add(
+                    egui::Button::new("📁  New Group")
+                        .min_size(egui::vec2(150.0, 0.0))
+                        .fill(Color32::TRANSPARENT),
+                )
+                .clicked()
+            {
                 self.state
                     .read()
                     .modal_manager

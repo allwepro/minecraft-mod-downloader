@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 pub enum ArtifactCommand {
     Fetch(ArtifactRequest),
     Cleanup,
+    DeleteAll,
 }
 
 pub type ArtifactCallback = Arc<dyn Fn(Option<bool>, f32) + Send + Sync>;
@@ -54,6 +55,16 @@ impl ArtifactManager {
             .err()
             .map(|e| {
                 log::error!("Failed to send cleanup request: {e}");
+            });
+    }
+
+    pub fn delete_all(&self) {
+        let _ = self
+            .request_tx
+            .try_send(ArtifactCommand::DeleteAll)
+            .err()
+            .map(|e| {
+                log::error!("Failed to send delete all request: {e}");
             });
     }
 }

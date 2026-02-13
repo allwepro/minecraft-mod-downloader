@@ -113,8 +113,7 @@ impl CoreCacheManager {
         ctx: CacheContext,
         fetcher: FetchFn,
     ) -> anyhow::Result<Option<T>> {
-        let key = ctx.hashed_key(ty);
-        if let Some(res) = self.get_from_registry::<T>(ty, &key) {
+        if let Some(res) = self.get_from_registry::<T>(ty, &ctx) {
             return res.map(Some);
         }
 
@@ -129,17 +128,15 @@ impl CoreCacheManager {
         fetcher: FetchFn,
         timeout: Duration,
     ) -> anyhow::Result<Option<T>> {
-        let key = ctx.hashed_key(ty);
-
-        if let Some(res) = self.get_from_registry::<T>(ty, &key) {
+        if let Some(res) = self.get_from_registry::<T>(ty, &ctx) {
             return res.map(Some);
         }
 
-        self.trigger_fetch(ty, ctx, fetcher);
+        self.trigger_fetch(ty, ctx.clone(), fetcher);
 
         let start = SystemTime::now();
         loop {
-            if let Some(res) = self.get_from_registry::<T>(ty, &key) {
+            if let Some(res) = self.get_from_registry::<T>(ty, &ctx) {
                 return res.map(Some);
             }
 
@@ -165,6 +162,22 @@ impl CoreCacheManager {
             });
     }
 
+    pub fn clear_all(&self, tys: Vec<CacheType>, in_mem: bool) {
+        if in_mem {
+            let mut reg = self.registry.write();
+            reg.retain(|k, _| !tys.contains(&k.0));
+        }
+        self.notify.notify_waiters();
+
+        let _ = self
+            .request_tx
+            .try_send(CacheCommand::DeleteAll { tys })
+            .err()
+            .map(|e| {
+                log::error!("Failed to send delete all request: {e}");
+            });
+    }
+
     pub fn discard(&self, ty: CacheType, ctx: CacheContext) {
         let key = ctx.hashed_key(ty);
         {
@@ -186,11 +199,12 @@ impl CoreCacheManager {
     fn get_from_registry<T: Clone + 'static>(
         &self,
         ty: CacheType,
-        key: &str,
+        ctx: &CacheContext,
     ) -> Option<anyhow::Result<T>> {
+        let key = ctx.hashed_key(ty);
         let needs_discard = {
             let reg = self.registry.read();
-            if let Some(entry_res) = reg.get(&(ty, key.to_string())) {
+            if let Some(entry_res) = reg.get(&(ty, key.clone())) {
                 match entry_res {
                     Ok(entry) => {
                         if time_now().saturating_sub(entry.updated_at) < ty.config().ttl.as_secs() {
@@ -217,8 +231,7 @@ impl CoreCacheManager {
         };
 
         if needs_discard {
-            let mut reg = self.registry.write();
-            reg.remove(&(ty, key.to_string()));
+            self.discard(ty, ctx.clone());
         }
 
         None

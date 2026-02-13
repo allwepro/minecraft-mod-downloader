@@ -1,7 +1,7 @@
 use crate::common::app::App;
 use crate::common::app::Tab::{Launcher, ResourceDownloader};
-use crate::common::app_icon::show_app_icon;
-use crate::common::prefabs::view_controller::ViewController;
+use crate::common::ui::app_icon::show_app_icon;
+use crate::common::ui::structs::view_controller::ViewController;
 use eframe::egui;
 use eframe::epaint::Color32;
 use egui::RichText;

@@ -1,4 +1,4 @@
-use crate::common::top_panel::TopBarAction;
+use crate::common::ui::top_panel::TopBarAction;
 use egui::{Context, Ui};
 
 pub trait ViewController {

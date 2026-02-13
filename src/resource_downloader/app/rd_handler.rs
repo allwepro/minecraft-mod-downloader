@@ -1,9 +1,9 @@
-use crate::common::modal_manager::SharedModalManager;
-use crate::common::notification_manager::SharedNotificationManager;
-use crate::common::pop_up_manager::SharedPopupManager;
-use crate::common::prefabs::view_controller::ViewController;
 use crate::common::program_args::{ArgRegistryBuilder, SharedArgRegistry};
-use crate::common::top_panel::TopBarAction;
+use crate::common::ui::helper::modal_manager::SharedModalManager;
+use crate::common::ui::helper::notification_manager::SharedNotificationManager;
+use crate::common::ui::helper::pop_up_manager::SharedPopupManager;
+use crate::common::ui::structs::view_controller::ViewController;
+use crate::common::ui::top_panel::TopBarAction;
 use crate::resource_downloader::app::modals::import_modal::ImportModal;
 use crate::resource_downloader::app::modals::legacy_import_progress_modal::LegacyProgressImportModal;
 use crate::resource_downloader::app::modals::modrinth_collection_import_modal::ModrinthCollectionImportModal;

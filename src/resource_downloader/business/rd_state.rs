@@ -1,8 +1,8 @@
-use crate::common::modal_manager::SharedModalManager;
-use crate::common::notification_manager::SharedNotificationManager;
-use crate::common::pop_up_manager::SharedPopupManager;
-use crate::common::prefabs::modal_window::ModalWindow;
-use crate::common::prefabs::notification_window::Notification;
+use crate::common::ui::helper::modal_manager::SharedModalManager;
+use crate::common::ui::helper::notification_manager::SharedNotificationManager;
+use crate::common::ui::helper::pop_up_manager::SharedPopupManager;
+use crate::common::ui::structs::modal_window::ModalWindow;
+use crate::common::ui::structs::notification_window::Notification;
 use crate::resource_downloader::business::Effect;
 use crate::resource_downloader::business::cache::ArtifactCallback;
 use crate::resource_downloader::business::list_pool::ListPool;
@@ -345,6 +345,7 @@ impl RDState {
                     && list_lnks.contains(last_open)
                 {
                     self.set_open_list_no_save(Some(last_open.clone()));
+                    self.pending_sidebar_scroll = Some(SidebarItem::from(last_open));
                 }
 
                 Some(Event::Initialized {
@@ -365,7 +366,6 @@ impl RDState {
             } => {
                 self.list_pool.insert_arc(list);
                 self.request_full_refresh();
-                self.pending_sidebar_scroll = Some(SidebarItem::from(&list_lnk));
 
                 {
                     let mut config = self.config.write();
@@ -382,6 +382,8 @@ impl RDState {
 
                     drop(config);
                 }
+
+                self.pending_sidebar_scroll = Some(SidebarItem::from(&list_lnk));
 
                 self.dispatch(Effect::SaveConfig {
                     config: self.config.read().clone(),

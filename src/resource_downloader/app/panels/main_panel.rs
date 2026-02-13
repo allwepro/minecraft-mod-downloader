@@ -1,4 +1,4 @@
-use crate::common::prefabs::popup_window::Popup;
+use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::app::dialogs::Dialogs;
 use crate::resource_downloader::app::modals::list_group_settings_modal::ListGroupSettingsModal;
 use crate::resource_downloader::app::modals::list_settings_modal::ListSettingsModal;
@@ -15,8 +15,9 @@ use crate::resource_downloader::domain::{
     ProjectList, ProjectLnk, ResourceType, SortMode,
 };
 use crate::{
-    clear_project_metadata, get_list, get_list_type, get_project_icon_texture, get_project_link,
-    get_project_metadata, get_project_versions, get_project_versions_best,
+    clear_project_metadata, clear_project_versiondata, get_list, get_list_type,
+    get_project_icon_texture, get_project_link, get_project_metadata, get_project_versions,
+    get_project_versions_best,
 };
 use eframe::egui;
 use egui::{Color32, Context, Ui};
@@ -72,7 +73,7 @@ impl MainPanel {
             self.debug_overlays = !self.debug_overlays;
         }
 
-        let (open_list_lnk, open_folder_lnk, found_files_map, active_scans, pending_scroll) = {
+        let (open_list_lnk, open_list_group_lnk, found_files_map, active_scans, pending_scroll) = {
             let mut s = self.state.write();
             (
                 s.open_list.clone(),
@@ -99,8 +100,8 @@ impl MainPanel {
                 self.selected_projects.clear();
             }
 
-            if let Some(folder_lnk) = open_folder_lnk {
-                self.show_folder_settings(ui, folder_lnk);
+            if let Some(lg_lnk) = open_list_group_lnk {
+                self.show_folder_settings(ui, lg_lnk);
                 return;
             }
 
@@ -159,8 +160,10 @@ impl MainPanel {
 
             ui.horizontal(|ui| {
                 if self.rename_input_open {
-                    ui.text_edit_singleline(&mut self.rename_input);
-                    if ui.button("✔").clicked() {
+                    let res = ui.text_edit_singleline(&mut self.rename_input);
+                    if (res.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                        || ui.button("✔").clicked()
+                    {
                         ListActions::rename_list(
                             self.state.clone(),
                             lnk.clone(),
@@ -1045,6 +1048,13 @@ impl MainPanel {
                                         .clicked()
                                     {
                                         clear_project_metadata!(self.state, p_lnk.clone(), *rt);
+                                        clear_project_versiondata!(
+                                            self.state,
+                                            p_lnk.clone(),
+                                            *rt,
+                                            g_ver.clone(),
+                                            g_ld.clone()
+                                        );
                                     }
                                 } else {
                                     ui.label(
@@ -1525,8 +1535,10 @@ impl MainPanel {
 
         ui.horizontal(|ui| {
             if self.list_group_rename_input_open {
-                ui.text_edit_singleline(&mut self.list_group_rename_input);
-                if ui.button("✔").clicked() {
+                let res = ui.text_edit_singleline(&mut self.list_group_rename_input);
+                if (res.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    || ui.button("✔").clicked()
+                {
                     ListGroupActions::rename_list_group(
                         self.state.clone(),
                         folder_lnk.clone(),

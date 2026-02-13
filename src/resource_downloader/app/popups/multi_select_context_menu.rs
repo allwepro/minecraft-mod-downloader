@@ -1,4 +1,4 @@
-use crate::common::prefabs::popup_window::Popup;
+use crate::common::ui::structs::popup_window::Popup;
 use crate::get_list;
 use crate::get_project_versions;
 use crate::resource_downloader::business::SharedRDState;

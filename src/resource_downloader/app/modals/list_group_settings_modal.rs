@@ -1,4 +1,4 @@
-use crate::common::prefabs::modal_window::ModalWindow;
+use crate::common::ui::structs::modal_window::ModalWindow;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::ListGroupLnk;
 use egui::{Id, Ui};
@@ -11,10 +11,10 @@ pub struct ListGroupSettingsModal {
 }
 
 impl ListGroupSettingsModal {
-    pub fn new(state: SharedRDState, folder_lnk: ListGroupLnk) -> Self {
+    pub fn new(state: SharedRDState, lg_lnk: ListGroupLnk) -> Self {
         Self {
             _state: state,
-            lg_lnk: folder_lnk,
+            lg_lnk,
             save_on_close: false,
         }
     }

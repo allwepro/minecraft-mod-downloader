@@ -1,10 +1,12 @@
-use crate::common::app_icon::show_app_icon;
-use crate::common::modal_manager::SharedModalManager;
-use crate::common::notification_manager::{BasicNotification, SharedNotificationManager};
-use crate::common::pop_up_manager::SharedPopupManager;
-use crate::common::prefabs::view_controller::ViewController;
 use crate::common::program_args::SharedArgRegistry;
-use crate::common::top_panel::TopPanel;
+use crate::common::ui::app_icon::show_app_icon;
+use crate::common::ui::helper::modal_manager::SharedModalManager;
+use crate::common::ui::helper::notification_manager::{
+    BasicNotification, SharedNotificationManager,
+};
+use crate::common::ui::helper::pop_up_manager::SharedPopupManager;
+use crate::common::ui::structs::view_controller::ViewController;
+use crate::common::ui::top_panel::TopPanel;
 use crate::resource_downloader::app::rd_handler::RDHandler;
 use eframe::{egui, glow};
 
@@ -116,7 +118,13 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.set_visuals(egui::Visuals::dark());
         self.handle_konami_code(ctx);
+        if ctx.input(|i| {
+            i.modifiers.ctrl && i.modifiers.shift && i.modifiers.alt && i.key_pressed(egui::Key::P)
+        }) {
+            self.popup_manager.toggle_debug_mode();
+        }
         // 1. Update active state
         self.rd_manager.update_state(ctx);
         // self.launcher_manager.update_state(ctx);

@@ -1,4 +1,4 @@
-use crate::common::prefabs::modal_window::ModalWindow;
+use crate::common::ui::structs::modal_window::ModalWindow;
 use crate::resource_downloader::app::components::list_settings_component::ListSettingsComponent;
 use crate::resource_downloader::app::dialogs::Dialogs;
 use crate::resource_downloader::app::modals::search_modal::{

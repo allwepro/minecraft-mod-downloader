@@ -1,4 +1,4 @@
-use crate::common::prefabs::popup_window::Popup;
+use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::business::list_group_actions::ListGroupActions;
@@ -30,7 +30,7 @@ impl Popup for ListContextMenu {
         let list_lnk = self.list_lnk.clone();
 
         ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-            let (current_folder_id, list_groups) = {
+            let (current_lg_lnk, list_groups) = {
                 let state = self.state.read();
                 let config = state.config.read();
                 let current = config.list_group_assignments.get(&list_lnk).cloned();
@@ -41,14 +41,14 @@ impl Popup for ListContextMenu {
                 ui.menu_button("📁  Move to Group", |ui| {
                     ui.set_min_width(180.0);
 
-                    let is_in_no_lg = current_folder_id.is_none();
-                    let no_folder_text = if is_in_no_lg {
+                    let is_in_no_lg = current_lg_lnk.is_none();
+                    let no_lg_text = if is_in_no_lg {
                         egui::RichText::new("✅ No Group").strong()
                     } else {
                         egui::RichText::new("   No Group")
                     };
 
-                    if ui.button(no_folder_text).clicked() {
+                    if ui.button(no_lg_text).clicked() {
                         ListGroupActions::move_list_to_list_group(
                             self.state.clone(),
                             list_lnk.clone(),
@@ -60,15 +60,15 @@ impl Popup for ListContextMenu {
                     ui.separator();
 
                     for list_group in list_groups {
-                        let is_current = current_folder_id.as_ref() == Some(&list_group.lnk);
+                        let is_current = current_lg_lnk.as_ref() == Some(&list_group.lnk);
 
-                        let folder_text = if is_current {
+                        let lg_text = if is_current {
                             egui::RichText::new(format!("✅ {}", list_group.name)).strong()
                         } else {
                             egui::RichText::new(format!("   {}", list_group.name))
                         };
 
-                        let mut button = egui::Button::new(folder_text);
+                        let mut button = egui::Button::new(lg_text);
 
                         if is_current {
                             button =
