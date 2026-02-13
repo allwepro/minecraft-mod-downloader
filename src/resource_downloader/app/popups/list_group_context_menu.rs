@@ -1,8 +1,9 @@
 use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::app::modals::create_list_group_modal::CreateListGroupModal;
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::business::list_group_actions::ListGroupActions;
-use crate::resource_downloader::domain::ListGroupLnk;
+use crate::resource_downloader::domain::{ListGroupLnk, SidebarItem};
 use eframe::egui;
 use egui::{Color32, Id, Ui};
 
@@ -65,7 +66,24 @@ impl Popup for ListGroupContextMenu {
             );
 
             if ui.add(delete_btn).clicked() {
-                ListGroupActions::delete_list_group(self.state.clone(), lg_lnk.clone());
+                let selected_items = {
+                    let state = self.state.read();
+                    if state
+                        .selected_sidebar_items
+                        .contains(&SidebarItem::ListGroup(lg_lnk.clone()))
+                    {
+                        state
+                            .selected_sidebar_items
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    } else {
+                        vec![SidebarItem::ListGroup(lg_lnk.clone())]
+                    }
+                };
+
+                ListActions::delete_items(self.state.clone(), selected_items);
+                self.state.write().selected_sidebar_items.clear();
                 *open = false;
             }
         });
