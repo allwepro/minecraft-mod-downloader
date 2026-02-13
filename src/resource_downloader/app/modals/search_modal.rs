@@ -1,4 +1,4 @@
-use crate::common::prefabs::modal_window::ModalWindow;
+use crate::common::ui::structs::modal_window::ModalWindow;
 use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::project_actions::ProjectActions;
 use crate::resource_downloader::domain::{

@@ -133,4 +133,7 @@ pub enum Effect {
         download_dir: String,
         projects: Vec<ProjectLnk>,
     },
+
+    // Other
+    ClearFileIndexCache,
 }

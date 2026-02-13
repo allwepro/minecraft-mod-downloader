@@ -1,3 +1,4 @@
+use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::business::{Effect, SharedRDState};
 use crate::resource_downloader::domain::{ListGroup, ListGroupLnk, ListLnk, SidebarItem};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -52,8 +53,8 @@ impl ListGroupActions {
         {
             let state_guard = state.write();
             let mut config = state_guard.config.write();
-            if let Some(folder) = config.list_groups.iter_mut().find(|f| f.lnk == lg_lnk) {
-                folder.name = new_name;
+            if let Some(list_group) = config.list_groups.iter_mut().find(|f| f.lnk == lg_lnk) {
+                list_group.name = new_name;
             }
         }
 
@@ -88,25 +89,23 @@ impl ListGroupActions {
         lg_lnk: ListGroupLnk,
         new_parent_id: Option<ListGroupLnk>,
     ) -> ListGroupLnk {
-        use crate::resource_downloader::business::list_actions::ListActions;
-
         let new_lg_id = Self::generate_list_group_id();
         let lists_to_duplicate: Vec<ListLnk>;
         let existing_list_ids: Vec<String>;
-        let subfolders_to_duplicate: Vec<(ListGroupLnk, String)>;
+        let sublist_groups_to_duplicate: Vec<(ListGroupLnk, String)>;
 
         {
             let mut state_guard = state.write();
             let mut config = state_guard.config.write();
 
             if let Some(original) = config.list_groups.iter().find(|f| f.lnk == lg_lnk) {
-                let new_folder = ListGroup {
+                let new_list_group = ListGroup {
                     lnk: new_lg_id.clone(),
                     name: format!("{} (Copy)", original.name),
                     collapsed: original.collapsed,
                     parent_id: new_parent_id.clone(),
                 };
-                config.list_groups.push(new_folder);
+                config.list_groups.push(new_list_group);
 
                 let original_id = lg_lnk.clone();
                 if let Some(pos) = config
@@ -142,7 +141,7 @@ impl ListGroupActions {
                     .list_pool
                     .map_filter(|list| Some(list.get_lnk().to_string()));
 
-                subfolders_to_duplicate = config
+                sublist_groups_to_duplicate = config
                     .list_groups
                     .iter()
                     .filter(|f| f.parent_id.as_ref() == Some(&lg_lnk))
@@ -155,7 +154,7 @@ impl ListGroupActions {
             } else {
                 lists_to_duplicate = Vec::new();
                 existing_list_ids = Vec::new();
-                subfolders_to_duplicate = Vec::new();
+                sublist_groups_to_duplicate = Vec::new();
             }
         }
 
@@ -166,11 +165,11 @@ impl ListGroupActions {
             });
         }
 
-        for (subfolder_id, _subfolder_name) in subfolders_to_duplicate {
-            let subfolder_lnk = subfolder_id;
+        for (sublist_group_id, _sublist_group_name) in sublist_groups_to_duplicate {
+            let sublist_group_lnk = sublist_group_id;
             Self::duplicate_list_group_recursive(
                 state.clone(),
-                subfolder_lnk,
+                sublist_group_lnk,
                 Some(new_lg_id.clone()),
             );
         }
@@ -180,7 +179,7 @@ impl ListGroupActions {
         }
 
         let state_clone = state.clone();
-        let new_folder_id_clone = new_lg_id.clone();
+        let new_list_group_id_clone = new_lg_id.clone();
         let num_lists_to_duplicate = lists_to_duplicate.len();
 
         std::thread::spawn(move || {
@@ -218,7 +217,7 @@ impl ListGroupActions {
                 for new_list_lnk in newly_created {
                     config
                         .list_group_assignments
-                        .insert(new_list_lnk, new_folder_id_clone.clone());
+                        .insert(new_list_lnk, new_list_group_id_clone.clone());
                 }
             }
 
@@ -235,8 +234,8 @@ impl ListGroupActions {
         {
             let state_guard = state.write();
             let mut config = state_guard.config.write();
-            if let Some(folder) = config.list_groups.iter_mut().find(|f| f.lnk == lg_lnk) {
-                folder.collapsed = !folder.collapsed;
+            if let Some(list_group) = config.list_groups.iter_mut().find(|f| f.lnk == lg_lnk) {
+                list_group.collapsed = !list_group.collapsed;
             }
         }
 
@@ -255,8 +254,8 @@ impl ListGroupActions {
             let state_guard = state.write();
             let mut config = state_guard.config.write();
 
-            if let Some(folder) = lg_lnk {
-                config.list_group_assignments.insert(list_id, folder);
+            if let Some(list_group) = lg_lnk {
+                config.list_group_assignments.insert(list_id, list_group);
             } else {
                 config.list_group_assignments.remove(&list_id);
             }

@@ -308,6 +308,18 @@ impl RTProjectPool {
         Ok(versions)
     }
 
+    pub fn clear_versiondata(
+        &self,
+        project: ProjectLnk,
+        resource_type: ResourceType,
+        version: GameVersion,
+        loader: GameLoader,
+    ) {
+        let (ctx, _) =
+            Self::versions_prepare_request(&project, resource_type, Some(version), Some(loader));
+        self.cache.discard(CacheType::ProjectVersions, ctx);
+    }
+
     /// Warms the slug cache for a specific project
     pub fn warm_slug(&self, slug: String, _resource_type: ResourceType, project: ProjectLnk) {
         let ctx = CacheContext {

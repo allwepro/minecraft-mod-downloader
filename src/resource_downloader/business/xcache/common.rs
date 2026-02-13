@@ -48,6 +48,9 @@ pub enum CacheCommand {
         ctx: CacheContext,
     },
     Cleanup,
+    DeleteAll {
+        tys: Vec<CacheType>,
+    },
 }
 
 pub enum CacheResponse {

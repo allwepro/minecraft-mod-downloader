@@ -18,6 +18,10 @@ pub struct FileIndexCache {
 }
 
 impl FileIndexCache {
+    pub fn path(base_dir: PathBuf) -> PathBuf {
+        base_dir.join("file_index.json")
+    }
+
     pub async fn load(path: &Path) -> Result<Self> {
         if !path.exists() {
             return Ok(Self::default());
@@ -44,9 +48,13 @@ impl FileIndexCache {
         self.entries
             .insert(path.to_string_lossy().to_string(), entry);
     }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
 }
 
-pub fn get_system_time_secs(time: SystemTime) -> u64 {
+pub fn get_time_secs(time: SystemTime) -> u64 {
     time.duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()

@@ -1,4 +1,4 @@
-use crate::common::prefabs::popup_window::Popup;
+use crate::common::ui::structs::popup_window::Popup;
 use eframe::egui;
 use egui::StrokeKind;
 use parking_lot::RwLock;
@@ -12,6 +12,7 @@ pub struct PopupRequest {
 
 struct PopupManagerInner {
     open_ids: Vec<egui::Id>,
+    initial_open_ids: Vec<egui::Id>,
     interaction_areas: HashMap<egui::Id, Vec<egui::Rect>>,
     body_rects: HashMap<egui::Id, egui::Rect>,
     requests: Vec<PopupRequest>,
@@ -25,6 +26,7 @@ impl Default for SharedPopupManager {
     fn default() -> Self {
         Self(Arc::new(RwLock::new(PopupManagerInner {
             open_ids: Vec::new(),
+            initial_open_ids: Vec::new(),
             interaction_areas: HashMap::new(),
             body_rects: HashMap::new(),
             requests: Vec::new(),
@@ -34,6 +36,11 @@ impl Default for SharedPopupManager {
 }
 
 impl SharedPopupManager {
+    pub fn toggle_debug_mode(&self) {
+        let mut inner = self.0.write();
+        inner.debug_mode = !inner.debug_mode;
+    }
+
     pub fn register_interaction_area(&self, id: egui::Id, rect: egui::Rect) {
         self.0
             .write()
@@ -64,6 +71,7 @@ impl SharedPopupManager {
         let mut inner = self.0.write();
         inner.requests.clear();
         inner.interaction_areas.clear();
+        inner.initial_open_ids = inner.open_ids.clone();
 
         let current_open_ids = inner.open_ids.clone();
         inner
@@ -188,7 +196,27 @@ impl SharedPopupManager {
                     || inner.body_rects.get(id).is_some_and(|r| r.contains(pos));
 
                 if is_hit {
-                    keep_until_idx = Some(idx);
+                    let mut current_idx = idx;
+                    if current_idx > 0 {
+                        let was_already_open = inner.initial_open_ids.contains(id);
+                        if !was_already_open {
+                            let parent_id = inner.open_ids[current_idx - 1];
+                            let click_in_parent = inner
+                                .interaction_areas
+                                .get(&parent_id)
+                                .is_some_and(|rects| rects.iter().any(|r| r.contains(pos)))
+                                || inner
+                                    .body_rects
+                                    .get(&parent_id)
+                                    .is_some_and(|r| r.contains(pos));
+
+                            if !click_in_parent {
+                                inner.open_ids.drain(0..current_idx);
+                                current_idx = 0;
+                            }
+                        }
+                    }
+                    keep_until_idx = Some(current_idx);
                     break;
                 }
             }

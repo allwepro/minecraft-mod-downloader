@@ -2,7 +2,7 @@ use crate::resource_downloader::business::cache::ArtifactManager;
 use crate::resource_downloader::business::services::xpool::{
     GameLoaderPool, GameVersionPool, ProjectIconPool, RTProjectPool,
 };
-use crate::resource_downloader::business::xcache::CoreCacheManager;
+use crate::resource_downloader::business::xcache::{CacheType, CoreCacheManager};
 use crate::resource_downloader::domain::{GameLoader, ProjectLnk, ResourceType};
 use crate::resource_downloader::infra::adapters::{
     ModrinthProvider, ResourceProvider, ResourceProviderContext,
@@ -23,6 +23,8 @@ type CleanupFn = Box<dyn Fn() -> CleanupFuture + Send + Sync>;
 pub struct ApiService {
     provider: Arc<dyn ResourceProvider>,
     modrinth_provider: Arc<ModrinthProvider>,
+
+    core_cache: Arc<CoreCacheManager>,
 
     // Pools (Domain APIs)
     pub game_version_pool: Arc<GameVersionPool>,
@@ -90,6 +92,7 @@ impl ApiService {
 
         let mut service = Self {
             provider,
+            core_cache,
             modrinth_provider,
             game_version_pool,
             game_loader_pool,
@@ -129,6 +132,10 @@ impl ApiService {
         self.modrinth_provider
             .fetch_collection(&self.provider_context(), &collection_id)
             .await
+    }
+
+    pub fn clear_core_cache(&self, tys: Vec<CacheType>, in_mem: bool) {
+        self.core_cache.clear_all(tys, in_mem);
     }
 
     fn provider_context(&self) -> ResourceProviderContext {
