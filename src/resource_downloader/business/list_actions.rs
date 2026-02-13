@@ -1,6 +1,6 @@
 use crate::resource_downloader::business::{Effect, SharedRDState};
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, ResourceType, SidebarItem,
+    GameLoader, GameVersion, ListLnk, ProjectList, ResourceType, SidebarItem,
 };
 use std::path::PathBuf;
 
@@ -13,12 +13,18 @@ impl ListActions {
             .list_pool
             .get(list_lnk)
             .map(|l| {
-                l.read()
-                    .get_resource_types()
+                let list = l.read();
+                list.get_resource_types()
                     .first()
                     .cloned()
                     .unwrap_or(ResourceType::Mod)
             })
+            .unwrap_or(ResourceType::Mod)
+    }
+    pub fn get_list_target_resource_type(list: &ProjectList) -> ResourceType {
+        list.get_resource_types()
+            .first()
+            .cloned()
             .unwrap_or(ResourceType::Mod)
     }
 

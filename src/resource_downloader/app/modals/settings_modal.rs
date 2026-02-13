@@ -32,7 +32,7 @@ impl ModalWindow for SettingsModal {
     }
 
     fn title(&self) -> String {
-        "Resource Downloader Settings".to_string()
+        "Resource Manager Settings".to_string()
     }
 
     fn render_contents(&mut self, ui: &mut Ui, open: &mut bool) {

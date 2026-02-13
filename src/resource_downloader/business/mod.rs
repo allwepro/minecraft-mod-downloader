@@ -5,13 +5,14 @@ pub(crate) mod list_actions;
 pub(crate) mod list_group_actions;
 mod list_pool;
 pub(crate) mod project_actions;
-pub(crate) mod rd_state;
+pub mod rm_api;
+pub(crate) mod rm_state;
 pub(crate) mod services;
 pub(crate) mod xcache;
 
 pub use effects::Effect;
 pub use events::{Event, InternalEvent};
-pub use rd_state::{DownloadStatus, FolderImportCandidate, RDState, SharedRDState};
+pub use rm_state::{DownloadStatus, FolderImportCandidate, RMState, SharedRDState};
 
 #[macro_export]
 macro_rules! get_versions {

@@ -1,5 +1,5 @@
 use crate::common::app::App;
-use crate::common::app::Tab::{Launcher, ResourceDownloader};
+use crate::common::app::Tab::{Launcher, ResourceManager};
 use crate::common::ui::app_icon::show_app_icon;
 use crate::common::ui::ash_ui::AshUi;
 use crate::common::ui::structs::view_controller::ViewController;
@@ -23,17 +23,16 @@ impl TopPanel {
                 ui.add_space(2.0);
                 ui.heading("&");
                 ui.add_space(2.0);
-                if tab_button(ui, "Resource Manager", app.open_tab == ResourceDownloader).clicked()
-                {
-                    app.open_tab = ResourceDownloader;
+                if tab_button(ui, "Resource Manager", app.open_tab == ResourceManager).clicked() {
+                    app.open_tab = ResourceManager;
                 }
-
+                ui.add_space(5.0);
                 ui.separator();
                 ui.ash_vert(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let actions = match app.open_tab {
-                            ResourceDownloader => app.rd_manager.get_top_bar_actions(),
-                            Launcher => vec![], //app.launcher_manager.get_top_bar_actions()
+                            ResourceManager => app.rm_manager.get_top_bar_actions(),
+                            Launcher => app.launcher_manager.get_top_bar_actions(),
                         };
 
                         for action in actions {
