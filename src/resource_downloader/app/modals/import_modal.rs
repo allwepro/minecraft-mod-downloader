@@ -3,7 +3,7 @@ use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::ListLnk;
 use eframe::egui;
 use egui::{Id, Ui};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
 pub struct ImportModal {
@@ -58,10 +58,8 @@ impl ModalWindow for ImportModal {
             self.item_count = list.read().project_count() as i32;
         }
 
-        if let Some(file_name) = self.file_path.file_stem()
-            && let Some(name_str) = file_name.to_str()
-        {
-            self.new_list_name = name_str.to_string();
+        if let Some(name) = Self::extract_name(&self.file_path) {
+            self.new_list_name = name;
         }
     }
 
@@ -78,72 +76,36 @@ impl ModalWindow for ImportModal {
     }
 }
 
+impl ImportModal {
+    fn extract_name(path: &Path) -> Option<String> {
+        path.file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_import_modal_id_constant() {
-        let test_id = Id::new("import_modal");
-        let expected_id = Id::new("import_modal");
-        assert_eq!(test_id, expected_id);
-    }
+    fn test_extract_name() {
+        let cases = vec![
+            ("/path/to/my_list.json", Some("my_list")),
+            ("list.mmd", Some("list")),
+            ("no_extension", Some("no_extension")),
+            (".hidden", Some(".hidden")),
+            ("", None),
+        ];
 
-    #[test]
-    fn test_import_modal_title_constant() {
-        let expected = "Import List".to_string();
-        assert_eq!(expected, "Import List");
-    }
-
-    #[test]
-    fn test_list_lnk_creation() {
-        let list = ListLnk::new("test_list".to_string());
-        let list_clone = list.clone();
-
-        assert_eq!(list, list_clone);
-    }
-
-    #[test]
-    fn test_import_modal_default_values() {
-        assert_eq!(0, 0); // item_count default
-        assert_eq!("", ""); // new_list_name default
-        let save_on_close = false;
-        assert!(!save_on_close, "save_on_close default should be false");
-    }
-
-    #[test]
-    fn test_save_flag_toggle() {
-        let mut save_flag = false;
-        assert!(!save_flag);
-
-        save_flag = true;
-        assert!(save_flag);
-
-        save_flag = false;
-        assert!(!save_flag);
-    }
-
-    #[test]
-    fn test_list_name_modification() {
-        let mut name = String::new();
-        assert!(name.is_empty());
-
-        name = "Test Name".to_string();
-        assert_eq!(name, "Test Name");
-
-        name.clear();
-        assert!(name.is_empty());
-    }
-
-    #[test]
-    fn test_item_count_modification() {
-        let mut count = 0i32;
-        assert_eq!(count, 0);
-
-        count = 42;
-        assert_eq!(count, 42);
-
-        count = 0;
-        assert_eq!(count, 0);
+        for (input, expected) in cases {
+            let path = PathBuf::from(input);
+            assert_eq!(
+                ImportModal::extract_name(&path),
+                expected.map(|s| s.to_string()),
+                "Failed for input: {}",
+                input
+            );
+        }
     }
 }
