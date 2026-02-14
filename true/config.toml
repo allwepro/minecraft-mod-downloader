@@ -1,0 +1,23 @@
+default_list_name = "New List"
+default_list_group_name = "New Group"
+
+[[list_groups]]
+lnk = "list_group_1770986614937655824"
+name = "My Lists"
+collapsed = false
+
+[[list_groups]]
+lnk = "list_group_1770986621305839031"
+name = "My Lists"
+collapsed = false
+
+[list_group_assignments]
+
+[[sidebar_ui_order]]
+List = "list_1770986738095379145"
+
+[[sidebar_ui_order]]
+ListGroup = "list_group_1770986621305839031"
+
+[[sidebar_ui_order]]
+ListGroup = "list_group_1770986614937655824"
