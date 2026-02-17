@@ -380,7 +380,8 @@ impl ModalWindow for FolderImportModal {
                                     .path
                                     .file_name()
                                     .unwrap_or_default()
-                                    .to_string_lossy()
+                                    .to_str()
+                                    .unwrap()
                                     .to_string();
 
                                 let mut settings = ListSettingsComponent::new_wo_rt_with_default(

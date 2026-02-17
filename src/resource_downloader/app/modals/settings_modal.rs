@@ -1,6 +1,8 @@
+use crate::common::ui::ash_ui::AshUi;
 use crate::common::ui::structs::modal_window::ModalWindow;
 use crate::resource_downloader::business::xcache::CacheType;
 use crate::resource_downloader::business::{Effect, SharedRDState};
+use eframe::epaint::Color32;
 use egui::{Id, Ui};
 
 #[derive(Clone)]
@@ -49,9 +51,10 @@ impl ModalWindow for SettingsModal {
             *open = false;
         }
 
-        ui.add_space(20.0);
+        ui.add_space(10.0);
+        ui.separator();
         if ui
-            .button(format!(
+            .ash_expand_btn(format!(
                 "{} Advanced",
                 if self.show_advanced_options {
                     "🔽"
@@ -113,7 +116,10 @@ impl SettingsModal {
             ui.label("⚠ Clearing game version or loader cache requires restarting the app to take effect.");
             ui.add_space(3.0);
         }
-        if ui.button("🗑 Clear Cache").clicked() {
+        if ui
+            .button(egui::RichText::new("🗑 Clear Cache").color(Color32::LIGHT_RED))
+            .clicked()
+        {
             {
                 let mut to_clear_wo_mem = Vec::new();
                 if self.cache_types.0 {

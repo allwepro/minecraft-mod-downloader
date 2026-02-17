@@ -125,7 +125,7 @@ impl RMRuntime {
                     }
 
                     let cache_path = FileIndexCache::path(cm.get_cache_dir());
-                    if let Ok(loaded_cache) = FileIndexCache::load(&cache_path).await {
+                    if let Ok(loaded_cache) = FileIndexCache::load(cache_path).await {
                         let mut cache = fic.write();
                         *cache = loaded_cache;
                     }
@@ -568,7 +568,7 @@ impl RMRuntime {
                     {
                         let cache = fic.read();
                         for (path, size, modified) in scan_results {
-                            let cached_hash = cache.get(&path).and_then(|e| {
+                            let cached_hash = cache.get(path.clone()).and_then(|e| {
                                 if e.size == size && e.modified == modified {
                                     Some(e.hash.clone())
                                 } else {
@@ -650,7 +650,7 @@ impl RMRuntime {
                     if cache_changed {
                         let cache_to_save = fic.read().clone();
                         let cache_path = FileIndexCache::path(cm.get_cache_dir());
-                        let _ = cache_to_save.save(&cache_path).await;
+                        let _ = cache_to_save.save(cache_path).await;
                     }
 
                     let _ = tx
@@ -1148,7 +1148,7 @@ impl RMRuntime {
                 self.rt_handle.spawn(async move {
                     let cache_to_save = fic.read().clone();
                     let cache_path = FileIndexCache::path(cm.get_cache_dir());
-                    let _ = cache_to_save.save(&cache_path).await;
+                    let _ = cache_to_save.save(cache_path).await;
                 });
             }
         }

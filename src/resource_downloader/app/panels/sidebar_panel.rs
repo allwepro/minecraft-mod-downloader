@@ -1,10 +1,10 @@
 use crate::common::ui::ash_ui::AshUi;
 use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::app::components::import_options_component::ImportOptionsComponent;
+use crate::resource_downloader::app::context_menus::sidebar_panel::list_context_menu::ListContextMenu;
+use crate::resource_downloader::app::context_menus::sidebar_panel::list_group_context_menu::ListGroupContextMenu;
 use crate::resource_downloader::app::popups::create_menu_popup::CreateMenuPopup;
 use crate::resource_downloader::app::popups::import_popup::ImportPopup;
-use crate::resource_downloader::app::popups::list_context_menu::ListContextMenu;
-use crate::resource_downloader::app::popups::list_group_context_menu::ListGroupContextMenu;
 use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::business::list_group_actions::ListGroupActions;
 use crate::resource_downloader::business::{Effect, SharedRDState};
@@ -12,6 +12,7 @@ use crate::resource_downloader::domain::{
     AppConfig, ListGroup, ListGroupLnk, ListLnk, ResourceType, SidebarItem,
 };
 use eframe::egui;
+use egui::text::LayoutJob;
 use egui::{Color32, StrokeKind, Ui};
 use std::collections::{HashMap, HashSet};
 
@@ -19,7 +20,7 @@ type ListItem = (ListLnk, ResourceType, String, String, String, String, usize);
 
 struct RenderContext<'a> {
     open_list: &'a Option<ListLnk>,
-    open_list_group: &'a Option<ListGroupLnk>,
+    _open_list_group: &'a Option<ListGroupLnk>,
     pending_sidebar_scroll: &'a Option<SidebarItem>,
     force_open_groups: HashSet<ListGroupLnk>,
 }
@@ -33,7 +34,7 @@ impl<'a> RenderContext<'a> {
     ) -> Self {
         Self {
             open_list,
-            open_list_group,
+            _open_list_group: open_list_group,
             pending_sidebar_scroll,
             force_open_groups,
         }
@@ -628,11 +629,6 @@ impl SidebarPanel {
 
         let mut arrow_clicked = false;
 
-        let is_open = ctx
-            .open_list_group
-            .as_ref()
-            .is_some_and(|l| l == &list_group.lnk);
-
         let is_selected = {
             let state = self.state.read();
             state
@@ -640,17 +636,9 @@ impl SidebarPanel {
                 .contains(&SidebarItem::ListGroup(list_group.lnk.clone()))
         };
 
-        let mut frame = egui::Frame::default()
-            .inner_margin(egui::Margin::symmetric(4, 1))
-            .corner_radius(4);
-
-        if is_open {
-            frame = frame
-                .fill(ui.visuals().faint_bg_color)
-                .stroke(egui::Stroke::new(1.0, Color32::from_gray(100)));
-        } else if is_selected {
-            frame = frame.fill(ui.visuals().widgets.active.bg_fill.gamma_multiply(0.3));
-        }
+        let frame = ui
+            .ash_selectable_frame(is_selected)
+            .inner_margin(egui::Margin::symmetric(4, 1));
 
         let list_group_response = frame
             .show(ui, |ui| {
@@ -667,12 +655,27 @@ impl SidebarPanel {
                     let inner_response = ui.dnd_drag_source(id, payload.clone(), |ui| {
                         ui.horizontal(|ui| {
                             ui.set_width(ui.available_width());
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(list_group.name.clone()).strong(),
-                                )
-                                .selectable(false),
+                            let icon = if list_group.is_instance { "🎮 " } else { "" };
+                            let mut job = LayoutJob::default();
+
+                            job.append(
+                                icon,
+                                0.0,
+                                egui::TextFormat {
+                                    color: Color32::LIGHT_BLUE,
+                                    ..Default::default()
+                                },
                             );
+
+                            job.append(
+                                &list_group.name,
+                                0.0,
+                                egui::TextFormat {
+                                    ..Default::default()
+                                },
+                            );
+
+                            ui.add(egui::Label::new(job).selectable(false));
 
                             if !collapsing.is_open() {
                                 let list_count =
@@ -681,14 +684,14 @@ impl SidebarPanel {
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
-                                            let highlight_color = Color32::from_rgb(100, 200, 255);
+                                            let highlight_color = Color32::from_rgb(230, 230, 230);
                                             egui::Frame::default()
                                                 .fill(highlight_color.gamma_multiply(0.1))
                                                 .stroke(egui::Stroke::new(
                                                     1.0,
                                                     highlight_color.gamma_multiply(0.2),
                                                 ))
-                                                .corner_radius(4)
+                                                .corner_radius(3)
                                                 .inner_margin(egui::Margin::symmetric(5, 0))
                                                 .show(ui, |ui| {
                                                     ui.add(egui::Label::new(
@@ -697,7 +700,7 @@ impl SidebarPanel {
                                                             list_count
                                                         ))
                                                         .color(highlight_color)
-                                                        .strong(),
+                                                        .small(),
                                                     ));
                                                 });
                                         },
@@ -950,11 +953,10 @@ impl SidebarPanel {
         &self,
         ui: &mut Ui,
         item: &ListItem,
-        open_list: &Option<ListLnk>,
+        _open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
     ) -> egui::Response {
         let (list, resource_type, icon, name, version, loader, count) = item;
-        let is_open = open_list.clone().is_some_and(|l| l == *list);
         let should_scroll = pending_list_scroll.as_ref().is_some_and(|l| l == list);
 
         let is_selected = {
@@ -963,24 +965,14 @@ impl SidebarPanel {
                 .selected_sidebar_items
                 .contains(&SidebarItem::List(list.clone()))
         };
-
-        let padding = egui::Margin {
-            left: 8,
-            right: 8,
-            top: 6,
-            bottom: 6,
-        };
-        let mut frame = egui::Frame::default()
-            .inner_margin(padding)
-            .corner_radius(4);
-
-        if is_open {
-            frame = frame
-                .fill(ui.visuals().faint_bg_color)
-                .stroke(egui::Stroke::new(1.0, Color32::from_gray(100)));
-        } else if is_selected {
-            frame = frame.fill(ui.visuals().widgets.active.bg_fill.gamma_multiply(0.3));
-        }
+        let frame = ui
+            .ash_selectable_frame(is_selected)
+            .inner_margin(egui::Margin {
+                left: 8,
+                right: 8,
+                top: 6,
+                bottom: 6,
+            });
 
         let response = frame
             .show(ui, |ui| {
@@ -1026,13 +1018,18 @@ impl SidebarPanel {
                                 ui.label(egui::RichText::new(loader).small());
                             });
 
+                        let highlight_color = Color32::from_rgb(230, 230, 230);
                         egui::Frame::default()
-                            .fill(badge_fill)
-                            .stroke(egui::Stroke::new(1.0, Color32::from_rgb(25, 25, 25)))
+                            .fill(highlight_color.gamma_multiply(0.1))
+                            .stroke(egui::Stroke::new(1.0, highlight_color.gamma_multiply(0.2)))
                             .corner_radius(3)
                             .inner_margin(egui::Margin::symmetric(4, 1))
                             .show(ui, |ui| {
-                                ui.label(egui::RichText::new(format!("{count}")).small());
+                                ui.label(
+                                    egui::RichText::new(format!("{count}"))
+                                        .color(highlight_color)
+                                        .small(),
+                                );
                             });
                     });
                 });
