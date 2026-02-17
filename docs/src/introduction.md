@@ -16,3 +16,4 @@ Modern Minecraft management often feels cluttered. Flux provides a sleek, respon
 
 ### Disclaimer
 Flux Launcher is an **independent project** and is **not affiliated, endorsed, or associated** with **Mojang AB**, **Microsoft Corporation**, **Modrinth**, or **Rinth Inc.**
+All trademarks and copyrights belong to their respective owners. Flux is developed by a passionate few of Minecraft enthusiasts and is provided as-is without any warranties. Use at your own risk.

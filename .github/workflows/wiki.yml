@@ -2,10 +2,10 @@ name: Wiki
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, docs/wiki ]
     paths: [ 'docs/**' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, docs/wiki ]
     paths: [ 'docs/**' ]
   workflow_dispatch:
 
