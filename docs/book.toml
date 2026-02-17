@@ -1,0 +1,8 @@
+[book]
+authors = ["Flux Launcher Contributors"]
+language = "en"
+src = "src"
+title = "Flux Launcher & Resoource Manager Manual"
+
+[output.html]
+git-repository-url = "https://github.com/allwepro/minecraft-mod-downloader"

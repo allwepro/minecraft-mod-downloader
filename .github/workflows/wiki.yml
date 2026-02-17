@@ -1,0 +1,42 @@
+name: Wiki
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'docs/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'docs/**' ]
+
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build, Test and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - name: Install mdbook
+        run: |
+          test -x "$HOME/.cargo/bin/mdbook" || cargo install --vers "^0.4" mdbook
+
+      - name: Build & test (book in docs/)
+        run: |
+          mdbook build docs
+          mdbook test docs
+
+      - name: Deploy to gh-pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: docs/book
