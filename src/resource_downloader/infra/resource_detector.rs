@@ -33,7 +33,7 @@ impl ResourceDetector {
                         .extension()
                         .is_some_and(|ext| ext == extension.as_str())
                 {
-                    return Some(entry.file_name().to_string_lossy().to_string());
+                    return Some(entry.file_name().to_str().unwrap().to_string());
                 }
                 None
             })
