@@ -5,6 +5,7 @@
 # RAPHAEL
 - **_KW 50_**: Jetlag + Keine Zeit an alternativ Terminen
 - **_KW 52-3_**: Krank aber nicht Bewegungsunfähig
+- **_KW 7.5-8.5_**: Krank nur halb Bewegungsunfähig
 
 # MARCUS
 - **_KW 50-3_**: Krank
