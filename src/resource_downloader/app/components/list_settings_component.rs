@@ -9,6 +9,7 @@ use egui::Ui;
 #[derive(Clone)]
 pub struct ListSettingsComponent {
     state: SharedRDState,
+    list_lnk: Option<ListLnk>,
     resource_types: Vec<ResourceType>,
     hide_name: bool,
     hide_rt: bool,
@@ -25,6 +26,7 @@ impl ListSettingsComponent {
     pub fn new(state: SharedRDState) -> Self {
         Self {
             state: state.clone(),
+            list_lnk: None,
             hide_name: false,
             hide_rt: false,
             resource_types: RESOURCE_TYPES.to_vec(),
@@ -41,6 +43,7 @@ impl ListSettingsComponent {
     pub fn new_with_rt(state: SharedRDState, resource_type: Vec<ResourceType>) -> Self {
         Self {
             state: state.clone(),
+            list_lnk: None,
             hide_name: false,
             hide_rt: false,
             new_resource_type: resource_type
@@ -64,6 +67,7 @@ impl ListSettingsComponent {
     ) -> Self {
         Self {
             state,
+            list_lnk: None,
             hide_name: true,
             hide_rt: true,
             new_resource_type: resource_type,
@@ -84,6 +88,7 @@ impl ListSettingsComponent {
     ) -> Self {
         Self {
             state,
+            list_lnk: None,
             hide_name: false,
             hide_rt: true,
             new_resource_type: resource_type,
@@ -116,6 +121,7 @@ impl ListSettingsComponent {
         let do_updates = target_list.read().get_do_updates();
         Self {
             state,
+            list_lnk: Some(list),
             hide_name: true,
             hide_rt: true,
             new_resource_type: resource_type,
@@ -169,6 +175,23 @@ impl ListSettingsComponent {
             ui.add_space(10.0);
         }
 
+        let is_managed_by_instance = if let Some(list_lnk) = &self.list_lnk {
+            let state = self.state.read();
+            let config = state.config.read();
+            if let Some(lg_lnk) = config.list_group_assignments.get(list_lnk) {
+                config
+                    .list_groups
+                    .iter()
+                    .find(|lg| &lg.lnk == lg_lnk)
+                    .map(|lg| lg.is_instance)
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         ui.label("Minecraft Version:");
         let version_opt = get_versions!(self.state);
         let offline_mode = self.state.read().offline_mode;
@@ -179,14 +202,20 @@ impl ListSettingsComponent {
                     self.new_game_version = Some(versions[0].clone());
                 }
 
-                egui::ComboBox::from_id_salt("new_list_version_selector")
+                let mut combo = egui::ComboBox::from_id_salt("new_list_version_selector")
                     .selected_text(
                         self.new_game_version
                             .as_ref()
                             .map(|v| v.name.clone())
                             .unwrap_or("Select...".to_string()),
-                    )
-                    .show_ui(ui, |ui| {
+                    );
+
+                if is_managed_by_instance {
+                    combo = combo.width(ui.available_width());
+                }
+
+                combo.show_ui(ui, |ui| {
+                    if !is_managed_by_instance {
                         for version in versions {
                             ui.selectable_value(
                                 &mut self.new_game_version,
@@ -194,7 +223,8 @@ impl ListSettingsComponent {
                                 &version.name,
                             );
                         }
-                    });
+                    }
+                });
             }
             None => {
                 egui::ComboBox::from_id_salt("new_list_version_selector")
@@ -205,6 +235,14 @@ impl ListSettingsComponent {
                     })
                     .show_ui(ui, |_ui| {});
             }
+        }
+
+        if is_managed_by_instance {
+            ui.label(
+                egui::RichText::new("⚠ Managed by instance.")
+                    .small()
+                    .color(egui::Color32::from_rgb(200, 150, 100)),
+            );
         }
 
         ui.add_space(10.0);
@@ -255,19 +293,37 @@ impl ListSettingsComponent {
                 self.new_download_dir = get_default_dir!(self.state, &self.new_resource_type);
             }
 
-            if ui
-                .text_edit_singleline(&mut self.new_download_dir)
-                .changed()
-            {
+            let mut text_edit = egui::TextEdit::singleline(&mut self.new_download_dir);
+            if is_managed_by_instance {
+                text_edit = text_edit.interactive(false);
+            }
+
+            if ui.add(text_edit).changed() && !is_managed_by_instance {
                 self.new_download_dir_edited = true;
             }
 
-            if ui.button("Browse...").clicked() {
+            let mut browse_button = egui::Button::new("Browse...");
+            if is_managed_by_instance {
+                browse_button = browse_button.fill(egui::Color32::from_rgb(60, 60, 60));
+            }
+
+            if ui
+                .add_enabled(!is_managed_by_instance, browse_button)
+                .clicked()
+            {
                 self.new_download_dir_edited = Dialogs::pick_folder(&mut self.new_download_dir)
                     .is_some()
                     || self.new_download_dir_edited;
             }
         });
+
+        if is_managed_by_instance {
+            ui.label(
+                egui::RichText::new("⚠ Managed by instance.")
+                    .small()
+                    .color(egui::Color32::from_rgb(200, 150, 100)),
+            );
+        }
 
         ui.add_space(10.0);
         ui.checkbox(&mut self.new_do_updates, "Automatically check for updates");

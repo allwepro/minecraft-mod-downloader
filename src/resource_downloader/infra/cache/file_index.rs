@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
 
@@ -22,7 +22,7 @@ impl FileIndexCache {
         base_dir.join("file_index.json")
     }
 
-    pub async fn load(path: &Path) -> Result<Self> {
+    pub async fn load(path: PathBuf) -> Result<Self> {
         if !path.exists() {
             return Ok(Self::default());
         }
@@ -31,7 +31,7 @@ impl FileIndexCache {
         Ok(cache)
     }
 
-    pub async fn save(&self, path: &Path) -> Result<()> {
+    pub async fn save(&self, path: PathBuf) -> Result<()> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await?;
         }
@@ -40,13 +40,13 @@ impl FileIndexCache {
         Ok(())
     }
 
-    pub fn get(&self, path: &Path) -> Option<&FileIndexEntry> {
-        self.entries.get(path.to_string_lossy().as_ref())
+    pub fn get(&self, path: PathBuf) -> Option<&FileIndexEntry> {
+        self.entries.get(path.to_str().unwrap())
     }
 
     pub fn insert(&mut self, path: PathBuf, entry: FileIndexEntry) {
         self.entries
-            .insert(path.to_string_lossy().to_string(), entry);
+            .insert(path.to_str().unwrap().to_string(), entry);
     }
 
     pub fn clear(&mut self) {

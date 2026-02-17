@@ -1,8 +1,10 @@
+use crate::common::ui::ash_ui;
 use crate::common::ui::structs::popup_window::Popup;
 use eframe::egui;
 use egui::StrokeKind;
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
 pub struct PopupRequest {
@@ -133,7 +135,9 @@ impl SharedPopupManager {
                 .order(egui::Order::Foreground)
                 .fixed_pos(pos)
                 .show(ctx, |ui| {
-                    let frame_res = egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    let mut style = ui.style().deref().clone();
+                    style.visuals.menu_corner_radius = ash_ui::ASH_ROUNDING;
+                    let frame_res = egui::Frame::popup(&style).show(ui, |ui| {
                         let mut is_open = true;
                         req.popup.render_contents(ui, &mut is_open);
                         if !is_open {

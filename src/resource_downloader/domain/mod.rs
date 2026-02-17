@@ -215,6 +215,15 @@ pub struct ListGroup {
     pub collapsed: bool,
     #[serde(default)]
     pub parent_id: Option<ListGroupLnk>,
+    pub is_instance: bool,
+    #[serde(default)]
+    pub instance_settings: Option<InstanceSettings>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InstanceSettings {
+    pub game_version: GameVersion,
+    pub download_directory: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

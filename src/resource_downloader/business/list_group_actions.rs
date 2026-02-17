@@ -1,5 +1,7 @@
 use crate::resource_downloader::business::{Effect, SharedRDState};
-use crate::resource_downloader::domain::{ListGroup, ListGroupLnk, ListLnk, SidebarItem};
+use crate::resource_downloader::domain::{
+    GameVersion, InstanceSettings, ListGroup, ListGroupLnk, ListLnk, SidebarItem,
+};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::list_actions::ListActions;
@@ -30,6 +32,8 @@ impl ListGroupActions {
                 name,
                 collapsed: false,
                 parent_id,
+                is_instance: false,
+                instance_settings: None,
             });
         }
 
@@ -95,7 +99,9 @@ impl ListGroupActions {
                     lnk: new_lg_id.clone(),
                     name: format!("{} (Copy)", original.name),
                     collapsed: original.collapsed,
+                    is_instance: original.is_instance,
                     parent_id: new_parent_id.clone(),
+                    instance_settings: original.instance_settings.clone(),
                 };
                 config.list_groups.push(new_list_group);
 
@@ -181,6 +187,68 @@ impl ListGroupActions {
                 config.list_group_assignments.insert(list_id, list_group);
             } else {
                 config.list_group_assignments.remove(&list_id);
+            }
+        }
+
+        let state_guard = state.read();
+        state_guard.dispatch(Effect::SaveConfig {
+            config: state_guard.config.read().clone(),
+        });
+    }
+
+    pub fn is_instance_mode(state: SharedRDState, lg_lnk: ListGroupLnk) -> bool {
+        let state_guard = state.read();
+        let config = state_guard.config.read();
+        config
+            .list_groups
+            .iter()
+            .find(|f| f.lnk == lg_lnk)
+            .map(|lg| lg.is_instance)
+            .unwrap_or(false)
+    }
+
+    pub fn toggle_instance_mode(state: SharedRDState, lg_lnk: ListGroupLnk) {
+        {
+            let s = state.write();
+            let mut config = s.config.write();
+            if let Some(list_group) = config.list_groups.iter_mut().find(|f| f.lnk == lg_lnk) {
+                list_group.is_instance = !list_group.is_instance;
+                if list_group.is_instance && list_group.instance_settings.is_none() {
+                    // Initialize with defaults if turning on
+                    if let Some((_, default_dir)) = s.default_dirs.iter().next() {
+                        let parent = std::path::PathBuf::from(default_dir)
+                            .parent()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        list_group.instance_settings = Some(InstanceSettings {
+                            download_directory: parent,
+                            game_version: GameVersion::release("1.20.1".to_string()), // Default fallback
+                        });
+                    }
+                }
+            }
+        }
+
+        let state_guard = state.read();
+        state_guard.dispatch(Effect::SaveConfig {
+            config: state_guard.config.read().clone(),
+        });
+    }
+
+    pub fn update_instance_settings(
+        state: SharedRDState,
+        lg_lnk: ListGroupLnk,
+        directory: String,
+        version: GameVersion,
+    ) {
+        {
+            let s = state.write();
+            let mut config = s.config.write();
+            if let Some(list_group) = config.list_groups.iter_mut().find(|f| f.lnk == lg_lnk) {
+                list_group.instance_settings = Some(InstanceSettings {
+                    download_directory: directory,
+                    game_version: version,
+                });
             }
         }
 

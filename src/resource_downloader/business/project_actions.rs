@@ -1,4 +1,5 @@
 use crate::resource_downloader::business::SharedRDState;
+use crate::resource_downloader::business::list_actions::ListActions;
 use crate::resource_downloader::domain::{
     ListLnk, MutationResult, Project, ProjectDependencyType, ProjectLnk, RTProjectData,
     RTProjectVersion, ResourceType,
@@ -68,10 +69,17 @@ impl ProjectActions {
                 .cloned()
                 .unwrap_or(ResourceType::Mod);
             let config = list.get_resource_type_config(&rt).unwrap();
+            let original_dir = config.download_dir.clone();
+            let effective_dir =
+                ListActions::get_effective_download_dir(&state, &list_lnk, rt, &original_dir);
             (
-                list.get_game_version().clone(),
+                ListActions::get_effective_game_version(
+                    &state,
+                    &list_lnk,
+                    &list.get_game_version(),
+                ),
                 config.loader.clone(),
-                config.download_dir.clone(),
+                effective_dir,
                 rt,
             )
         };
@@ -137,7 +145,10 @@ impl ProjectActions {
                 .cloned()
                 .unwrap_or(ResourceType::Mod);
             let config = list.get_resource_type_config(&rt).unwrap();
-            (config.download_dir.clone(), rt)
+            let original_dir = config.download_dir.clone();
+            let effective_dir =
+                ListActions::get_effective_download_dir(&state, &list_lnk, rt, &original_dir);
+            (effective_dir, rt)
         };
 
         let mut triggered = HashSet::new();

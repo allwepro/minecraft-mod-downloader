@@ -1,3 +1,5 @@
+use crate::common::ui::ash_ui;
+use crate::common::ui::ash_ui::AshUi;
 use crate::common::ui::structs::modal_window::ModalWindow;
 use eframe::egui;
 use parking_lot::RwLock;
@@ -88,6 +90,10 @@ impl SharedModalManager {
                     }
                 });
 
+            ctx.style_mut(|s| {
+                s.visuals.window_corner_radius = ash_ui::ASH_ROUNDING;
+                s.visuals.widgets.open.weak_bg_fill = egui::Color32::TRANSPARENT;
+            });
             egui::Window::new(state.instance.title())
                 .id(state.instance.id().with(tab_str))
                 .collapsible(false)
@@ -95,7 +101,9 @@ impl SharedModalManager {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .open(&mut is_open)
                 .show(ctx, |ui| {
-                    state.instance.render_contents(ui, &mut is_open_internal);
+                    ui.ash_lite(|ui| {
+                        state.instance.render_contents(ui, &mut is_open_internal);
+                    });
                 });
 
             let mut inner = self.0.write();

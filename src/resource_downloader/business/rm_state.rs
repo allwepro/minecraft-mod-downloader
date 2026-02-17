@@ -484,11 +484,10 @@ impl RMState {
                 file_extension,
                 files,
             } => {
-                let norm_dir = Self::normalize_path(directory);
-                self.active_scans.remove(&norm_dir);
-                self.found_files.insert(norm_dir.clone(), files.clone());
+                self.active_scans.remove(&directory);
+                self.found_files.insert(directory.clone(), files.clone());
                 Some(Event::FilesFound {
-                    directory: norm_dir,
+                    directory,
                     file_extension,
                     files,
                 })
@@ -755,8 +754,7 @@ impl RMState {
     }
 
     pub fn find_files(&mut self, directory: PathBuf, file_extension: String) {
-        let norm_dir = Self::normalize_path(directory.clone());
-        self.active_scans.insert(norm_dir);
+        self.active_scans.insert(directory.clone());
         self.dispatch(Effect::FindFiles {
             directory,
             file_extension: vec![
@@ -831,13 +829,61 @@ impl RMState {
         }
         let list_lnk = self.open_list.as_ref().unwrap();
 
-        if let Some(list_arc) = self.list_pool.get(list_lnk) {
+        let dirs_to_scan: Vec<(String, String)> = if let Some(list_arc) =
+            self.list_pool.get(list_lnk)
+        {
             let list = list_arc.read();
+            let config = self.config.read();
+
+            let mut result = Vec::new();
             for rt in list.get_resource_types() {
                 if let Some(tc) = list.get_resource_type_config(&rt) {
-                    self.find_files(tc.download_dir.clone().into(), rt.file_extension());
+                    let original_dir = tc.download_dir.clone();
+
+                    // Apply instance directory override if list is in an instance group
+                    let effective_dir = if let Some(lg_lnk) =
+                        config.list_group_assignments.get(list_lnk)
+                    {
+                        if let Some(list_group) =
+                            config.list_groups.iter().find(|lg| &lg.lnk == lg_lnk)
+                        {
+                            if list_group.is_instance
+                                && matches!(
+                                    rt,
+                                    ResourceType::Mod
+                                        | ResourceType::ResourcePack
+                                        | ResourceType::Shader
+                                )
+                            {
+                                if let Some(instance_settings) = &list_group.instance_settings {
+                                    let subfolder = rt.game_folder();
+                                    let path =
+                                        PathBuf::from(instance_settings.download_directory.clone())
+                                            .join(subfolder);
+                                    path.to_str().unwrap().to_string()
+                                } else {
+                                    original_dir
+                                }
+                            } else {
+                                original_dir
+                            }
+                        } else {
+                            original_dir
+                        }
+                    } else {
+                        original_dir
+                    };
+
+                    result.push((effective_dir, rt.file_extension()));
                 }
             }
+            result
+        } else {
+            Vec::new()
+        };
+
+        for (dir, ext) in dirs_to_scan {
+            self.find_files(dir.into(), ext);
         }
     }
 
@@ -887,10 +933,5 @@ impl RMState {
             download_dir,
             projects,
         });
-    }
-
-    fn normalize_path(path: PathBuf) -> PathBuf {
-        let s = path.to_string_lossy().replace('\\', "/");
-        PathBuf::from(s)
     }
 }

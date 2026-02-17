@@ -28,6 +28,24 @@ impl ListActions {
             .unwrap_or(ResourceType::Mod)
     }
 
+    pub fn get_effective_game_version(
+        state: &SharedRDState,
+        list_lnk: &ListLnk,
+        original_version: &GameVersion,
+    ) -> GameVersion {
+        let s = state.read();
+        let config = s.config.read();
+
+        if let Some(lg_lnk) = config.list_group_assignments.get(list_lnk)
+            && let Some(list_group) = config.list_groups.iter().find(|lg| &lg.lnk == lg_lnk)
+            && list_group.is_instance
+            && let Some(instance_settings) = &list_group.instance_settings
+        {
+            return instance_settings.game_version.clone();
+        }
+        original_version.clone()
+    }
+
     pub fn create_list(
         state: SharedRDState,
         name: String,
@@ -158,8 +176,11 @@ impl ListActions {
             if let Some(rt) = list.get_resource_types().first()
                 && let Some(config) = list.get_resource_type_config(rt)
             {
-                let dir = config.download_dir.clone();
-                state.read().open_explorer(dir.into());
+                let original_dir = config.download_dir.clone();
+                let effective_dir =
+                    Self::get_effective_download_dir(&state, &list_lnk, *rt, &original_dir);
+                println!("Opening folder: {}", effective_dir);
+                state.read().open_explorer(effective_dir.into());
             }
         }
     }
@@ -190,5 +211,31 @@ impl ListActions {
             .read()
             .list_pool
             .mutate(&list_lnk, |list| list.recalculate_dependents());
+    }
+
+    pub fn get_effective_download_dir(
+        state: &SharedRDState,
+        list_lnk: &ListLnk,
+        resource_type: ResourceType,
+        original_download_dir: &str,
+    ) -> String {
+        let s = state.read();
+        let config = s.config.read();
+
+        if let Some(lg_lnk) = config.list_group_assignments.get(list_lnk)
+            && let Some(list_group) = config.list_groups.iter().find(|lg| &lg.lnk == lg_lnk)
+            && list_group.is_instance
+            && matches!(
+                resource_type,
+                ResourceType::Mod | ResourceType::ResourcePack | ResourceType::Shader
+            )
+            && let Some(instance_settings) = &list_group.instance_settings
+        {
+            let subfolder = resource_type.game_folder();
+            let path = PathBuf::from(instance_settings.download_directory.clone()).join(subfolder);
+            return path.to_str().unwrap().to_string();
+        }
+
+        original_download_dir.to_string()
     }
 }
