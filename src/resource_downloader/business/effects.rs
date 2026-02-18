@@ -138,4 +138,13 @@ pub enum Effect {
 
     // Other
     ClearFileIndexCache,
+
+    // Backup/Restore effects
+    ExportBackup {
+        path: PathBuf,
+    },
+
+    ImportBackup {
+        path: PathBuf,
+    },
 }

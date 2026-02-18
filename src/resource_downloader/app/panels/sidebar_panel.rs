@@ -3,6 +3,7 @@ use crate::common::ui::structs::popup_window::Popup;
 use crate::resource_downloader::app::components::import_options_component::ImportOptionsComponent;
 use crate::resource_downloader::app::context_menus::sidebar_panel::list_context_menu::ListContextMenu;
 use crate::resource_downloader::app::context_menus::sidebar_panel::list_group_context_menu::ListGroupContextMenu;
+use crate::resource_downloader::app::context_menus::sidebar_panel::multiselect_context_menu::MultiSelectContextMenu;
 use crate::resource_downloader::app::popups::create_menu_popup::CreateMenuPopup;
 use crate::resource_downloader::app::popups::import_popup::ImportPopup;
 use crate::resource_downloader::business::list_actions::ListActions;
@@ -67,6 +68,7 @@ pub struct SidebarPanel {
     import_popup: ImportPopup,
     context_menu_target: Option<(ListLnk, egui::Rect)>,
     list_group_context_menu_target: Option<(ListGroupLnk, String, egui::Rect)>,
+    multiselect_context_menu_target: Option<(Vec<SidebarItem>, egui::Rect)>,
     import_options: ImportOptionsComponent,
     drop_targets: Vec<DropTarget>,
     hover_group_start: Option<(ListGroupLnk, f64)>,
@@ -84,6 +86,7 @@ impl SidebarPanel {
             import_popup: ImportPopup::new(state.clone()),
             context_menu_target: None,
             list_group_context_menu_target: None,
+            multiselect_context_menu_target: None,
             import_options: ImportOptionsComponent::new(state.clone()),
             drop_targets: Vec::new(),
             hover_group_start: None,
@@ -362,6 +365,19 @@ impl SidebarPanel {
                 self.list_group_context_menu_target = None;
             }
         }
+
+        if let Some((selected_items, rect)) = &self.multiselect_context_menu_target {
+            let menu =
+                MultiSelectContextMenu::new(self.state.clone(), selected_items.clone(), *rect);
+            let menu_id = menu.id();
+            let pm = self.state.read().popup_manager.clone();
+            if pm.is_open(menu_id) {
+                pm.register_interaction_area(menu_id, *rect);
+                pm.request_show(Box::new(menu), *rect);
+            } else {
+                self.multiselect_context_menu_target = None;
+            }
+        }
     }
 
     fn show_popup_button<P: Popup + Clone + 'static>(
@@ -636,6 +652,11 @@ impl SidebarPanel {
                 .contains(&SidebarItem::ListGroup(list_group.lnk.clone()))
         };
 
+        let is_open_group = {
+            let state = self.state.read();
+            state.open_list_group.as_ref() == Some(&list_group.lnk)
+        };
+
         let frame = ui
             .ash_selectable_frame(is_selected)
             .inner_margin(egui::Margin::symmetric(4, 1));
@@ -658,6 +679,12 @@ impl SidebarPanel {
                             let icon = if list_group.is_instance { "🎮 " } else { "" };
                             let mut job = LayoutJob::default();
 
+                            let name_color = if is_open_group {
+                                Color32::from_rgb(150, 180, 255)
+                            } else {
+                                Color32::LIGHT_BLUE
+                            };
+
                             job.append(
                                 icon,
                                 0.0,
@@ -671,6 +698,11 @@ impl SidebarPanel {
                                 &list_group.name,
                                 0.0,
                                 egui::TextFormat {
+                                    color: if is_open_group {
+                                        name_color
+                                    } else {
+                                        ui.visuals().text_color()
+                                    },
                                     ..Default::default()
                                 },
                             );
@@ -752,6 +784,8 @@ impl SidebarPanel {
                     }
 
                     if drag_response.secondary_clicked() {
+                        let selected_count = self.state.read().selected_sidebar_items.len();
+
                         {
                             let mut state = self.state.write();
                             let item_sid = SidebarItem::ListGroup(lg_lnk.clone());
@@ -761,10 +795,25 @@ impl SidebarPanel {
                                 state.last_clicked_sidebar_item = Some(item_sid);
                             }
                         }
-                        self.list_group_context_menu_target =
-                            Some((lg_lnk.clone(), list_group.name.clone(), drag_response.rect));
-                        let menu_id = egui::Id::new("list_group_context_menu").with(&lg_lnk);
-                        self.state.read().popup_manager.toggle(menu_id);
+
+                        if selected_count > 1 {
+                            let selected_items: Vec<SidebarItem> = self
+                                .state
+                                .read()
+                                .selected_sidebar_items
+                                .iter()
+                                .cloned()
+                                .collect();
+                            self.multiselect_context_menu_target =
+                                Some((selected_items, drag_response.rect));
+                            let menu_id = egui::Id::new("multiselect_context_menu");
+                            self.state.read().popup_manager.toggle(menu_id);
+                        } else {
+                            self.list_group_context_menu_target =
+                                Some((lg_lnk.clone(), list_group.name.clone(), drag_response.rect));
+                            let menu_id = egui::Id::new("list_group_context_menu").with(&lg_lnk);
+                            self.state.read().popup_manager.toggle(menu_id);
+                        }
                     }
 
                     if drag_response.double_clicked() {
@@ -953,11 +1002,12 @@ impl SidebarPanel {
         &self,
         ui: &mut Ui,
         item: &ListItem,
-        _open_list: &Option<ListLnk>,
+        open_list: &Option<ListLnk>,
         pending_list_scroll: &Option<ListLnk>,
     ) -> egui::Response {
         let (list, resource_type, icon, name, version, loader, count) = item;
         let should_scroll = pending_list_scroll.as_ref().is_some_and(|l| l == list);
+        let is_open = open_list.as_ref().is_some_and(|l| l == list);
 
         let is_selected = {
             let state = self.state.read();
@@ -965,6 +1015,7 @@ impl SidebarPanel {
                 .selected_sidebar_items
                 .contains(&SidebarItem::List(list.clone()))
         };
+
         let frame = ui
             .ash_selectable_frame(is_selected)
             .inner_margin(egui::Margin {
@@ -980,7 +1031,11 @@ impl SidebarPanel {
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.label(icon);
-                        ui.add(egui::Label::new(egui::RichText::new(name).strong()).truncate());
+                        let mut name_text = egui::RichText::new(name).strong();
+                        if is_open {
+                            name_text = name_text.color(Color32::from_rgb(150, 180, 255));
+                        }
+                        ui.add(egui::Label::new(name_text).truncate());
                     });
                     ui.add_space(2.0);
                     ui.horizontal(|ui| {
@@ -1430,6 +1485,8 @@ impl SidebarPanel {
             self.context_menu_target = Some((item.0.clone(), response.rect));
         }
         if response.secondary_clicked() {
+            let selected_count = self.state.read().selected_sidebar_items.len();
+
             {
                 let mut state = self.state.write();
                 let item_sid = SidebarItem::List(item.0.clone());
@@ -1439,9 +1496,23 @@ impl SidebarPanel {
                     state.last_clicked_sidebar_item = Some(item_sid);
                 }
             }
-            self.context_menu_target = Some((item.0.clone(), response.rect));
-            let menu_id = egui::Id::new("list_context_menu").with(&item.0);
-            self.state.read().popup_manager.toggle(menu_id);
+
+            if selected_count > 1 {
+                let selected_items: Vec<SidebarItem> = self
+                    .state
+                    .read()
+                    .selected_sidebar_items
+                    .iter()
+                    .cloned()
+                    .collect();
+                self.multiselect_context_menu_target = Some((selected_items, response.rect));
+                let menu_id = egui::Id::new("multiselect_context_menu");
+                self.state.read().popup_manager.toggle(menu_id);
+            } else {
+                self.context_menu_target = Some((item.0.clone(), response.rect));
+                let menu_id = egui::Id::new("list_context_menu").with(&item.0);
+                self.state.read().popup_manager.toggle(menu_id);
+            }
         }
     }
 
@@ -1524,13 +1595,13 @@ impl SidebarPanel {
             state.selected_sidebar_items.insert(item.clone());
             state.last_clicked_sidebar_item = Some(item.clone());
 
+            drop(state);
             match &item {
                 SidebarItem::List(l_lnk) => {
-                    drop(state);
                     ListActions::toggle_open_list(self.state.clone(), l_lnk);
                 }
                 SidebarItem::ListGroup(lg_lnk) => {
-                    state.set_open_list_group(Some(lg_lnk.clone()));
+                    ListGroupActions::toggle_open_group_list(self.state.clone(), lg_lnk);
                 }
             }
         }

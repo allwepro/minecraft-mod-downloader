@@ -263,7 +263,7 @@ impl MainPanel {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui
                                 .add(egui::Button::new(
-                                    egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
+                                    egui::RichText::new("🗑 Delete List").color(Color32::LIGHT_RED),
                                 ))
                                 .clicked()
                             {
@@ -287,7 +287,7 @@ impl MainPanel {
                                 )
                             {
                                 let ext = path.extension().and_then(|s| s.to_str());
-                                if ext == Some("toml") || ext == Some("mmd") {
+                                if ext == Some("mmd") {
                                     ListActions::export_list(self.state.clone(), lnk.clone(), path);
                                 } else if content_type == ResourceType::Mod {
                                     ListActions::export_legacy_list(

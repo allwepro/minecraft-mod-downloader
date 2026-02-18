@@ -4,6 +4,7 @@ mod events;
 pub(crate) mod list_actions;
 pub(crate) mod list_group_actions;
 mod list_pool;
+pub(crate) mod most_searched_stale;
 pub(crate) mod project_actions;
 pub mod rm_api;
 pub(crate) mod rm_state;

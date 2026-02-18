@@ -257,4 +257,13 @@ impl ListGroupActions {
             config: state_guard.config.read().clone(),
         });
     }
+
+    pub fn toggle_open_group_list(state: SharedRDState, lg_lnk: &ListGroupLnk) {
+        let current = { state.read().open_list_group.clone() };
+        if current.as_ref() == Some(lg_lnk) {
+            state.write().set_open_list_group(None);
+        } else {
+            state.write().set_open_list_group(Some(lg_lnk.clone()));
+        }
+    }
 }
