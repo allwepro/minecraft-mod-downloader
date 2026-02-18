@@ -263,7 +263,7 @@ impl MainPanel {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui
                                 .add(egui::Button::new(
-                                    egui::RichText::new("🗑 Delete").color(Color32::LIGHT_RED),
+                                    egui::RichText::new("🗑 Delete List").color(Color32::LIGHT_RED),
                                 ))
                                 .clicked()
                             {

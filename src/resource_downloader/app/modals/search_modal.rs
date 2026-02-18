@@ -1,6 +1,6 @@
 use crate::common::ui::structs::modal_window::ModalWindow;
-use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::business::project_actions::ProjectActions;
+use crate::resource_downloader::business::{SharedRDState, most_searched_stale};
 use crate::resource_downloader::domain::{
     GameLoader, GameVersion, ListLnk, ProjectLnk, ResourceType,
 };
@@ -85,10 +85,18 @@ impl ModalWindow for SearchModal {
     }
 
     fn title(&self) -> String {
-        "Search Project".to_string()
+        format!("Search {}s", self.resource_type.display_name())
     }
 
     fn render_contents(&mut self, ui: &mut Ui, open: &mut bool) {
+        ui.label(
+            egui::RichText::new(
+                "For discovering please use the Modrinth Website as this \
+        serves just as a quick search tool to find projects and add them to your lists.",
+            )
+            .small()
+            .weak(),
+        );
         ui.horizontal(|ui| {
             let query_response = ui.add(
                 egui::TextEdit::singleline(&mut self.search_query)
@@ -106,6 +114,20 @@ impl ModalWindow for SearchModal {
                 self.searched_query = Some(self.search_query.clone());
             }
         });
+        if let Some(searched_query) = &self.searched_query
+            && let Some(result) =
+                most_searched_stale::is_for_other_type(searched_query.clone(), &self.resource_type)
+        {
+            ui.label(
+                egui::RichText::new(format!(
+                    "This list is for {}s only but your search seems like a {} which you have\
+                         to add to a list of that type!",
+                    self.resource_type.display_name(),
+                    result.0.display_name()
+                ))
+                .small(),
+            );
+        }
         ui.separator();
 
         egui::ScrollArea::vertical()
