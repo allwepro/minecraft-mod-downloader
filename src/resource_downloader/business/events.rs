@@ -17,6 +17,7 @@ pub enum Event {
         lists: Vec<ListLnk>,
         default_download_dir_by_type: HashMap<ResourceType, String>,
     },
+    Reinitialize,
     FailedInitialization {
         error: String,
     },
@@ -221,6 +222,32 @@ pub enum Event {
     FolderImportCandidatesFound {
         results: HashMap<String, Vec<(ProjectLnk, String)>>,
     },
+
+    BackupExportStarted,
+    BackupExportProgress {
+        current: usize,
+        total: usize,
+        message: String,
+    },
+    BackupExported {
+        path: PathBuf,
+    },
+    FailedBackupExport {
+        error: String,
+    },
+
+    BackupImportStarted,
+    BackupImportProgress {
+        current: usize,
+        total: usize,
+        message: String,
+    },
+    BackupImported {
+        path: PathBuf,
+    },
+    FailedBackupImport {
+        error: String,
+    },
 }
 
 pub enum InternalEvent {
@@ -234,6 +261,7 @@ pub enum InternalEvent {
         default_download_dir_by_type: HashMap<ResourceType, String>,
         offline_mode: bool,
     },
+    Reinitialize,
     ListCreated {
         name: String,
         resource_type: ResourceType,

@@ -95,6 +95,8 @@ pub struct RMState {
 
     pub selected_sidebar_items: HashSet<SidebarItem>,
     pub last_clicked_sidebar_item: Option<SidebarItem>,
+
+    pub backup_progress: Option<(usize, usize, String)>,
 }
 
 impl RMState {
@@ -139,6 +141,8 @@ impl RMState {
 
             selected_sidebar_items: HashSet::new(),
             last_clicked_sidebar_item: None,
+
+            backup_progress: None,
         }
     }
 
@@ -347,14 +351,18 @@ impl RMState {
 
                 self.default_dirs = default_download_dir_by_type.clone();
 
-                if let Some(last_open) = &config.last_open_list_id
-                    && list_lnks.contains(last_open)
-                {
-                    self.set_open_list_no_save(Some(last_open.clone()));
-                    self.pending_sidebar_scroll = Some(SidebarItem::from(last_open));
-                    self.selected_sidebar_items
-                        .insert(SidebarItem::from(last_open));
-                    self.last_clicked_sidebar_item = Some(SidebarItem::from(last_open));
+                if let Some(last_open) = &config.last_open_item {
+                    match last_open {
+                        SidebarItem::List(lnk) => {
+                            self.set_open_list_no_save(Some(lnk.clone()));
+                        }
+                        SidebarItem::ListGroup(lnk) => {
+                            self.set_open_list_group(Some(lnk.clone()));
+                        }
+                    }
+                    self.pending_sidebar_scroll = Some(last_open.clone());
+                    self.selected_sidebar_items.insert(last_open.clone());
+                    self.last_clicked_sidebar_item = Some(last_open.clone());
                 }
 
                 Some(Event::Initialized {
@@ -624,6 +632,17 @@ impl RMState {
                 }
                 Some(Event::FolderImportCandidatesFound { results })
             }
+            InternalEvent::Reinitialize => {
+                self.loading = true;
+                self.open_list = None;
+                self.open_list_group = None;
+                self.selected_sidebar_items.clear();
+                self.last_clicked_sidebar_item = None;
+                self.pending_sidebar_scroll = None;
+
+                self.dispatch(Effect::Initialize);
+                None
+            }
         }
     }
 
@@ -649,7 +668,8 @@ impl RMState {
         }
 
         self.open_list = list.clone();
-        self.config.write().last_open_list_id = list;
+        self.open_list_group = None;
+        self.config.write().last_open_item = list.as_ref().map(SidebarItem::from);
         self.save_config();
 
         self.request_full_refresh();
@@ -661,7 +681,8 @@ impl RMState {
         }
 
         self.open_list = list.clone();
-        self.config.write().last_open_list_id = list;
+        self.open_list_group = None;
+        self.config.write().last_open_item = list.as_ref().map(SidebarItem::from);
         self.save_config();
 
         self.request_full_refresh();
@@ -677,10 +698,10 @@ impl RMState {
                 self.list_pool.save(&old_list);
             }
             self.open_list = None;
-            self.config.write().last_open_list_id = None;
         }
 
-        self.open_list_group = list_group;
+        self.open_list_group = list_group.clone();
+        self.config.write().last_open_item = list_group.as_ref().map(SidebarItem::from);
         self.save_config();
         self.request_full_refresh();
     }

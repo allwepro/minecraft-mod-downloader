@@ -4,6 +4,7 @@ use crate::resource_downloader::business::xcache::CacheType;
 use crate::resource_downloader::business::{Effect, SharedRDState};
 use eframe::epaint::Color32;
 use egui::{Id, Ui};
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct SettingsModal {
@@ -13,6 +14,8 @@ pub struct SettingsModal {
     default_list_group_name: String,
     show_advanced_options: bool,
     cache_types: (bool, bool, bool, bool, bool, bool, bool, bool),
+    show_import_warning: bool,
+    pending_import_path: Option<PathBuf>,
 }
 
 impl SettingsModal {
@@ -24,6 +27,8 @@ impl SettingsModal {
             default_list_group_name: String::new(),
             show_advanced_options: false,
             cache_types: (false, false, false, false, false, false, false, false),
+            show_import_warning: false,
+            pending_import_path: None,
         }
     }
 }
@@ -49,6 +54,121 @@ impl ModalWindow for SettingsModal {
         if ui.button("💾 Save").clicked() {
             self.save_on_close = true;
             *open = false;
+        }
+
+        ui.add_space(10.0);
+        ui.separator();
+        ui.add_space(5.0);
+
+        ui.strong("Backup & Restore");
+        ui.weak("Export or import all settings and lists as a .flux-rm file");
+        ui.add_space(5.0);
+
+        let backup_progress = self.state.read().backup_progress.clone();
+        if let Some((current, total, message)) = &backup_progress {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(format!("{} ({}/{})", message, current, total));
+            });
+            ui.add_space(5.0);
+        }
+
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(
+                    backup_progress.is_none(),
+                    egui::Button::new("📤 Export Backup"),
+                )
+                .clicked()
+                && let Some(path) = rfd::FileDialog::new()
+                    .set_file_name("flux-resource-manager-backup.flux-rm")
+                    .add_filter("Flux RM Backup", &["flux-rm"])
+                    .save_file()
+            {
+                self.state.read().dispatch(Effect::ExportBackup { path });
+            }
+
+            if ui
+                .add_enabled(
+                    backup_progress.is_none(),
+                    egui::Button::new("📥 Import Backup"),
+                )
+                .clicked()
+                && let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Flux RM Backup", &["flux-rm"])
+                    .pick_file()
+            {
+                self.pending_import_path = Some(path);
+                self.show_import_warning = true;
+            }
+        });
+
+        if self.show_import_warning {
+            egui::Window::new("⚠ Warning: Import Backup")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ui.ctx(), |ui| {
+                    ui.set_min_width(400.0);
+                    ui.vertical(|ui| {
+                        ui.colored_label(
+                            Color32::from_rgb(255, 150, 0),
+                            egui::RichText::new("⚠ Important Warning")
+                                .strong()
+                                .size(18.0),
+                        );
+                        ui.add_space(10.0);
+
+                        ui.label(egui::RichText::new(
+                            "Importing a backup will OVERWRITE all existing settings and lists!"
+                        ).strong());
+                        ui.add_space(5.0);
+
+                        ui.label("This action will:");
+                        ui.label("  • Replace all current lists with the backup");
+                        ui.label("  • Replace all settings with the backup");
+                        ui.label("  • Automatically reload all data");
+                        ui.add_space(5.0);
+
+                        ui.colored_label(
+                            Color32::from_rgb(255, 100, 100),
+                            egui::RichText::new(
+                                "Make sure you have saved any unsaved changes before proceeding!",
+                            )
+                            .strong(),
+                        );
+
+                        ui.add_space(15.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        ui.horizontal(|ui| {
+                            if ui
+                                .button(
+                                    egui::RichText::new("✔ Yes, Import")
+                                        .color(Color32::from_rgb(100, 255, 100)),
+                                )
+                                .clicked()
+                            {
+                                if let Some(path) = self.pending_import_path.take() {
+                                    self.state.read().dispatch(Effect::ImportBackup { path });
+                                }
+                                self.show_import_warning = false;
+                            }
+
+                            if ui
+                                .button(
+                                    egui::RichText::new("❌ Cancel")
+                                        .color(Color32::from_rgb(255, 100, 100)),
+                                )
+                                .clicked()
+                            {
+                                self.pending_import_path = None;
+                                self.show_import_warning = false;
+                            }
+                        });
+                    });
+                });
         }
 
         ui.add_space(10.0);
