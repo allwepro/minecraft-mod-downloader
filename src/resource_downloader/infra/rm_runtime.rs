@@ -3,8 +3,8 @@ use crate::resource_downloader::business::services::ApiService;
 use crate::resource_downloader::business::{Effect, Event};
 use crate::resource_downloader::business::{FolderImportCandidate, InternalEvent};
 use crate::resource_downloader::domain::{
-    GameLoader, GameVersion, ListLnk, Project, ProjectDependency, ProjectList, ProjectLnk,
-    ProjectTypeConfig, ProjectVersion, RESOURCE_TYPES, ResourceType,
+    AppConfig, GameLoader, GameVersion, ListLnk, Project, ProjectDependency, ProjectList,
+    ProjectLnk, ProjectTypeConfig, ProjectVersion, RESOURCE_TYPES, ResourceType,
 };
 use crate::resource_downloader::infra::cache::file_index;
 use crate::resource_downloader::infra::cache::file_index::{FileIndexCache, FileIndexEntry};
@@ -14,6 +14,7 @@ use crate::resource_downloader::infra::{
 use parking_lot::RwLock;
 use sha1::{Digest, Sha1};
 use std::collections::HashMap;
+use std::future::Future;
 use std::pin::Pin;
 use std::process::Command;
 use std::sync::Arc;
@@ -1151,6 +1152,192 @@ impl RMRuntime {
                     let _ = cache_to_save.save(cache_path).await;
                 });
             }
+            Effect::ExportBackup { path } => {
+                self.rt_handle.spawn(async move {
+                    let _ = tx
+                        .send(InternalEvent::Standard(Event::BackupExportStarted))
+                        .await;
+
+                    match Self::export_backup(&cm, &lm, path.clone(), tx.clone()).await {
+                        Ok(_) => {
+                            let _ = tx
+                                .send(InternalEvent::Standard(Event::BackupExported { path }))
+                                .await;
+                        }
+                        Err(e) => {
+                            let _ = tx
+                                .send(InternalEvent::Standard(Event::FailedBackupExport {
+                                    error: e.to_string(),
+                                }))
+                                .await;
+                        }
+                    }
+                });
+            }
+            Effect::ImportBackup { path } => {
+                let rt_handle = self.rt_handle.clone();
+                self.rt_handle.spawn(async move {
+                    let _ = tx
+                        .send(InternalEvent::Standard(Event::BackupImportStarted))
+                        .await;
+
+                    match Self::import_backup(&cm, &lm, path.clone(), tx.clone()).await {
+                        Ok(_) => {
+                            let _ = tx
+                                .send(InternalEvent::Standard(Event::BackupImported { path }))
+                                .await;
+
+                            rt_handle.spawn(async move {
+                                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                                let _ = tx.send(InternalEvent::Reinitialize).await;
+                            });
+                        }
+                        Err(e) => {
+                            let _ = tx
+                                .send(InternalEvent::Standard(Event::FailedBackupImport {
+                                    error: e.to_string(),
+                                }))
+                                .await;
+                        }
+                    }
+                });
+            }
         }
+    }
+
+    async fn export_backup(
+        cm: &Arc<ConfigManager>,
+        lm: &Arc<ListFileManager>,
+        output_path: std::path::PathBuf,
+        tx: mpsc::Sender<InternalEvent>,
+    ) -> anyhow::Result<()> {
+        use std::io::Write;
+
+        let _ = tx
+            .send(InternalEvent::Standard(Event::BackupExportProgress {
+                current: 1,
+                total: 3,
+                message: "Creating backup file...".to_string(),
+            }))
+            .await;
+
+        let file = std::fs::File::create(&output_path)?;
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .unix_permissions(0o755);
+
+        let _ = tx
+            .send(InternalEvent::Standard(Event::BackupExportProgress {
+                current: 2,
+                total: 3,
+                message: "Exporting config...".to_string(),
+            }))
+            .await;
+
+        let config = cm.load_config().await?;
+        let config_str = toml::to_string_pretty(&config)?;
+        zip.start_file("config.toml", options)?;
+        zip.write_all(config_str.as_bytes())?;
+
+        let _ = tx
+            .send(InternalEvent::Standard(Event::BackupExportProgress {
+                current: 3,
+                total: 3,
+                message: "Exporting lists...".to_string(),
+            }))
+            .await;
+
+        let list_lnks = lm.get_available_lists().await;
+        for lnk in list_lnks {
+            if let Ok(list) = lm.load(&lnk).await {
+                let list_str = toml::to_string_pretty(&list)?;
+                zip.start_file(format!("lists/{}.mmd", lnk), options)?;
+                zip.write_all(list_str.as_bytes())?;
+            }
+        }
+
+        zip.finish()?;
+        Ok(())
+    }
+
+    async fn import_backup(
+        cm: &Arc<ConfigManager>,
+        lm: &Arc<ListFileManager>,
+        backup_path: std::path::PathBuf,
+        tx: mpsc::Sender<InternalEvent>,
+    ) -> anyhow::Result<()> {
+        use std::io::Read;
+
+        let _ = tx
+            .send(InternalEvent::Standard(Event::BackupImportProgress {
+                current: 1,
+                total: 3,
+                message: "Reading backup file...".to_string(),
+            }))
+            .await;
+
+        let (config_str, list_data) = tokio::task::spawn_blocking(
+            #[allow(clippy::type_complexity)]
+            move || -> anyhow::Result<(Option<String>, Vec<(String, String)>)> {
+                let file = std::fs::File::open(&backup_path)?;
+                let mut zip = zip::ZipArchive::new(file)?;
+
+                let mut config_str = None;
+                let mut list_data = Vec::new();
+
+                if let Ok(mut config_file) = zip.by_name("config.toml") {
+                    let mut s = String::new();
+                    config_file.read_to_string(&mut s)?;
+                    config_str = Some(s);
+                }
+
+                for i in 0..zip.len() {
+                    let mut file = zip.by_index(i)?;
+                    let file_name = file.name().to_string();
+
+                    if file_name.starts_with("lists/") && file_name.ends_with(".mmd") {
+                        let mut list_str = String::new();
+                        file.read_to_string(&mut list_str)?;
+                        let lnk = file_name
+                            .trim_start_matches("lists/")
+                            .trim_end_matches(".mmd")
+                            .to_string();
+                        list_data.push((lnk, list_str));
+                    }
+                }
+
+                Ok((config_str, list_data))
+            },
+        )
+        .await??;
+
+        let _ = tx
+            .send(InternalEvent::Standard(Event::BackupImportProgress {
+                current: 2,
+                total: 3,
+                message: "Restoring config...".to_string(),
+            }))
+            .await;
+
+        if let Some(config_content) = config_str {
+            let config: AppConfig = toml::from_str(&config_content)?;
+            cm.save_config(&config).await?;
+        }
+
+        let _ = tx
+            .send(InternalEvent::Standard(Event::BackupImportProgress {
+                current: 3,
+                total: 3,
+                message: "Restoring lists...".to_string(),
+            }))
+            .await;
+
+        for (_lnk, list_str) in list_data {
+            let list: ProjectList = toml::from_str(&list_str)?;
+            lm.save(&list).await?;
+        }
+
+        Ok(())
     }
 }

@@ -95,6 +95,8 @@ pub struct RMState {
 
     pub selected_sidebar_items: HashSet<SidebarItem>,
     pub last_clicked_sidebar_item: Option<SidebarItem>,
+
+    pub backup_progress: Option<(usize, usize, String)>,
 }
 
 impl RMState {
@@ -139,6 +141,8 @@ impl RMState {
 
             selected_sidebar_items: HashSet::new(),
             last_clicked_sidebar_item: None,
+
+            backup_progress: None,
         }
     }
 
@@ -627,6 +631,17 @@ impl RMState {
                     }
                 }
                 Some(Event::FolderImportCandidatesFound { results })
+            }
+            InternalEvent::Reinitialize => {
+                self.loading = true;
+                self.open_list = None;
+                self.open_list_group = None;
+                self.selected_sidebar_items.clear();
+                self.last_clicked_sidebar_item = None;
+                self.pending_sidebar_scroll = None;
+
+                self.dispatch(Effect::Initialize);
+                None
             }
         }
     }

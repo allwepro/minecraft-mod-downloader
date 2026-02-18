@@ -287,7 +287,7 @@ impl MainPanel {
                                 )
                             {
                                 let ext = path.extension().and_then(|s| s.to_str());
-                                if ext == Some("toml") || ext == Some("mmd") {
+                                if ext == Some("mmd") {
                                     ListActions::export_list(self.state.clone(), lnk.clone(), path);
                                 } else if content_type == ResourceType::Mod {
                                     ListActions::export_legacy_list(

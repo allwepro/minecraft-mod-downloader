@@ -10,6 +10,7 @@ use crate::resource_downloader::app::modals::legacy_import_progress_modal::Legac
 use crate::resource_downloader::app::modals::modrinth_collection_import_modal::ModrinthCollectionImportModal;
 use crate::resource_downloader::app::modals::settings_modal::SettingsModal;
 use crate::resource_downloader::app::notifications::fail_notification::FailedNotification;
+use crate::resource_downloader::app::notifications::success_notification::SuccessNotification;
 use crate::resource_downloader::app::panels::main_panel::MainPanel;
 use crate::resource_downloader::app::panels::sidebar_panel::SidebarPanel;
 use crate::resource_downloader::business::services::{ApiService, UpdateFn};
@@ -203,6 +204,61 @@ impl ViewController for RMHandler {
                     self.notification_manager
                         .notify(Box::new(FailedNotification::new(
                             "Failed to Import Modrinth Collection",
+                            error.as_str(),
+                        )));
+                }
+                Event::BackupExportStarted => {
+                    self.state.write().backup_progress =
+                        Some((0, 3, "Starting export...".to_string()));
+                }
+                Event::BackupExportProgress {
+                    current,
+                    total,
+                    message,
+                } => {
+                    self.state.write().backup_progress = Some((current, total, message));
+                }
+                Event::BackupExported { path } => {
+                    self.state.write().backup_progress = None;
+                    self.notification_manager
+                        .notify(Box::new(SuccessNotification::new(
+                            "Backup Exported",
+                            format!("Backup successfully saved to: {:?}", path).as_str(),
+                        )));
+                }
+                Event::FailedBackupExport { error } => {
+                    self.state.write().backup_progress = None;
+                    self.notification_manager
+                        .notify(Box::new(FailedNotification::new(
+                            "Backup Export Failed",
+                            error.as_str(),
+                        )));
+                }
+                Event::BackupImportStarted => {
+                    self.state.write().backup_progress =
+                        Some((0, 3, "Starting import...".to_string()));
+                }
+                Event::BackupImportProgress {
+                    current,
+                    total,
+                    message,
+                } => {
+                    self.state.write().backup_progress = Some((current, total, message));
+                }
+                Event::BackupImported { path } => {
+                    self.state.write().backup_progress = None;
+                    self.modal_manager.close_active();
+                    self.notification_manager
+                        .notify(Box::new(SuccessNotification::new(
+                            "Backup Imported",
+                            format!("Backup imported from: {:?}\nReloading data...", path).as_str(),
+                        )));
+                }
+                Event::FailedBackupImport { error } => {
+                    self.state.write().backup_progress = None;
+                    self.notification_manager
+                        .notify(Box::new(FailedNotification::new(
+                            "Backup Import Failed",
                             error.as_str(),
                         )));
                 }
