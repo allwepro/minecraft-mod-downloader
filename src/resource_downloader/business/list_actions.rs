@@ -73,16 +73,10 @@ impl ListActions {
     }
 
     pub fn toggle_open_list(state: SharedRDState, list: &ListLnk) {
-        let current = state.read().open_list.clone();
+        let current = { state.read().open_list.clone() };
         if current.as_ref() == Some(list) {
             state.write().set_open_list(None);
         } else {
-            {
-                let mut s = state.write();
-                if s.open_list_group.is_some() {
-                    s.open_list_group = None;
-                }
-            }
             state.write().set_open_list(Some(list.clone()));
         }
     }
@@ -112,7 +106,6 @@ impl ListActions {
                     SidebarItem::List(list_lnk) => {
                         if s.open_list.as_ref() == Some(list_lnk) {
                             s.open_list = None;
-                            config.last_open_list_id = None;
                         }
                         config.sidebar_ui_order.retain(|i| !i.match_list(list_lnk));
                         config.list_group_assignments.remove(list_lnk);
@@ -152,6 +145,10 @@ impl ListActions {
                             .retain(|i| !i.match_list_group(lg_lnk));
                         config_changed = true;
                     }
+                }
+                if config.last_open_item.as_ref() == Some(item) {
+                    config.last_open_item = None;
+                    config_changed = true;
                 }
             }
         }

@@ -232,7 +232,7 @@ pub struct AppConfig {
     pub default_list_name: String,
     #[serde(default = "default_list_group_name")]
     pub default_list_group_name: String,
-    pub last_open_list_id: Option<ListLnk>,
+    pub last_open_item: Option<SidebarItem>,
     #[serde(default)]
     pub list_groups: Vec<ListGroup>,
     #[serde(default)]
@@ -246,7 +246,7 @@ impl Default for AppConfig {
         Self {
             default_list_name: default_list_name(),
             default_list_group_name: default_list_group_name(),
-            last_open_list_id: None,
+            last_open_item: None,
             list_groups: Vec::new(),
             list_group_assignments: HashMap::new(),
             sidebar_ui_order: Vec::new(),
