@@ -236,3 +236,435 @@ impl ListActions {
         original_download_dir.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::ui::helper::modal_manager::SharedModalManager;
+    use crate::common::ui::helper::notification_manager::SharedNotificationManager;
+    use crate::common::ui::helper::pop_up_manager::SharedPopupManager;
+    use crate::resource_downloader::business::services::ApiService;
+    use crate::resource_downloader::business::{InternalEvent, RMState};
+    use crate::resource_downloader::domain::{
+        AppConfig, GameLoader, GameVersion, InstanceSettings, ListGroup, ListGroupLnk, ListLnk,
+        ProjectList, ProjectTypeConfig, ResourceType, SidebarItem,
+    };
+    use parking_lot::RwLock;
+    use std::sync::Arc;
+    use tokio::sync::mpsc;
+
+    fn setup_test_state() -> SharedRDState {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let handle = rt.handle().clone();
+
+        let modal_manager = SharedModalManager::default();
+        let popup_manager = SharedPopupManager::default();
+        let notification_manager = SharedNotificationManager::new();
+
+        let (_effect_sx, _effect_rx) = mpsc::channel::<Effect>(1024);
+        let (_event_sx, event_rx) = mpsc::channel::<InternalEvent>(1024);
+
+        let cache_dir = std::env::temp_dir().join("flux_test_cache_lists");
+        let (api_service, _, _, _) = ApiService::new(&handle, cache_dir);
+        let api_service = Arc::new(api_service);
+
+        let (effect_sx, _) = mpsc::channel::<Effect>(1024);
+
+        let mut state = RMState::new(
+            handle.clone(),
+            modal_manager,
+            popup_manager,
+            notification_manager,
+            api_service,
+            event_rx,
+            effect_sx,
+        );
+
+        let list_group_lnk = ListGroupLnk::new("test_group".to_string());
+
+        let config = AppConfig {
+            list_groups: vec![ListGroup {
+                lnk: list_group_lnk.clone(),
+                name: "Test Group".to_string(),
+                collapsed: false,
+                parent_id: None,
+                is_instance: true,
+                instance_settings: Some(InstanceSettings {
+                    download_directory: "/test/instance".to_string(),
+                    game_version: GameVersion::release("1.21".to_string()),
+                }),
+            }],
+            ..Default::default()
+        };
+
+        state.config = Arc::new(RwLock::new(config));
+        state
+            .default_dirs
+            .insert(ResourceType::Mod, "/default/mods".to_string());
+
+        Arc::new(RwLock::new(state))
+    }
+
+    fn create_test_list(name: &str, resource_type: ResourceType) -> ProjectList {
+        let mut list = ProjectList::new(
+            format!("list_{}", name),
+            name.to_string(),
+            GameVersion::release("1.20.1".to_string()),
+        );
+        list.set_resource_type(
+            resource_type,
+            ProjectTypeConfig::new(
+                GameLoader {
+                    id: "fabric".to_string(),
+                    name: "Fabric".to_string(),
+                },
+                "/test/mods".to_string(),
+            ),
+        );
+        list
+    }
+
+    #[test]
+    fn test_get_list_resource_type_default() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("nonexistent_list".to_string());
+
+        let rt = ListActions::get_list_resource_type(&state, &list_lnk);
+        assert_eq!(rt, ResourceType::Mod);
+    }
+
+    #[test]
+    fn test_get_list_target_resource_type() {
+        let list = create_test_list("test", ResourceType::Shader);
+        let rt = ListActions::get_list_target_resource_type(&list);
+        assert_eq!(rt, ResourceType::Shader);
+    }
+
+    #[test]
+    fn test_get_list_target_resource_type_default() {
+        let list = ProjectList::new(
+            "empty_list".to_string(),
+            "Empty".to_string(),
+            GameVersion::release("1.20.1".to_string()),
+        );
+        let rt = ListActions::get_list_target_resource_type(&list);
+        assert_eq!(rt, ResourceType::Mod); // Default
+    }
+
+    #[test]
+    fn test_get_effective_game_version_without_instance() {
+        let state = setup_test_state();
+        let original_version = GameVersion::release("1.20.1".to_string());
+        let list_lnk = ListLnk::new("test_list".to_string());
+
+        let effective_version =
+            ListActions::get_effective_game_version(&state, &list_lnk, &original_version);
+        assert_eq!(effective_version.name, "1.20.1");
+    }
+
+    #[test]
+    fn test_get_effective_game_version_with_instance() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("test_list".to_string());
+        let list_group_lnk = ListGroupLnk::new("test_group".to_string());
+
+        {
+            let s = state.read();
+            let mut config = s.config.write();
+            config
+                .list_group_assignments
+                .insert(list_lnk.clone(), list_group_lnk);
+        }
+
+        let original_version = GameVersion::release("1.20.1".to_string());
+        let effective_version =
+            ListActions::get_effective_game_version(&state, &list_lnk, &original_version);
+
+        assert_eq!(effective_version.name, "1.21");
+    }
+
+    #[test]
+    fn test_toggle_open_list() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("test_list".to_string());
+
+        assert!(state.read().open_list.is_none());
+
+        ListActions::toggle_open_list(state.clone(), &list_lnk);
+        assert_eq!(state.read().open_list, Some(list_lnk.clone()));
+
+        ListActions::toggle_open_list(state.clone(), &list_lnk);
+        assert!(state.read().open_list.is_none());
+    }
+
+    #[test]
+    fn test_rename_list_nonexistent() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("nonexistent".to_string());
+
+        ListActions::rename_list(state.clone(), list_lnk.clone(), "New Name".to_string());
+    }
+
+    #[test]
+    fn test_set_sidebar_ui_order() {
+        let state = setup_test_state();
+        let item1 = SidebarItem::List(ListLnk::new("list1".to_string()));
+        let item2 = SidebarItem::ListGroup(ListGroupLnk::new("group1".to_string()));
+        let new_order = vec![item1.clone(), item2.clone()];
+
+        ListActions::set_sidebar_ui_order(state.clone(), new_order.clone());
+
+        let s = state.read();
+        let config = s.config.read();
+        assert_eq!(config.sidebar_ui_order.len(), 2);
+        assert!(config.sidebar_ui_order.contains(&item1));
+        assert!(config.sidebar_ui_order.contains(&item2));
+    }
+
+    #[test]
+    fn test_delete_list_removes_from_config() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("test_list".to_string());
+
+        {
+            let s = state.read();
+            let mut config = s.config.write();
+            config
+                .sidebar_ui_order
+                .push(SidebarItem::List(list_lnk.clone()));
+        }
+
+        ListActions::delete_list(state.clone(), list_lnk.clone());
+
+        let s = state.read();
+        let config = s.config.read();
+        assert!(
+            !config
+                .sidebar_ui_order
+                .iter()
+                .any(|item| item.match_list(&list_lnk))
+        );
+    }
+
+    #[test]
+    fn test_delete_list_closes_if_open() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("test_list".to_string());
+
+        state.write().open_list = Some(list_lnk.clone());
+        assert!(state.read().open_list.is_some());
+
+        ListActions::delete_list(state.clone(), list_lnk.clone());
+
+        assert!(state.read().open_list.is_none());
+    }
+
+    #[test]
+    fn test_delete_list_group_reassigns_children() {
+        let state = setup_test_state();
+        let parent_group = ListGroupLnk::new("parent".to_string());
+        let child_group = ListGroupLnk::new("child".to_string());
+        let grandchild_group = ListGroupLnk::new("grandchild".to_string());
+
+        {
+            let s = state.read();
+            let mut config = s.config.write();
+
+            config.list_groups.push(ListGroup {
+                lnk: parent_group.clone(),
+                name: "Parent".to_string(),
+                collapsed: false,
+                parent_id: None,
+                is_instance: false,
+                instance_settings: None,
+            });
+
+            config.list_groups.push(ListGroup {
+                lnk: child_group.clone(),
+                name: "Child".to_string(),
+                collapsed: false,
+                parent_id: Some(parent_group.clone()),
+                is_instance: false,
+                instance_settings: None,
+            });
+
+            config.list_groups.push(ListGroup {
+                lnk: grandchild_group.clone(),
+                name: "Grandchild".to_string(),
+                collapsed: false,
+                parent_id: Some(child_group.clone()),
+                is_instance: false,
+                instance_settings: None,
+            });
+        }
+
+        ListActions::delete_items(
+            state.clone(),
+            vec![SidebarItem::ListGroup(child_group.clone())],
+        );
+
+        let s = state.read();
+        let config = s.config.read();
+        let grandchild = config
+            .list_groups
+            .iter()
+            .find(|g| g.lnk == grandchild_group)
+            .unwrap();
+        assert_eq!(grandchild.parent_id, Some(parent_group));
+    }
+
+    #[test]
+    fn test_get_effective_download_dir_without_instance() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("test_list".to_string());
+        let original_dir = "/original/mods";
+
+        let effective_dir = ListActions::get_effective_download_dir(
+            &state,
+            &list_lnk,
+            ResourceType::Mod,
+            original_dir,
+        );
+
+        assert_eq!(effective_dir, original_dir);
+    }
+
+    #[test]
+    fn test_get_effective_download_dir_with_instance() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("test_list".to_string());
+        let list_group_lnk = ListGroupLnk::new("test_group".to_string());
+
+        {
+            let s = state.read();
+            let mut config = s.config.write();
+            config
+                .list_group_assignments
+                .insert(list_lnk.clone(), list_group_lnk);
+        }
+
+        let original_dir = "/original/mods";
+        let effective_dir = ListActions::get_effective_download_dir(
+            &state,
+            &list_lnk,
+            ResourceType::Mod,
+            original_dir,
+        );
+
+        assert!(effective_dir.contains("/test/instance"));
+        assert!(effective_dir.contains("mods"));
+    }
+
+    #[test]
+    fn test_get_effective_download_dir_instance_only_for_supported_types() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("test_list".to_string());
+        let list_group_lnk = ListGroupLnk::new("test_group".to_string());
+
+        {
+            let s = state.read();
+            let mut config = s.config.write();
+            config
+                .list_group_assignments
+                .insert(list_lnk.clone(), list_group_lnk);
+        }
+
+        let original_dir = "/original/datapacks";
+
+        let effective_dir = ListActions::get_effective_download_dir(
+            &state,
+            &list_lnk,
+            ResourceType::Datapack,
+            original_dir,
+        );
+
+        assert_eq!(effective_dir, original_dir);
+    }
+
+    #[test]
+    fn test_get_effective_download_dir_shader_uses_instance() {
+        let state = setup_test_state();
+        let list_lnk = ListLnk::new("test_list".to_string());
+        let list_group_lnk = ListGroupLnk::new("test_group".to_string());
+
+        {
+            let s = state.read();
+            let mut config = s.config.write();
+            config
+                .list_group_assignments
+                .insert(list_lnk.clone(), list_group_lnk);
+        }
+
+        let original_dir = "/original/shaderpacks";
+        let effective_dir = ListActions::get_effective_download_dir(
+            &state,
+            &list_lnk,
+            ResourceType::Shader,
+            original_dir,
+        );
+
+        assert!(effective_dir.contains("/test/instance"));
+        assert!(effective_dir.contains("shaderpacks"));
+    }
+
+    #[test]
+    fn test_delete_multiple_items() {
+        let state = setup_test_state();
+        let list1 = ListLnk::new("list1".to_string());
+        let list2 = ListLnk::new("list2".to_string());
+        let group1 = ListGroupLnk::new("group1".to_string());
+
+        {
+            let s = state.read();
+            let mut config = s.config.write();
+            config
+                .sidebar_ui_order
+                .push(SidebarItem::List(list1.clone()));
+            config
+                .sidebar_ui_order
+                .push(SidebarItem::List(list2.clone()));
+            config
+                .sidebar_ui_order
+                .push(SidebarItem::ListGroup(group1.clone()));
+
+            config.list_groups.push(ListGroup {
+                lnk: group1.clone(),
+                name: "Group 1".to_string(),
+                collapsed: false,
+                parent_id: None,
+                is_instance: false,
+                instance_settings: None,
+            });
+        }
+
+        let items = vec![
+            SidebarItem::List(list1.clone()),
+            SidebarItem::ListGroup(group1.clone()),
+        ];
+
+        ListActions::delete_items(state.clone(), items);
+
+        let s = state.read();
+        let config = s.config.read();
+
+        assert!(
+            !config
+                .sidebar_ui_order
+                .iter()
+                .any(|item| item.match_list(&list1))
+        );
+        assert!(
+            !config
+                .sidebar_ui_order
+                .iter()
+                .any(|item| item.match_list_group(&group1))
+        );
+
+        assert!(
+            config
+                .sidebar_ui_order
+                .iter()
+                .any(|item| item.match_list(&list2))
+        );
+    }
+}

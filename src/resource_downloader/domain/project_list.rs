@@ -752,3 +752,161 @@ impl ProjectList {
         MutationResult::new(MutationOutcome::Unchanged)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resource_downloader::domain::{
+        GameVersion, Project, ProjectDependency, ProjectDependencyType, ResourceType,
+    };
+
+    fn setup_list() -> ProjectList {
+        ProjectList::new(
+            "list_1".to_string(),
+            "Test List".to_string(),
+            GameVersion::release("1.21".to_string()),
+        )
+    }
+
+    fn l(id: &str) -> ProjectLnk {
+        ProjectLnk::from(&id.to_string())
+    }
+
+    #[test]
+    fn test_add_project() {
+        let mut list = setup_list();
+        let p = Project::new(
+            "p1".to_string(),
+            ResourceType::Mod,
+            true,
+            "Mod 1".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+
+        list.add_project(p);
+        assert_eq!(list.project_count(), 1);
+        assert!(list.has_project(&l("p1")));
+    }
+
+    #[test]
+    fn test_project_promotion() {
+        let mut list = setup_list();
+
+        let p_dep = Project::new(
+            "p1".to_string(),
+            ResourceType::Mod,
+            false,
+            "Mod 1".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        list.add_project(p_dep);
+        assert!(!list.get_project(&l("p1")).unwrap().is_manual());
+
+        let p_man = Project::new(
+            "p1".to_string(),
+            ResourceType::Mod,
+            true,
+            "Mod 1".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        let res = list.add_project(p_man);
+        assert!(matches!(res.outcome(), MutationOutcome::ProjectPromoted));
+        assert!(list.get_project(&l("p1")).unwrap().is_manual());
+    }
+
+    #[test]
+    fn test_remove_project_demotion() {
+        let mut list = setup_list();
+
+        list.add_project(Project::new(
+            "p1".to_string(),
+            ResourceType::Mod,
+            true,
+            "P1".into(),
+            "".into(),
+            "".into(),
+        ));
+        list.add_project(Project::new(
+            "p2".to_string(),
+            ResourceType::Mod,
+            true,
+            "P2".into(),
+            "".into(),
+            "".into(),
+        ));
+
+        list.add_version(
+            &l("p2"),
+            ProjectVersion::new(
+                true,
+                "v1".into(),
+                "a1".into(),
+                "h1".into(),
+                "release".into(),
+                vec![ProjectDependency::new(
+                    l("p1"),
+                    ProjectDependencyType::Required,
+                    None,
+                    None,
+                )],
+            ),
+        );
+
+        let res = list.remove_project(&l("p1"));
+        assert!(matches!(res.outcome(), MutationOutcome::ProjectDemoted));
+        let p1 = list.get_project(&l("p1")).unwrap();
+        assert!(!p1.is_manual());
+        assert!(p1.has_dependents());
+    }
+
+    #[test]
+    fn test_archive_propagation() {
+        let mut list = setup_list();
+        list.add_project(Project::new(
+            "p1".to_string(),
+            ResourceType::Mod,
+            true,
+            "P1".into(),
+            "".into(),
+            "".into(),
+        ));
+        list.add_project(Project::new(
+            "p2".to_string(),
+            ResourceType::Mod,
+            true,
+            "P2".into(),
+            "".into(),
+            "".into(),
+        ));
+
+        list.add_version(
+            &l("p2"),
+            ProjectVersion::new(
+                true,
+                "v1".into(),
+                "a1".into(),
+                "h1".into(),
+                "release".into(),
+                vec![ProjectDependency::new(
+                    l("p1"),
+                    ProjectDependencyType::Required,
+                    None,
+                    None,
+                )],
+            ),
+        );
+
+        let res = list.archive_project(&l("p1"), true);
+        assert!(matches!(res.outcome(), MutationOutcome::Unchanged));
+        assert!(!list.is_project_archived(&l("p1")));
+
+        list.archive_project(&l("p2"), true);
+        assert!(list.is_project_archived(&l("p2")));
+
+        list.archive_project(&l("p1"), true);
+        assert!(list.is_project_archived(&l("p1")));
+    }
+}
