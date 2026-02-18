@@ -137,4 +137,8 @@ impl MutationResult {
     pub fn changed_projects(&self) -> &Vec<ProjectLnk> {
         self.changed_projects.as_ref()
     }
+
+    pub fn outcome(&self) -> &MutationOutcome {
+        &self.outcome
+    }
 }

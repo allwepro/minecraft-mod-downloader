@@ -1,1 +1,0 @@
-{"slug":"escraft","name":"ESCraft","description":"ESCraft is a Fabric Mod that port Minecraft to OpenGL ES Backend API","author":"ItzGreenCat","icon_url":"https://cdn.modrinth.com/data/wA5zqI31/3ec9f929b2604612486e624712a448ea496eee85_96.webp","download_count":267,"supported_versions":[{"name":"1.21.11","channel":"release"}],"supported_loaders":[{"id":"fabric","name":"Fabric"}]}

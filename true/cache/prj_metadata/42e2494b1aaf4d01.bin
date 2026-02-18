@@ -1,1 +1,0 @@
-{"slug":"yaw-snapper","name":"Yaw Snapper","description":"Snap your yaw to the nearest 45-degree angle.","author":"SoundsoftheSun","icon_url":"https://cdn.modrinth.com/data/n55fmbOY/7a87c65a1e76033410232d2c884ce20515091c49_96.webp","download_count":69,"supported_versions":[{"name":"1.21.11","channel":"release"}],"supported_loaders":[{"id":"fabric","name":"Fabric"}]}
