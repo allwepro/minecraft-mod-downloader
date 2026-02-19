@@ -3,7 +3,7 @@ use crate::launcher::ui::{JavaDownloadWindow, MinecraftDownloadWindow};
 use crate::launcher::{
     AdvancedLauncher, FabricInstaller, JavaDetector, JavaInstallation, LaunchConfig, LaunchProfile,
     LaunchResult, MinecraftDetector, MinecraftInstallation, ModCopier, ModCopyProgress,
-    ModValidationSpec,
+    ModValidationReport, ModValidationSpec,
 };
 use eframe::egui;
 use std::sync::{Arc, Mutex};
@@ -863,22 +863,30 @@ impl LauncherPanel {
                         None
                     };
 
-                    let validation_errors = ModCopier::validate_mods_for_launch(
+                    let validation_report = ModCopier::validate_mods_for_launch(
                         &mods_dir,
                         &mod_specs,
                         &loader_name,
                         &mc_version,
                         loader_version.as_deref(),
                     )
-                    .unwrap_or_else(|e| vec![e.to_string()]);
+                    .unwrap_or_else(|e| ModValidationReport {
+                        errors: vec![e.to_string()],
+                        warnings: Vec::new(),
+                    });
 
-                    if !validation_errors.is_empty() {
-                        let summary = validation_errors.join("\n");
+                    if let Some(warning_message) =
+                        Self::build_validation_warning_message(&validation_report)
+                    {
+                        log::warn!("{}", warning_message);
+                        let _ = tx.send(PanelMessage::Status(warning_message)).await;
+                    }
+
+                    if let Some(error_message) =
+                        Self::build_validation_error_message(&validation_report)
+                    {
                         let _ = tx
-                            .send(PanelMessage::LaunchFinished(Err(format!(
-                                "Mod validation failed:\n{}",
-                                summary
-                            ))))
+                            .send(PanelMessage::LaunchFinished(Err(error_message)))
                             .await;
                         return;
                     }
@@ -992,6 +1000,28 @@ impl LauncherPanel {
         match (std::fs::canonicalize(source), std::fs::canonicalize(dest)) {
             (Ok(a), Ok(b)) => a == b,
             _ => source == dest,
+        }
+    }
+
+    fn build_validation_error_message(report: &ModValidationReport) -> Option<String> {
+        if report.errors.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "Mod validation failed:\n{}",
+                report.errors.join("\n")
+            ))
+        }
+    }
+
+    fn build_validation_warning_message(report: &ModValidationReport) -> Option<String> {
+        if report.warnings.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "Mod validation warnings: {}",
+                report.warnings.join(" | ")
+            ))
         }
     }
 
@@ -1141,7 +1171,7 @@ impl LauncherPanel {
 mod tests {
     use super::{LaunchPreflightOutcome, LauncherPanel};
     use crate::infra::ConfigManager;
-    use crate::launcher::{JavaInstallation, MinecraftInstallation};
+    use crate::launcher::{JavaInstallation, MinecraftInstallation, ModValidationReport};
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -1396,6 +1426,35 @@ mod tests {
         panel.launch_minecraft(&config_manager, runtime.handle(), &None, "/tmp", "vanilla");
 
         assert_eq!(panel.launch_status, Some(format!("❌ {}", first_reason)));
+    }
+
+    #[test]
+    fn validation_warning_message_is_non_blocking() {
+        let report = ModValidationReport {
+            errors: Vec::new(),
+            warnings: vec!["WI Zoom has unverified minecraft requirement >=1.21 ???".to_string()],
+        };
+
+        assert!(LauncherPanel::build_validation_error_message(&report).is_none());
+        assert!(
+            LauncherPanel::build_validation_warning_message(&report)
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Mod validation warnings:")
+        );
+    }
+
+    #[test]
+    fn validation_error_message_blocks_launch_path() {
+        let report = ModValidationReport {
+            errors: vec!["Bobby requires minecraft ~1.21.9 (current 1.21.11)".to_string()],
+            warnings: Vec::new(),
+        };
+
+        let message = LauncherPanel::build_validation_error_message(&report)
+            .expect("expected blocking validation message");
+        assert!(message.contains("Mod validation failed:"));
+        assert!(message.contains("Bobby requires minecraft ~1.21.9"));
     }
 
     #[test]
