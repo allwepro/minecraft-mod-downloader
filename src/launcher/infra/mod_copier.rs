@@ -20,6 +20,19 @@ pub struct ModValidationSpec {
     pub allow_incompatible: bool,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ModValidationReport {
+    pub errors: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DependencyMatch {
+    Compatible,
+    Incompatible,
+    Unverified,
+}
+
 impl ModCopier {
     pub fn new() -> Self {
         Self
@@ -203,8 +216,7 @@ impl ModCopier {
     fn read_fabric_mod_json(mod_path: &Path) -> Result<Value> {
         let file = std::fs::File::open(mod_path)
             .with_context(|| format!("Failed to open {}", mod_path.display()))?;
-        let mut archive =
-            ZipArchive::new(file).context("Failed to read mod jar as zip")?;
+        let mut archive = ZipArchive::new(file).context("Failed to read mod jar as zip")?;
         let mut entry = archive
             .by_name("fabric.mod.json")
             .context("Missing fabric.mod.json (not a Fabric mod)")?;
@@ -218,23 +230,133 @@ impl ModCopier {
         Ok(json)
     }
 
-    fn get_dependency(meta: &Value, key: &str) -> Option<String> {
+    fn get_dependency_alternatives(meta: &Value, key: &str) -> Option<Vec<String>> {
         let depends = meta.get("depends")?.as_object()?;
         let value = depends.get(key)?;
         if let Some(s) = value.as_str() {
-            return Some(s.to_string());
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            return Some(vec![trimmed.to_string()]);
         }
         if let Some(arr) = value.as_array() {
-            let mut parts = Vec::new();
+            let mut alternatives = Vec::new();
             for item in arr {
                 if let Some(s) = item.as_str() {
-                    parts.push(s.to_string());
+                    let trimmed = s.trim();
+                    if !trimmed.is_empty() {
+                        alternatives.push(trimmed.to_string());
+                    }
                 }
             }
-            if !parts.is_empty() {
-                return Some(parts.join(" "));
+            if !alternatives.is_empty() {
+                return Some(alternatives);
             }
         }
+        None
+    }
+
+    fn dependency_alternatives_to_string(alternatives: &[String]) -> String {
+        alternatives.join(" || ")
+    }
+
+    fn evaluate_dependency_alternatives(version: &str, alternatives: &[String]) -> DependencyMatch {
+        let mut saw_unverified = false;
+
+        for requirement in alternatives {
+            match Self::matches_version_requirement(version, requirement) {
+                Some(true) => return DependencyMatch::Compatible,
+                Some(false) => {}
+                None => saw_unverified = true,
+            }
+        }
+
+        if saw_unverified {
+            DependencyMatch::Unverified
+        } else {
+            DependencyMatch::Incompatible
+        }
+    }
+
+    fn split_requirement_tokens(group: &str) -> Vec<&str> {
+        group
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|t| !t.is_empty())
+            .collect()
+    }
+
+    fn token_is_comparator(token: &str) -> bool {
+        let trimmed = token.trim();
+        trimmed.starts_with(">=")
+            || trimmed.starts_with("<=")
+            || trimmed.starts_with('>')
+            || trimmed.starts_with('<')
+            || trimmed.starts_with('^')
+            || trimmed.starts_with('~')
+            || trimmed.starts_with('=')
+            || trimmed == "*"
+            || trimmed.contains('x')
+            || trimmed.contains('X')
+            || trimmed.contains('*')
+    }
+
+    fn eval_plain_version_token(
+        version: &str,
+        version_nums: &Option<Vec<i32>>,
+        token: &str,
+    ) -> Option<bool> {
+        Self::eval_requirement_token(version, version_nums, token)
+    }
+
+    fn evaluate_requirement_group(
+        version: &str,
+        version_nums: &Option<Vec<i32>>,
+        group: &str,
+    ) -> Option<bool> {
+        let tokens = Self::split_requirement_tokens(group);
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let mut comparator_tokens = Vec::new();
+        let mut plain_tokens = Vec::new();
+
+        for token in tokens {
+            if Self::token_is_comparator(token) {
+                comparator_tokens.push(token);
+            } else {
+                plain_tokens.push(token);
+            }
+        }
+
+        if comparator_tokens.is_empty() {
+            // Pure plain-version list: treat as OR alternatives.
+            let mut saw_unverified = false;
+            for token in plain_tokens {
+                match Self::eval_plain_version_token(version, version_nums, token) {
+                    Some(true) => return Some(true),
+                    Some(false) => {}
+                    None => saw_unverified = true,
+                }
+            }
+            return if saw_unverified { None } else { Some(false) };
+        }
+
+        if plain_tokens.is_empty() {
+            // Comparator expression: treat as AND constraints.
+            let mut saw_unverified = false;
+            for token in comparator_tokens {
+                match Self::eval_requirement_token(version, version_nums, token) {
+                    Some(true) => {}
+                    Some(false) => return Some(false),
+                    None => saw_unverified = true,
+                }
+            }
+            return if saw_unverified { None } else { Some(true) };
+        }
+
+        // Mixed comparator + plain token group is ambiguous by default.
         None
     }
 
@@ -243,34 +365,14 @@ impl ModCopier {
         let mut unknown = false;
 
         for group in requirement.split("||") {
-            let mut group_ok = true;
-            for token in group
-                .split(|c: char| c.is_whitespace() || c == ',')
-                .filter(|t| !t.is_empty())
-            {
-                match Self::eval_requirement_token(version, &version_nums, token) {
-                    Some(true) => {}
-                    Some(false) => {
-                        group_ok = false;
-                        break;
-                    }
-                    None => {
-                        unknown = true;
-                        group_ok = false;
-                        break;
-                    }
-                }
-            }
-            if group_ok {
-                return Some(true);
+            match Self::evaluate_requirement_group(version, &version_nums, group) {
+                Some(true) => return Some(true),
+                Some(false) => {}
+                None => unknown = true,
             }
         }
 
-        if unknown {
-            None
-        } else {
-            Some(false)
-        }
+        if unknown { None } else { Some(false) }
     }
 
     fn eval_requirement_token(
@@ -333,10 +435,12 @@ impl ModCopier {
                 continue;
             }
             let mut digits = String::new();
+            let mut has_suffix = false;
             for ch in part.chars() {
                 if ch.is_ascii_digit() {
                     digits.push(ch);
                 } else {
+                    has_suffix = true;
                     break;
                 }
             }
@@ -344,12 +448,12 @@ impl ModCopier {
                 return None;
             }
             parts.push(digits.parse::<i32>().ok()?);
+            // Ignore prerelease/build suffix details after the numeric core.
+            if has_suffix {
+                break;
+            }
         }
-        if parts.is_empty() {
-            None
-        } else {
-            Some(parts)
-        }
+        if parts.is_empty() { None } else { Some(parts) }
     }
 
     fn compare_versions(a: &[i32], b: &[i32]) -> i32 {
@@ -448,8 +552,8 @@ impl ModCopier {
         loader: &str,
         mc_version: &str,
         loader_version: Option<&str>,
-    ) -> Result<Vec<String>> {
-        let mut errors = Vec::new();
+    ) -> Result<ModValidationReport> {
+        let mut report = ModValidationReport::default();
         let require_fabric = loader.eq_ignore_ascii_case("fabric");
 
         for spec in mods {
@@ -461,7 +565,9 @@ impl ModCopier {
             let metadata = std::fs::metadata(&mod_file)
                 .with_context(|| format!("Failed to read {}", mod_file.display()))?;
             if metadata.len() == 0 {
-                errors.push(format!("Mod file is empty: {}", mod_file.display()));
+                report
+                    .errors
+                    .push(format!("Mod file is empty: {}", mod_file.display()));
                 continue;
             }
 
@@ -470,61 +576,75 @@ impl ModCopier {
                     Ok(meta) => meta,
                     Err(e) => {
                         if !spec.allow_incompatible {
-                            errors.push(format!("{}: {}", spec.name, e));
+                            report.errors.push(format!("{}: {}", spec.name, e));
                         }
                         continue;
                     }
                 };
 
                 if !spec.allow_incompatible {
-                    if let Some(dep) = Self::get_dependency(&fabric_meta, "minecraft") {
-                        if let Some(result) = Self::matches_version_requirement(mc_version, &dep) {
-                            if !result {
-                                errors.push(format!(
+                    if let Some(dep_alternatives) =
+                        Self::get_dependency_alternatives(&fabric_meta, "minecraft")
+                    {
+                        let display = Self::dependency_alternatives_to_string(&dep_alternatives);
+                        match Self::evaluate_dependency_alternatives(mc_version, &dep_alternatives)
+                        {
+                            DependencyMatch::Compatible => {}
+                            DependencyMatch::Incompatible => {
+                                report.errors.push(format!(
                                     "{} requires minecraft {} (current {})",
-                                    spec.name, dep, mc_version
+                                    spec.name, display, mc_version
                                 ));
                             }
-                        } else {
-                            errors.push(format!(
-                                "{} has unverified minecraft requirement {}",
-                                spec.name, dep
-                            ));
+                            DependencyMatch::Unverified => {
+                                report.warnings.push(format!(
+                                    "{} has unverified minecraft requirement {}",
+                                    spec.name, display
+                                ));
+                            }
                         }
                     }
 
-                    if let (Some(loader_version), Some(dep)) =
-                        (loader_version, Self::get_dependency(&fabric_meta, "fabricloader"))
-                    {
-                        if let Some(result) = Self::matches_version_requirement(loader_version, &dep)
-                        {
-                            if !result {
-                                errors.push(format!(
+                    if let (Some(loader_version), Some(dep_alternatives)) = (
+                        loader_version,
+                        Self::get_dependency_alternatives(&fabric_meta, "fabricloader"),
+                    ) {
+                        let display = Self::dependency_alternatives_to_string(&dep_alternatives);
+                        match Self::evaluate_dependency_alternatives(
+                            loader_version,
+                            &dep_alternatives,
+                        ) {
+                            DependencyMatch::Compatible => {}
+                            DependencyMatch::Incompatible => {
+                                report.errors.push(format!(
                                     "{} requires fabricloader {} (current {})",
-                                    spec.name, dep, loader_version
+                                    spec.name, display, loader_version
                                 ));
                             }
-                        } else {
-                            errors.push(format!(
-                                "{} has unverified fabricloader requirement {}",
-                                spec.name, dep
-                            ));
+                            DependencyMatch::Unverified => {
+                                report.warnings.push(format!(
+                                    "{} has unverified fabricloader requirement {}",
+                                    spec.name, display
+                                ));
+                            }
                         }
                     }
                 }
             }
         }
 
-        Ok(errors)
+        Ok(report)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{ModCopier, ModValidationSpec};
+    use std::io::Write;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::sync::mpsc;
+    use zip::write::FileOptions;
 
     fn test_temp_dir(name: &str) -> PathBuf {
         let nonce = SystemTime::now()
@@ -539,6 +659,18 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).expect("failed to create temp dir");
         dir
+    }
+
+    fn write_fabric_mod_jar(path: &std::path::Path, fabric_mod_json: &serde_json::Value) {
+        let file = std::fs::File::create(path).expect("failed to create mod jar");
+        let mut zip = zip::ZipWriter::new(file);
+        let options = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("fabric.mod.json", options)
+            .expect("failed to start fabric.mod.json entry");
+        let payload = serde_json::to_string(fabric_mod_json).expect("failed to serialize json");
+        zip.write_all(payload.as_bytes())
+            .expect("failed to write fabric.mod.json");
+        zip.finish().expect("failed to finalize jar");
     }
 
     #[test]
@@ -618,14 +750,48 @@ mod tests {
         });
 
         assert_eq!(
-            ModCopier::get_dependency(&json, "minecraft"),
-            Some(">=1.20".to_string())
+            ModCopier::get_dependency_alternatives(&json, "minecraft"),
+            Some(vec![">=1.20".to_string()])
         );
         assert_eq!(
-            ModCopier::get_dependency(&json, "fabricloader"),
-            Some(">=0.15.0 <0.16.0".to_string())
+            ModCopier::get_dependency_alternatives(&json, "fabricloader"),
+            Some(vec![">=0.15.0".to_string(), "<0.16.0".to_string()])
         );
-        assert_eq!(ModCopier::get_dependency(&json, "missing"), None);
+        assert_eq!(
+            ModCopier::get_dependency_alternatives(&json, "missing"),
+            None
+        );
+    }
+
+    #[test]
+    fn matches_version_requirement_plain_version_list_is_or() {
+        assert_eq!(
+            ModCopier::matches_version_requirement(
+                "1.21.11",
+                "1.14.4 1.15.2 1.16.4 1.16.5 1.21.11"
+            ),
+            Some(true)
+        );
+        assert_eq!(
+            ModCopier::matches_version_requirement("1.21.10", "1.14.4 1.15.2 1.21.11"),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn matches_version_requirement_prerelease_core_normalization() {
+        assert_eq!(
+            ModCopier::matches_version_requirement("1.21.11", ">=1.21.11-beta.1"),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn matches_version_requirement_mixed_group_is_unverified() {
+        assert_eq!(
+            ModCopier::matches_version_requirement("1.21.11", ">=1.21 ???"),
+            None
+        );
     }
 
     #[test]
@@ -671,7 +837,7 @@ mod tests {
             allow_incompatible: false,
         }];
 
-        let errors = ModCopier::validate_mods_for_launch(
+        let report = ModCopier::validate_mods_for_launch(
             &mods_dir,
             &specs,
             "fabric",
@@ -680,7 +846,13 @@ mod tests {
         )
         .expect("validation should not fail unexpectedly");
 
-        assert!(errors.iter().any(|e| e.contains("Mod file is empty")));
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| e.contains("Mod file is empty"))
+        );
+        assert!(report.warnings.is_empty());
 
         let _ = std::fs::remove_dir_all(&mods_dir);
     }
@@ -695,7 +867,7 @@ mod tests {
             name: "ParticleEffects".to_string(),
             allow_incompatible: false,
         }];
-        let strict_errors = ModCopier::validate_mods_for_launch(
+        let strict_report = ModCopier::validate_mods_for_launch(
             &mods_dir,
             &strict_specs,
             "fabric",
@@ -703,13 +875,13 @@ mod tests {
             Some("0.15.0"),
         )
         .expect("strict validation failed unexpectedly");
-        assert!(!strict_errors.is_empty());
+        assert!(!strict_report.errors.is_empty());
 
         let lax_specs = vec![ModValidationSpec {
             name: "ParticleEffects".to_string(),
             allow_incompatible: true,
         }];
-        let lax_errors = ModCopier::validate_mods_for_launch(
+        let lax_report = ModCopier::validate_mods_for_launch(
             &mods_dir,
             &lax_specs,
             "fabric",
@@ -717,7 +889,145 @@ mod tests {
             Some("0.15.0"),
         )
         .expect("lax validation failed unexpectedly");
-        assert!(lax_errors.is_empty());
+        assert!(lax_report.errors.is_empty());
+        assert!(lax_report.warnings.is_empty());
+
+        let _ = std::fs::remove_dir_all(&mods_dir);
+    }
+
+    #[test]
+    fn validate_mods_for_launch_treats_dependency_arrays_as_or() {
+        let mods_dir = test_temp_dir("validate_array_or");
+        let mod_file = mods_dir.join("ViaFabric.jar");
+
+        let fabric_mod_json = serde_json::json!({
+            "schemaVersion": 1,
+            "id": "viafabric",
+            "version": "1.0.0",
+            "depends": {
+                "minecraft": ["1.20.6", "1.21.11"]
+            }
+        });
+        write_fabric_mod_jar(&mod_file, &fabric_mod_json);
+
+        let specs = vec![ModValidationSpec {
+            name: "ViaFabric".to_string(),
+            allow_incompatible: false,
+        }];
+
+        let report = ModCopier::validate_mods_for_launch(
+            &mods_dir,
+            &specs,
+            "fabric",
+            "1.21.11",
+            Some("0.18.4"),
+        )
+        .expect("validation should not fail unexpectedly");
+
+        assert!(report.errors.is_empty());
+        assert!(report.warnings.is_empty());
+
+        let _ = std::fs::remove_dir_all(&mods_dir);
+    }
+
+    #[test]
+    fn validate_mods_for_launch_repro_fixture_splits_errors_and_warnings() {
+        let mods_dir = test_temp_dir("validate_repro_fixture");
+
+        write_fabric_mod_jar(
+            &mods_dir.join("Bobby.jar"),
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "id": "bobby",
+                "version": "1.0.0",
+                "depends": {
+                    "minecraft": "~1.21.9"
+                }
+            }),
+        );
+
+        write_fabric_mod_jar(
+            &mods_dir.join("ViaFabric.jar"),
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "id": "viafabric",
+                "version": "1.0.0",
+                "depends": {
+                    "minecraft": "1.14.4 1.15.2 1.16.4 1.16.5 1.17.1 1.18.2 1.19.4 1.20 1.20.3 1.20.5 1.20.6 1.21.11"
+                }
+            }),
+        );
+
+        write_fabric_mod_jar(
+            &mods_dir.join("PresenceFootsteps.jar"),
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "id": "presence-footsteps",
+                "version": "1.0.0",
+                "depends": {
+                    "minecraft": ">=1.21.11-beta.1"
+                }
+            }),
+        );
+
+        write_fabric_mod_jar(
+            &mods_dir.join("WIZoom.jar"),
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "id": "wi-zoom",
+                "version": "1.0.0",
+                "depends": {
+                    "minecraft": ">=1.21 ???"
+                }
+            }),
+        );
+
+        let specs = vec![
+            ModValidationSpec {
+                name: "Bobby".to_string(),
+                allow_incompatible: false,
+            },
+            ModValidationSpec {
+                name: "ViaFabric".to_string(),
+                allow_incompatible: false,
+            },
+            ModValidationSpec {
+                name: "Presence Footsteps".to_string(),
+                allow_incompatible: false,
+            },
+            ModValidationSpec {
+                name: "WI Zoom".to_string(),
+                allow_incompatible: false,
+            },
+        ];
+
+        let report = ModCopier::validate_mods_for_launch(
+            &mods_dir,
+            &specs,
+            "fabric",
+            "1.21.11",
+            Some("0.18.4"),
+        )
+        .expect("validation should not fail unexpectedly");
+
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| e.contains("Bobby requires minecraft ~1.21.9"))
+        );
+        assert!(
+            report
+                .warnings
+                .iter()
+                .any(|w| w.contains("WI Zoom has unverified minecraft requirement >=1.21 ???"))
+        );
+        assert!(
+            !report
+                .errors
+                .iter()
+                .any(|e| e.contains("ViaFabric") || e.contains("Presence Footsteps"))
+        );
 
         let _ = std::fs::remove_dir_all(&mods_dir);
     }
