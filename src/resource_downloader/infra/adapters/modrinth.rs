@@ -699,7 +699,7 @@ impl ModrinthProvider {
         let response = self
             .client
             .get(&collection_url)
-            .header("User-Agent", "MinecraftModDownloader/1.0")
+            .header("User-Agent", self.user_agent.clone())
             .send()
             .await?;
 
@@ -752,7 +752,7 @@ impl ModrinthProvider {
         let projects_response = self
             .client
             .get(&projects_url)
-            .header("User-Agent", "MinecraftModDownloader/1.0")
+            .header("User-Agent", self.user_agent.clone())
             .send()
             .await?;
 
@@ -848,7 +848,7 @@ impl ModrinthProvider {
                 if let Ok(resp) = self
                     .client
                     .get(&versions_url)
-                    .header("User-Agent", "MinecraftModDownloader/1.0")
+                    .header("User-Agent", self.user_agent.clone())
                     .send()
                     .await
                     && let Ok(versions) = resp.json::<Vec<ModrinthVersion>>().await

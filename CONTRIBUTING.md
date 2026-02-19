@@ -13,8 +13,8 @@ This project is developed collaboratively as a **university group project**.
 
 ## 2️⃣ Set up your environment
 ```bash
-git clone https://github.com/allwepro/minecraft-mod-downloader.git
-cd minecraft-mod-downloader
+git clone https://github.com/allwepro/flux-project.git
+cd flux-project
 ```
 
 Create a new branch:
