@@ -9,7 +9,7 @@ on:
       - "v*.*.*"
 
 env:
-  BIN_NAME: minecraft_mod_downloader
+  BIN_NAME: flux-project
 
 jobs:
   build-release:

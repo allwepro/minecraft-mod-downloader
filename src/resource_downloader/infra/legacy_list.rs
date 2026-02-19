@@ -127,7 +127,7 @@ impl LegacyListService {
         }
 
         let content = format!(
-            "# Minecraft Mod List\n# Generated on {}\n\n{}\n# Exported via Flux Launcher\n",
+            "# Minecraft Mod List\n# Generated on {}\n\n{}\n# Exported via Flux Project\n",
             chrono::Utc::now().format("%Y-%m-%d %H:%M:%S"),
             successful_slugs.join("\n")
         );
