@@ -27,7 +27,7 @@ impl ArgRegistry {
         let reset = "\x1b[0m";
 
         println!(
-            "{bold}{green}🧩 Flux Launcher{reset} - {bold}Minecraft Resource Management \
+            "{bold}{green}👾 Flux Project{reset} - {bold}Minecraft Resource Management \
         Tool{reset}"
         );
         println!();

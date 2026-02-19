@@ -35,13 +35,13 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 700.0])
             .with_min_inner_size([1000.0, 400.0])
-            .with_title("Flux Launcher & Resource Manager")
+            .with_title("Flux Project")
             .with_icon(get_app_icon()),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Flux Launcher & Resource Manager",
+        "Flux Project",
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);

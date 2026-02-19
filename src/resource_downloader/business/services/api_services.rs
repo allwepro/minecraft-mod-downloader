@@ -155,6 +155,6 @@ impl ApiService {
     }
 
     fn get_user_agent() -> String {
-        format!("FluxLauncher/{}", env!("CARGO_PKG_VERSION"))
+        format!("FluxProject/{}", env!("CARGO_PKG_VERSION"))
     }
 }
