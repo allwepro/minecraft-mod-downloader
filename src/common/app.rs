@@ -90,7 +90,7 @@ impl App {
     pub fn get_app_dir() -> PathBuf {
         dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("flux-launcher")
+            .join("flux-project")
     }
 }
 

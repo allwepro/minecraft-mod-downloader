@@ -1,8 +1,8 @@
 [package]
-name = "flux-launcher"
+name = "flux-project"
 version = "1.0.0-beta"
 edition = "2024"
-authors = ["Flux Contributors"]
+authors = ["Flux Project Contributors"]
 description = "A GUI-based Minecraft Launcher and Resource Manager."
 
 [dependencies]

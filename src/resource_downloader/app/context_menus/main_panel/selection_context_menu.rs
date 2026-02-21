@@ -206,7 +206,7 @@ impl SelectionContextMenu {
                     }
 
                     if res.clicked() {
-                        ProjectActions::update_selected_projects(
+                        ProjectActions::update_version_for_projects(
                             self.state.clone(),
                             self.list_lnk.clone(),
                             updates_available,
@@ -239,10 +239,10 @@ impl SelectionContextMenu {
                         .map(|(_, h)| h.clone())
                         .collect();
 
-                    ProjectActions::download_projects_latest(
+                    ProjectActions::download_projects(
                         self.state.clone(),
                         self.list_lnk.clone(),
-                        self.selected.iter().cloned().collect(),
+                        self.selected.iter().map(|p| (p.clone(), None)).collect(),
                         &found_hashes,
                     );
                     *open = false;
@@ -322,7 +322,7 @@ impl SelectionContextMenu {
                     .on_hover_text(&blocking_tooltip);
 
                 if btn_res.clicked() {
-                    ProjectActions::delete_projects(
+                    ProjectActions::remove_projects(
                         self.state.clone(),
                         self.list_lnk.clone(),
                         self.selected.iter().cloned().collect(),

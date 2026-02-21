@@ -42,7 +42,7 @@ impl ArgRegistry {
         }
         println!();
         println!("{yellow}Example:{reset}");
-        println!("  flux-launcher --path \"/home/user/.minecraft\" --help");
+        println!("  flux --path \"/home/user/.minecraft\" --help");
     }
 }
 

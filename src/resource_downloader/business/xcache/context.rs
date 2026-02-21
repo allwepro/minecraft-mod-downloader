@@ -1,4 +1,4 @@
-use crate::resource_downloader::business::xcache::common::CacheType;
+use crate::resource_downloader::domain::xcache::common::CacheType;
 use crate::resource_downloader::domain::{GameLoader, GameVersion, ResourceType};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
