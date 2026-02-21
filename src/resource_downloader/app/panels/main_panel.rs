@@ -462,10 +462,10 @@ impl MainPanel {
                                 });
 
                             if res1.clicked() {
-                                ProjectActions::download_projects_latest(
+                                ProjectActions::download_projects(
                                     self.state.clone(),
                                     lnk.clone(),
-                                    missing,
+                                    missing.into_iter().map(|p| (p, None)).collect(),
                                     &found_hashes,
                                 );
                             }
@@ -493,7 +493,7 @@ impl MainPanel {
                                     .on_hover_text("Update all projects to their latest versions");
 
                                 if res2.clicked() {
-                                    ProjectActions::update_all_projects(
+                                    ProjectActions::update_version_for_all_projects(
                                         self.state.clone(),
                                         lnk.clone(),
                                     );
@@ -519,7 +519,7 @@ impl MainPanel {
                                 let res3 = ui.add(del_selected_btn);
 
                                 if res3.clicked() {
-                                    ProjectActions::delete_projects(
+                                    ProjectActions::remove_projects(
                                         self.state.clone(),
                                         lnk.clone(),
                                         self.selected_projects.iter().cloned().collect(),
@@ -1046,7 +1046,7 @@ impl MainPanel {
                                     .on_hover_text(&delete_tooltip);
 
                                 if del_btn_res.clicked() {
-                                    ProjectActions::delete_projects(
+                                    ProjectActions::remove_projects(
                                         self.state.clone(),
                                         lnk.clone(),
                                         vec![p_lnk.clone()],
@@ -1129,11 +1129,10 @@ impl MainPanel {
                                             if btn.clicked()
                                                 && let Some(v) = latest_version
                                             {
-                                                ProjectActions::download_project_specific(
+                                                ProjectActions::download_projects(
                                                     self.state.clone(),
                                                     lnk.clone(),
-                                                    p_lnk.clone(),
-                                                    v,
+                                                    vec![(p_lnk.clone(), Some(v.clone()))],
                                                     found_hashes,
                                                 );
                                             }
@@ -1154,11 +1153,10 @@ impl MainPanel {
                                             if btn.clicked()
                                                 && let Some(v) = latest_version
                                             {
-                                                ProjectActions::download_project_specific(
+                                                ProjectActions::download_projects(
                                                     self.state.clone(),
                                                     lnk.clone(),
-                                                    p_lnk.clone(),
-                                                    v,
+                                                    vec![(p_lnk.clone(), Some(v.clone()))],
                                                     found_hashes,
                                                 );
                                             }
@@ -1860,10 +1858,10 @@ impl MainPanel {
                                 };
 
                                 if dir.is_some() {
-                                    ProjectActions::download_projects_latest(
+                                    ProjectActions::download_projects(
                                         self.state.clone(),
                                         lnk,
-                                        projects,
+                                        projects.into_iter().map(|p| (p, None)).collect(),
                                         &hashes,
                                     );
                                 }

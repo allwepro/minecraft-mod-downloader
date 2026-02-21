@@ -4,14 +4,14 @@ use crate::resource_downloader::domain::{
     ListLnk, MutationResult, Project, ProjectDependencyType, ProjectLnk, RTProjectData,
     RTProjectVersion, ResourceType,
 };
-use crate::{get_list, get_project_versions_best};
+use crate::{get_list, get_project_versions, get_project_versions_best};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
 pub struct ProjectActions;
 
 impl ProjectActions {
-    pub fn delete_projects(state: SharedRDState, list_lnk: ListLnk, projects: Vec<ProjectLnk>) {
+    pub fn remove_projects(state: SharedRDState, list_lnk: ListLnk, projects: Vec<ProjectLnk>) {
         state.read().list_pool.mutate(&list_lnk, move |list| {
             let mut result = MutationResult::unchanged();
             for p_lnk in projects {
@@ -54,118 +54,99 @@ impl ProjectActions {
         });
     }
 
-    pub fn download_projects_latest(
+    pub fn download_projects(
         state: SharedRDState,
         list_lnk: ListLnk,
-        projects: Vec<ProjectLnk>,
+        projects: Vec<(ProjectLnk, Option<RTProjectVersion>)>,
         found_hashes: &HashSet<String>,
     ) {
-        let (ver, loader, dir, content_type) = {
-            let list_arc = get_list!(state, &list_lnk);
+        let list_arc = get_list!(state, &list_lnk);
+        let ver = {
             let list = list_arc.read();
-            let rt = list
-                .get_resource_types()
-                .first()
-                .cloned()
-                .unwrap_or(ResourceType::Mod);
-            let config = list.get_resource_type_config(&rt).unwrap();
-            let original_dir = config.download_dir.clone();
-            let effective_dir =
-                ListActions::get_effective_download_dir(&state, &list_lnk, rt, &original_dir);
-            (
-                ListActions::get_effective_game_version(
-                    &state,
-                    &list_lnk,
-                    &list.get_game_version(),
-                ),
-                config.loader.clone(),
-                effective_dir,
-                rt,
-            )
+            ListActions::get_effective_game_version(&state, &list_lnk, &list.get_game_version())
         };
 
         let mut triggered = HashSet::new();
 
-        for p_lnk in projects {
-            let selected_version_hash = {
-                let list_arc = get_list!(state, &list_lnk);
+        for (p_lnk, specific_version) in projects {
+            let (content_type, loader, dir, is_overruled, selected_version_hash) = {
                 let list = list_arc.read();
-                list.get_project(&p_lnk)
-                    .and_then(|p| p.get_version())
-                    .map(|v| v.artifact_hash.clone())
+                let p = list.get_project(&p_lnk);
+                let rt = p.map(|p| p.get_type()).unwrap_or(ResourceType::Mod);
+                if let Some(config) = list.get_resource_type_config(&rt) {
+                    let original_dir = config.download_dir.clone();
+                    let effective_dir = ListActions::get_effective_download_dir(
+                        &state,
+                        &list_lnk,
+                        rt,
+                        &original_dir,
+                    );
+                    (
+                        rt,
+                        config.loader.clone(),
+                        effective_dir,
+                        p.map(|p| p.is_compatibility_overruled()).unwrap_or(false),
+                        p.and_then(|p| p.get_version())
+                            .map(|v| v.artifact_hash.clone()),
+                    )
+                } else {
+                    continue;
+                }
             };
 
-            let versions = get_project_versions_best!(
-                state,
-                p_lnk.clone(),
-                content_type,
-                ver.clone(),
-                loader.clone()
-            );
-
-            if let Ok(Some(v_list)) = versions {
-                let target_version = if let Some(hash) = selected_version_hash {
-                    v_list
-                        .iter()
-                        .find(|v| v.artifact_hash == hash)
-                        .or_else(|| v_list.first())
+            let version = if let Some(v) = specific_version {
+                Some(v)
+            } else {
+                let versions = if is_overruled {
+                    get_project_versions_best!(
+                        state,
+                        p_lnk.clone(),
+                        content_type,
+                        ver.clone(),
+                        loader.clone()
+                    )
                 } else {
-                    v_list.first()
+                    get_project_versions!(
+                        state,
+                        p_lnk.clone(),
+                        content_type,
+                        ver.clone(),
+                        loader.clone()
+                    )
                 };
 
-                if let Some(version) = target_version {
-                    Self::trigger_download_recursive(
-                        state.clone(),
-                        &list_lnk,
-                        &p_lnk,
-                        version,
-                        &dir,
-                        &content_type,
-                        found_hashes,
-                        &mut triggered,
-                    );
+                if let Ok(Some(v_list)) = versions {
+                    if let Some(hash) = selected_version_hash {
+                        v_list
+                            .iter()
+                            .find(|v| v.artifact_hash == hash)
+                            .cloned()
+                            .or_else(|| v_list.first().cloned())
+                    } else {
+                        v_list.into_iter().next()
+                    }
+                } else {
+                    None
                 }
+            };
+
+            if let Some(version) = version {
+                Self::download_version_with_dependencies(
+                    state.clone(),
+                    &list_lnk,
+                    &p_lnk,
+                    &version,
+                    &dir,
+                    &content_type,
+                    found_hashes,
+                    &mut triggered,
+                );
             }
         }
     }
 
-    pub fn download_project_specific(
-        state: SharedRDState,
-        list_lnk: ListLnk,
-        project_lnk: ProjectLnk,
-        version: &RTProjectVersion,
-        found_hashes: &HashSet<String>,
-    ) {
-        let (dir, content_type) = {
-            let list_arc = get_list!(state, &list_lnk);
-            let list = list_arc.read();
-            let rt = list
-                .get_resource_types()
-                .first()
-                .cloned()
-                .unwrap_or(ResourceType::Mod);
-            let config = list.get_resource_type_config(&rt).unwrap();
-            let original_dir = config.download_dir.clone();
-            let effective_dir =
-                ListActions::get_effective_download_dir(&state, &list_lnk, rt, &original_dir);
-            (effective_dir, rt)
-        };
-
-        let mut triggered = HashSet::new();
-        Self::trigger_download_recursive(
-            state,
-            &list_lnk,
-            &project_lnk,
-            version,
-            &dir,
-            &content_type,
-            found_hashes,
-            &mut triggered,
-        );
-    }
-
     #[allow(clippy::too_many_arguments)]
-    fn trigger_download_recursive(
+    fn download_version_with_dependencies(
         state: SharedRDState,
         lnk: &ListLnk,
         p_lnk: &ProjectLnk,
@@ -204,11 +185,10 @@ impl ProjectActions {
 
         for dep in &version.depended_on {
             if dep.dependency_type == ProjectDependencyType::Required {
-                Self::trigger_list_project_download(
+                Self::download_project_with_dependencies(
                     state.clone(),
                     lnk,
                     &dep.project,
-                    dir,
                     found_hashes,
                     triggered,
                 );
@@ -216,11 +196,10 @@ impl ProjectActions {
         }
     }
 
-    fn trigger_list_project_download(
+    fn download_project_with_dependencies(
         state: SharedRDState,
         lnk: &ListLnk,
         p_lnk: &ProjectLnk,
-        dir: &String,
         found_hashes: &HashSet<String>,
         triggered: &mut HashSet<ProjectLnk>,
     ) {
@@ -233,19 +212,28 @@ impl ProjectActions {
             let list = list_arc.read();
             list.get_project(p_lnk).and_then(|p| {
                 p.get_version().map(|v| {
+                    let rt = p.resource_type;
+                    let config = list.get_resource_type_config(&rt).unwrap();
+                    let dir = ListActions::get_effective_download_dir(
+                        &state,
+                        lnk,
+                        rt,
+                        &config.download_dir,
+                    );
                     (
-                        p.resource_type,
+                        rt,
                         v.version_id.clone(),
                         v.artifact_id.clone(),
                         v.artifact_hash.clone(),
                         v.get_depended_ons().to_vec(),
                         p.get_safe_filename(),
+                        dir,
                     )
                 })
             })
         };
 
-        if let Some((rt, v_id, a_id, a_hash, deps, safe_name)) = download_info {
+        if let Some((rt, v_id, a_id, a_hash, deps, safe_name, dir)) = download_info {
             triggered.insert(p_lnk.clone());
 
             if !found_hashes.contains(&a_hash) {
@@ -257,11 +245,10 @@ impl ProjectActions {
 
             for dep in deps {
                 if dep.dependency_type == ProjectDependencyType::Required {
-                    Self::trigger_list_project_download(
+                    Self::download_project_with_dependencies(
                         state.clone(),
                         lnk,
                         &dep.project,
-                        dir,
                         found_hashes,
                         triggered,
                     );
@@ -270,7 +257,7 @@ impl ProjectActions {
         }
     }
 
-    pub fn update_all_projects(state: SharedRDState, list_lnk: ListLnk) {
+    pub fn update_version_for_all_projects(state: SharedRDState, list_lnk: ListLnk) {
         let projects: Vec<ProjectLnk> = {
             let list_arc = get_list!(state, &list_lnk);
             let list = list_arc.read();
@@ -281,51 +268,64 @@ impl ProjectActions {
                 .collect()
         };
 
-        Self::update_selected_projects(state, list_lnk, projects);
+        Self::update_version_for_projects(state, list_lnk, projects);
     }
 
-    pub fn update_selected_projects(
+    pub fn update_version_for_projects(
         state: SharedRDState,
         list_lnk: ListLnk,
         projects: Vec<ProjectLnk>,
     ) {
-        let (ver, loader, rt) = {
-            let list_arc = get_list!(state, &list_lnk);
+        let list_arc = get_list!(state, &list_lnk);
+        let ver = {
             let list = list_arc.read();
-            let rt = list
-                .get_resource_types()
-                .first()
-                .cloned()
-                .unwrap_or(ResourceType::Mod);
-            (
-                list.get_game_version().clone(),
-                list.get_resource_type_config(&rt).unwrap().loader.clone(),
-                rt,
-            )
+            list.get_game_version().clone()
         };
 
         for p_lnk in projects {
-            let versions =
-                get_project_versions_best!(state, p_lnk.clone(), rt, ver.clone(), loader.clone());
+            let (content_type, loader, is_overruled, current_hash) = {
+                let list = list_arc.read();
+                let p = list.get_project(&p_lnk);
+                let rt = p.map(|p| p.get_type()).unwrap_or(ResourceType::Mod);
+                if let Some(config) = list.get_resource_type_config(&rt) {
+                    (
+                        rt,
+                        config.loader.clone(),
+                        p.map(|p| p.is_compatibility_overruled()).unwrap_or(false),
+                        p.and_then(|p| p.get_version())
+                            .map(|v| v.artifact_hash.clone()),
+                    )
+                } else {
+                    continue;
+                }
+            };
+
+            let versions = if is_overruled {
+                get_project_versions_best!(
+                    state,
+                    p_lnk.clone(),
+                    content_type,
+                    ver.clone(),
+                    loader.clone()
+                )
+            } else {
+                get_project_versions!(
+                    state,
+                    p_lnk.clone(),
+                    content_type,
+                    ver.clone(),
+                    loader.clone()
+                )
+            };
 
             if let Ok(Some(v_list)) = versions
                 && let Some(latest) = v_list.first()
+                && Some(latest.artifact_hash.clone()) != current_hash
             {
-                let current_hash = {
-                    let list_arc = get_list!(state, &list_lnk);
-                    let list = list_arc.read();
-                    list.get_project(&p_lnk)
-                        .and_then(|p| p.get_version())
-                        .map(|v| v.artifact_hash.clone())
-                };
-
-                if Some(latest.artifact_hash.clone()) != current_hash {
-                    state.read().list_pool.select_version(
-                        &list_lnk,
-                        p_lnk,
-                        latest.version_id.clone(),
-                    );
-                }
+                state
+                    .read()
+                    .list_pool
+                    .select_version(&list_lnk, p_lnk, latest.version_id.clone());
             }
         }
     }

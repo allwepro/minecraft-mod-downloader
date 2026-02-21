@@ -1,5 +1,5 @@
 use crate::resource_downloader::business::xcache::CacheContext;
-use crate::resource_downloader::business::xcache::common::{
+use crate::resource_downloader::domain::xcache::common::{
     AnyCacheData, CacheCommand, CacheEntry, CacheResponse, CacheType, FetchFn,
 };
 use crate::resource_downloader::infra::adapters::ResourceProviderContext;

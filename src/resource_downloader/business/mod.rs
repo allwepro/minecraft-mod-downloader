@@ -1,6 +1,4 @@
 pub(crate) mod cache;
-mod effects;
-mod events;
 pub(crate) mod list_actions;
 pub(crate) mod list_group_actions;
 mod list_pool;
@@ -11,8 +9,8 @@ pub(crate) mod rm_state;
 pub(crate) mod services;
 pub(crate) mod xcache;
 
-pub use effects::Effect;
-pub use events::{Event, InternalEvent};
+pub use crate::resource_downloader::domain::effects::Effect;
+pub use crate::resource_downloader::domain::events::{Event, InternalEvent};
 pub use rm_state::{DownloadStatus, FolderImportCandidate, RMState, SharedRDState};
 
 #[macro_export]
