@@ -5,6 +5,10 @@ edition = "2024"
 authors = ["Flux Project Contributors"]
 description = "A GUI-based Minecraft Launcher and Resource Manager."
 
+[[bin]]
+name = "flux"
+path = "src/main.rs"
+
 [dependencies]
 # async
 tokio = { version = "1.49", features = ["full"] }
