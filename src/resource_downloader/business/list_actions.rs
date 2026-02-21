@@ -176,7 +176,6 @@ impl ListActions {
                 let original_dir = config.download_dir.clone();
                 let effective_dir =
                     Self::get_effective_download_dir(&state, &list_lnk, *rt, &original_dir);
-                println!("Opening folder: {}", effective_dir);
                 state.read().open_explorer(effective_dir.into());
             }
         }

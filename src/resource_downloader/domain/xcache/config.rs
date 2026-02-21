@@ -1,4 +1,4 @@
-use crate::resource_downloader::business::xcache::common::CacheType;
+use crate::resource_downloader::domain::xcache::common::CacheType;
 use crate::resource_downloader::infra::cache::{
     duration_from_days, duration_from_hours, duration_from_minutes,
 };
