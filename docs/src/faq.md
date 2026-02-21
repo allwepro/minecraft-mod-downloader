@@ -16,17 +16,17 @@ However, we do not recommend using them as they lack official security features 
 
 ### How can I submit a feature request?
 We welcome community suggestions! 
-You can submit a feature request by opening an [issue](https://github.com/allwepro/minecraft-mod-downloader/issues) on our GitHub and selecting the "Feature Request" template.
+You can submit a feature request by opening an [issue](https://github.com/allwepro/flux-project/issues) on our GitHub and selecting the "Feature Request" template.
 
 ### Which operating systems are supported?
 Flux is designed to be cross-platform and is available for Windows, macOS, and Linux.
 
 ### How do I report a bug?
-Please open an [issue](https://github.com/allwepro/minecraft-mod-downloader/issues) on our GitHub repository with as much detail as possible, including logs and steps to reproduce the problem.
+Please open an [issue](https://github.com/allwepro/flux-project/issues) on our GitHub repository with as much detail as possible, including logs and steps to reproduce the problem.
 
 ### Are other languages supported?
 Currently, Flux is only available in English.
 We may consider adding support for additional languages in the future based on community interest.
 
 ### Is the source code available?
-Yes. Flux is open-source. You can view, audit, or contribute to the code on our official [GitHub Repository](https://github.com/allwepro/minecraft-mod-downloader).
+Yes. Flux is open-source. You can view, audit, or contribute to the code on our official [GitHub Repository](https://github.com/allwepro/flux-project).

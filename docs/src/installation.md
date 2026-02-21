@@ -3,7 +3,7 @@
 Getting started with Flux is straightforward. We provide pre-compiled binaries for Windows, macOS, and Linux.
 
 ### 1. Download
-Head over to the **[GitHub Releases](https://github.com/allwepro/minecraft-mod-downloader/releases)** page and grab the latest version for your operating system.
+Head over to the **[GitHub Releases](https://github.com/allwepro/flux-project/releases)** page and grab the latest version for your operating system.
 
 ### 2. Unpack and Run
 The release is typically provided in a compressed format (zip/tar.gz).
@@ -42,8 +42,8 @@ If you prefer not to use pre-compiled binaries, you can build Flux directly from
 
 ```bash
 # Clone the repository
-git clone https://github.com/allwepro/minecraft-mod-downloader.git
-cd minecraft-mod-downloader
+git clone https://github.com/allwepro/flux-project.git
+cd flux-project
 
 # Build and run in release mode
 cargo run --release
