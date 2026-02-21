@@ -196,6 +196,886 @@
 <h3 id="disclaimer"><a class="header" href="#disclaimer">Disclaimer</a></h3>
 <p>Flux Project is an <strong>independent project</strong> and is <strong>not affiliated, endorsed, or associated</strong> with <strong>Mojang AB</strong>, <strong>Microsoft Corporation</strong>, <strong>Modrinth</strong>, or <strong>Rinth Inc.</strong>
 All trademarks and copyrights belong to their respective owners. Flux is developed by a passionate few of Minecraft enthusiasts and is provided as-is without any warranties. Use at your own risk.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="-installation"><a class="header" href="#-installation">🚀 Installation</a></h1>
+<p>Getting started with Flux is straightforward. We provide pre-compiled binaries for Windows, macOS, and Linux.</p>
+<h3 id="1-download"><a class="header" href="#1-download">1. Download</a></h3>
+<p>Head over to the <strong><a href="https://github.com/allwepro/minecraft-mod-downloader/releases">GitHub Releases</a></strong> page and grab the latest version for your operating system.</p>
+<h3 id="2-unpack-and-run"><a class="header" href="#2-unpack-and-run">2. Unpack and Run</a></h3>
+<p>The release is typically provided in a compressed format (zip/tar.gz).</p>
+<ol>
+<li><strong>Unpack:</strong> Extract the contents of the downloaded folder to a location of your choice.</li>
+<li><strong>Execute:</strong> Locate the <code>flux</code> executable and run it.</li>
+</ol>
+<h3 id="-security-warnings"><a class="header" href="#-security-warnings">🛡️ Security Warnings</a></h3>
+<p>Since Flux is an independent, open-source project and is not "code-signed" with expensive certificates from Microsoft or Apple, your operating system may flag it as "untrusted."</p>
+<p><strong>This is a standard procedure for many open-source tools.</strong> Below is how to safely proceed:</p>
+<h4 id="windows-smartscreen"><a class="header" href="#windows-smartscreen"><strong>Windows (SmartScreen)</strong></a></h4>
+<p><strong>Why this appears:</strong> Windows SmartScreen flags any executable that hasn't been downloaded by thousands of users yet or isn't signed by a registered corporation.</p>
+<ol>
+<li>When the blue "Windows protected your PC" popup appears, click <strong>"More info"</strong>.</li>
+<li>A new button will appear. Click <strong>"Run anyway"</strong>.</li>
+</ol>
+<p><img src="images/smartscreen.png" alt="Windows SmartScreen Security" /></p>
+<h4 id="macos-gatekeeper"><a class="header" href="#macos-gatekeeper"><strong>MacOS (Gatekeeper)</strong></a></h4>
+<p><strong>Why this appears:</strong> macOS Gatekeeper blocks apps that are not from the App Store or from "Identified Developers".</p>
+<ol>
+<li>If you see a '"flux" not Opened' message, click <strong>Done</strong>.</li>
+<li>Open <strong>System Settings</strong> (or System Preferences) &gt; <strong>Privacy &amp; Security</strong>.</li>
+<li>Scroll down to the <strong>Security</strong> section.</li>
+<li>You will see a message saying 'Flux was blocked to protect your Mac.' Click <strong>"Open Anyway"</strong>.</li>
+<li>If you see another prompt saying 'Open "flux"?', click <strong>"Open Anyway"</strong> to confirm you want to run the app.</li>
+<li>Enter your password if prompted to confirm.</li>
+</ol>
+<p><img src="images/gatekeeper.png" alt="MacOS Gatekeeper Security" /></p>
+<hr />
+<h3 id="-compile-from-source"><a class="header" href="#-compile-from-source">🛠️ Compile from Source</a></h3>
+<p>If you prefer not to use pre-compiled binaries, you can build Flux directly from the source code:</p>
+<pre><code class="language-bash"># Clone the repository
+git clone https://github.com/allwepro/minecraft-mod-downloader.git
+cd minecraft-mod-downloader
+
+# Build and run in release mode
+cargo run --release
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="-usage-overview"><a class="header" href="#-usage-overview">🧭 Usage Overview</a></h1>
+<p>This section covers how to navigate and use the different components of Flux. Whether you are looking to launch the game or manage your mod library, you can find the specific guides below.</p>
+<hr />
+<h3 id="-launcher"><a class="header" href="#-launcher">🚀 <a href="usage/launcher.html">Launcher</a></a></h3>
+<p>The core component for launching Minecraft. This section details how to manage game profiles, select versions, and start your game sessions.
+<em>Note: This feature is currently a Work In Progress.</em></p>
+<h3 id="-resource-manager"><a class="header" href="#-resource-manager">📦 <a href="usage/resource-manager.html">Resource Manager</a></a></h3>
+<p>The heart of Flux's utility. Learn how to browse, download, and update your Minecraft content. The Resource Manager allows you to organize your mods, resource packs, and other game assets efficiently.</p>
+<hr />
+<blockquote>
+<p>💡 <strong>Tip:</strong> If you are new to Flux, we recommend starting with the <strong>Resource Manager</strong> to set up your first collection of mods.</p>
+</blockquote>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="launcher"><a class="header" href="#launcher">Launcher</a></h1>
+<h3 id="-work-in-progress"><a class="header" href="#-work-in-progress">🚧 Work In Progress</a></h3>
+<p>The launcher functionality is currently under development.</p>
+<div style="break-before: page; page-break-before: always;"></div><div style="break-before: page; page-break-before: always;"></div><h1 id="-resource-manager-overview"><a class="header" href="#-resource-manager-overview">📦 Resource Manager Overview</a></h1>
+<p>The Resource Manager is the core of Flux, designed for efficient organization and control of your Minecraft content. It features a dual-pane interface: a <strong>Sidebar</strong> for list management and a <strong>Main View</strong> for resource interaction.</p>
+<h3 id="-general-settings"><a class="header" href="#-general-settings">⚙️ General Settings</a></h3>
+<ul>
+<li><strong><a href="usage/resource-manager/resource_manager_settings.html">Resource Manager Settings</a>:</strong> Configure the Resource Manager's behavior and access advanced options that apply specifically to the resource manager.</li>
+</ul>
+<h3 id="-organization"><a class="header" href="#-organization">📂 Organization</a></h3>
+<ul>
+<li><strong><a href="usage/resource-manager/lists.html">Lists</a>:</strong> Learn to create, select, and manage your primary resource lists.</li>
+<li><strong><a href="usage/resource-manager/groups_instances.html">Groups &amp; Instances</a>:</strong> Organize your sidebar by grouping lists and make instances for your different game profiles.</li>
+<li><strong><a href="usage/resource-manager/importing.html">Importing Resources</a>:</strong> How to bring in existing content from files (including legacy formats), Modrinth Collections, or direct imports from Minecraft folders.</li>
+</ul>
+<h3 id="-resource-control"><a class="header" href="#-resource-control">🛠️ Resource Control</a></h3>
+<ul>
+<li><strong><a href="usage/resource-manager/toolbar_search.html">Toolbar &amp; Search</a>:</strong> Utilize the top bar for searching within your resource list, sorting, and executing bulk actions like "Download All".</li>
+<li><strong><a href="usage/resource-manager/list_actions_settings.html">List Actions &amp; Settings</a>:</strong> Understand the specific actions available for the open list, including the List Settings, Export, Open Folder, Duplicate, Rename, and Delete.</li>
+<li><strong><a href="usage/resource-manager/managing_resources.html">Managing Resources</a>:</strong> Managing resource in a list.</li>
+<li><strong><a href="usage/resource-manager/dependencies_archives.html">Dependencies &amp; Archives</a>:</strong> A detailed guide on managing resource dependencies, archiving resources, and handling unknown files.</li>
+</ul>
+<h3 id="-efficiency"><a class="header" href="#-efficiency">⚡ Efficiency</a></h3>
+<ul>
+<li><strong><a href="usage/resource-manager/productivity.html">Productivity &amp; Shortcuts</a>:</strong> Boost your workflow with multi-select functionality, context menus, and keyboard shortcuts.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h2 id="-get-started-with-fluxs-resource-manager"><a class="header" href="#-get-started-with-fluxs-resource-manager">🚀 Get Started with Flux's Resource Manager!</a></h2>
+<p>Welcome to Flux! This guide will quickly show you how to create your first mod list, add resources, and get them downloaded. Let's get your Minecraft setup ready!
+As a first step you need to have Flux installed. If you haven't done that yet, check out our <a href="usage/resource-manager/../../installation.html">Installation Guide</a> first.
+Then after successfully installing Flux, you can open the Resource Manager by clicking the "Resource Manager" text in the top left if it's not already open.</p>
+<hr />
+<h2 id="1-the-resource-manager-interface"><a class="header" href="#1-the-resource-manager-interface">1. The Resource Manager Interface</a></h2>
+<p>The Resource Manager has two main areas:</p>
+<ul>
+<li><strong>Left Sidebar:</strong> Where you manage your different <strong>Lists</strong> (your mod profiles).</li>
+<li><strong>Main View:</strong> Shows the content of your selected list, where you add and manage resources.</li>
+</ul>
+<p><img src="usage/resource-manager/../../images/resource-manager/fresh_start.png" alt="Resource Manager Overview" /></p>
+<hr />
+<h2 id="2-start-your-first-list"><a class="header" href="#2-start-your-first-list">2. Start Your First List</a></h2>
+<p>You have two main ways to begin: <strong>Create a New List</strong> from scratch or <strong>Import an Existing Collection.</strong></p>
+<h3 id="option-a-create-a-new-list-recommended-for-beginners"><a class="header" href="#option-a-create-a-new-list-recommended-for-beginners">Option A: Create a New List (Recommended for beginners)</a></h3>
+<ol>
+<li>
+<p><strong>Click "➕ Create"</strong>: Find this green button at the top-left of the sidebar.
+<img src="usage/resource-manager/../../images/resource-manager/create_button.png" alt="Create List Button" /></p>
+</li>
+<li>
+<p><strong>Configure Your List</strong>: A dialog will ask for essential details. These define which mods are compatible.</p>
+<ul>
+<li><strong>Name:</strong> Give it a clear name (e.g., "My Survival Mods").</li>
+<li><strong>Minecraft Version:</strong> Select your target Minecraft version (e.g., <code>1.21.11</code>).</li>
+<li><strong>Loader Type:</strong> Choose your mod loader (e.g., <code>Fabric</code>, <code>Forge</code>).</li>
+<li><strong>Download Directory:</strong> This is where Flux will save your files. You can leave the default.</li>
+</ul>
+<p><img src="usage/resource-manager/../../images/resource-manager/new_list_dialog.png" alt="New List Dialog" /></p>
+</li>
+<li>
+<p><strong>Confirm</strong>: Click "Create" to add your new, empty list to the sidebar.</p>
+</li>
+</ol>
+<h3 id="option-b-import-an-existing-collection-if-you-have-one"><a class="header" href="#option-b-import-an-existing-collection-if-you-have-one">Option B: Import an Existing Collection (If you have one)</a></h3>
+<p>If you already have an existing Minecraft folder or a Modrinth collection:</p>
+<ol>
+<li>
+<p><strong>Click "Import"</strong>: This button is at the top of the sidebar.</p>
+</li>
+<li>
+<p><strong>Choose an Option</strong>: Select "From File" (for <code>.mmd</code> or legacy mod lists), "Modrinth Collection" (for a URL), or "From Minecraft Folder" (to scan an existing game folder). Follow the prompts to set it up.</p>
+<p><img src="usage/resource-manager/../../images/resource-manager/import_options.png" alt="Import Options" /></p>
+</li>
+</ol>
+<hr />
+<p><img src="usage/resource-manager/../../images/resource-manager/first_list.png" alt="Resource Manager First List" /></p>
+<h2 id="3-add-resources-to-your-list"><a class="header" href="#3-add-resources-to-your-list">3. Add Resources to Your List</a></h2>
+<p>Now, let's find some mods! Flux connects directly to Modrinth.</p>
+<ol>
+<li>
+<p><strong>Click "➕ Add [Resource Type]"</strong>: In the main view, click the button (e.g., "➕ Add Mod"). This opens the <strong>Search Modal</strong>.</p>
+</li>
+<li>
+<p><strong>Search &amp; Add</strong>:</p>
+<ul>
+<li>Type keywords (e.g., "Sodium").</li>
+<li>Results automatically filter for your list's <strong>Minecraft Version</strong> and <strong>Loader Type</strong>.</li>
+<li>Click the <strong>"Add"</strong> button next to each resource you want.</li>
+<li>Close the modal when done.</li>
+</ul>
+<p><img src="usage/resource-manager/../../images/resource-manager/search_modal.png" alt="Search Modal" /></p>
+</li>
+<li>
+<p><strong>Resources Appear</strong>: The added resources will now be in your list, showing a <code>📁 Missing</code> badge.
+<img src="usage/resource-manager/../../images/resource-manager/resource_added_to_list.png" alt="Added Resource In List" /></p>
+</li>
+</ol>
+<hr />
+<h2 id="4-download-your-resources"><a class="header" href="#4-download-your-resources">4. Download Your Resources</a></h2>
+<p>Time to get the files onto your computer!</p>
+<ol>
+<li>
+<p><strong>Click "⬇ Download All"</strong>: This button, found in the toolbar at the top right of the main view, will download all missing resources in your list.</p>
+</li>
+<li>
+<p><strong>Check Progress</strong>: The button changes to "⏳ Downloading...", and individual resources show progress.
+<img src="usage/resource-manager/../../images/resource-manager/downloading_resources.png" alt="Downloading Resources" /></p>
+</li>
+<li>
+<p><strong>Finished!</strong>: Once downloaded, resources show a <code>✅</code> badge, meaning they're ready!
+<img src="usage/resource-manager/../../images/resource-manager/resource_downloaded.png" alt="Resource Downloaded" /></p>
+</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="-lists-creating-and-managing-your-collections"><a class="header" href="#-lists-creating-and-managing-your-collections">📂 Lists: Creating and Managing Your Collections</a></h1>
+<p>Lists are the fundamental building blocks within Flux's Resource Manager. Each list represents a self-contained collection of Minecraft resources (mods, shaders, resource packs, etc.) tailored for a specific Minecraft version and loader combination. Think of them as dedicated profiles for your different gameplay experiences.</p>
+<hr />
+<h3 id="understanding-the-lists-sidebar"><a class="header" href="#understanding-the-lists-sidebar">Understanding the Lists Sidebar</a></h3>
+<p>The left sidebar of the Resource Manager is where all your lists are displayed and managed.</p>
+<p><img src="usage/resource-manager/../../images/resource-manager/first_list.png" alt="Flux Sidebar" /></p>
+<p>Each list entry provides a quick overview of its configuration:</p>
+<ul>
+<li><strong>List Name:</strong> The user-defined name for your collection (e.g., "New List").</li>
+<li><strong>Resource Type Badge (e.g., <code>Mod</code>):</strong> Indicates the primary type of content this list is designed for. While often <code>Mod</code>, Flux supports others like <code>Shader</code>, <code>Resource Pack</code>, etc., though the current UI primarily shows <code>Mod</code> for general resource lists.</li>
+<li><strong>Minecraft Version Badge (e.g., <code>1.21.11</code>):</strong> The target Minecraft version for this list.</li>
+<li><strong>Loader Type Badge (e.g., <code>Fabric</code>):</strong> The specific Minecraft loader (Fabric, Forge, Quilt, NeoForge, Vanilla) configured for this list.</li>
+<li><strong>Resource Count Badge (e.g., <code>0</code> or <code>2</code>):</strong> Shows the current number of resources installed in this list.</li>
+</ul>
+<p>When a list is selected, it will be highlighted in the sidebar, and its contents will be displayed in the main view.</p>
+<hr />
+<h3 id="creating-a-new-list"><a class="header" href="#creating-a-new-list">Creating a New List</a></h3>
+<p>To start a fresh collection of resources:</p>
+<ol>
+<li>Click the green <strong><code>+ Create</code></strong> button in the top-left of the sidebar.</li>
+<li>A dialog will appear (not shown in screenshots, but implied) prompting you to:
+<ul>
+<li><strong>Name your new list.</strong> Choose a descriptive name.</li>
+<li><strong>Select the target Minecraft Version.</strong> This ensures compatible resources are suggested.</li>
+<li><strong>Choose the desired Loader Type.</strong></li>
+<li><strong>If necessary, pick your preferred download destination.</strong></li>
+</ul>
+</li>
+<li>After confirmation, your new list will appear in the sidebar and be automatically selected.</li>
+</ol>
+<p>Newly created lists will initially show <strong>"No items in this list"</strong> in the main view, ready for you to add resources.</p>
+<hr />
+<h3 id="searching-your-lists"><a class="header" href="#searching-your-lists">Searching Your Lists</a></h3>
+<p>As your collection grows, you might have many lists. The <strong><code>Search Lists...</code></strong> input field at the top of the sidebar helps you quickly find a specific list:</p>
+<ul>
+<li>Type keywords into the search bar. The sidebar will dynamically filter, showing only lists whose names match your input.</li>
+<li>To clear the search and see all lists again, simply delete the text from the search bar.</li>
+</ul>
+<hr />
+<h3 id="deleting-a-list"><a class="header" href="#deleting-a-list">Deleting a List</a></h3>
+<p>To remove a list you no longer need:</p>
+<ol>
+<li>Select the list you wish to delete from the sidebar.</li>
+<li>In the top-right action bar of the main view, click the <strong><code>Delete</code></strong> button (red trash can icon).</li>
+<li>A confirmation dialog will appear. Confirm to permanently remove the list and all its associated resources and configurations.</li>
+</ol>
+<p><strong>Warning:</strong> Deleting a list is irreversible and will remove all downloaded mods and configuration specific to that list. Ensure you have backed up any important data if necessary.</p>
+<hr />
+<h3 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h3>
+<p>Now that you know how to create and manage lists, you can:</p>
+<ul>
+<li><strong><a href="usage/resource-manager/groups_instances.html">Organize them further with Groups &amp; Instances</a></strong></li>
+<li><strong><a href="usage/resource-manager/importing.html">Import existing collections</a></strong></li>
+<li><strong><a href="usage/resource-manager/managing_resources.html">Add resources to your lists</a></strong></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="-groups--instances"><a class="header" href="#-groups--instances">👥 Groups &amp; Instances</a></h1>
+<p>Flux provides powerful organizational features through <strong>Groups</strong> and <strong>Instances</strong> in the sidebar. These allow you to categorize your resource lists and manage dedicated Minecraft game setups more effectively.</p>
+<hr />
+<h2 id="what-are-groups"><a class="header" href="#what-are-groups">What are Groups?</a></h2>
+<p>A group is a customizable folder in your sidebar that can contain multiple individual resource lists. Groups help keep your workspace organized, especially when you have many modpacks or different game configurations.</p>
+<h2 id="what-are-instances"><a class="header" href="#what-are-instances">What are Instances?</a></h2>
+<p>An instance is a special type of group designed to manage a complete Minecraft game installation. When you convert a group into an instance, you can:</p>
+<ul>
+<li>Define a specific <strong>instance directory</strong> (<code>.minecraft</code> folder location).</li>
+<li>Pin a particular <strong>Minecraft game version</strong> for all lists within that instance.</li>
+<li>All lists assigned to an instance will automatically use the instance's directory and game version as their default.</li>
+</ul>
+<hr />
+<h2 id="-creating--organizing-groups"><a class="header" href="#-creating--organizing-groups">🏗️ Creating &amp; Organizing Groups</a></h2>
+<ol>
+<li>
+<p><strong>Creating a New Group:</strong></p>
+<ul>
+<li>In the sidebar, click the "➕ <strong>Create</strong>" button.</li>
+<li>From the popup, select "New List Group" (this option will be available when a group creation feature is implemented).</li>
+<li>A new, empty group will appear in your sidebar.</li>
+</ul>
+</li>
+<li>
+<p><strong>Adding Lists to a Group:</strong></p>
+<ul>
+<li>You can drag and drop existing lists directly into a group in the sidebar.</li>
+<li>Lists can also be moved between groups or out of groups to the root level.</li>
+</ul>
+</li>
+<li>
+<p><strong>Viewing &amp; Navigating Groups:</strong></p>
+<ul>
+<li>Groups appear with a "➕" (collapsed) or "➖" (expanded) icon.</li>
+<li>Click the arrow or double-click the group's name to toggle its expanded state.</li>
+<li>A badge next to the group name shows the total number of lists it contains.</li>
+<li>If a group is an instance, it will display a "🎮" icon next to its name.</li>
+</ul>
+</li>
+</ol>
+<h2 id="-managing-group-settings"><a class="header" href="#-managing-group-settings">⚙️ Managing Group Settings</a></h2>
+<p>When you click on a group in the sidebar, its settings will be displayed in the main content area.</p>
+<h3 id="group-header-actions"><a class="header" href="#group-header-actions">Group Header Actions</a></h3>
+<p>At the top of the main panel, you'll see the group's name and a set of action buttons:</p>
+<ul>
+<li><strong>✏ Rename:</strong> Click this button to rename the current group. An input field will appear, allowing you to type a new name. Press <code>Enter</code> or click the "✔" button to confirm, or "❌" to cancel.</li>
+<li><strong>👥 Duplicate:</strong> Creates an exact copy of the group, including all its assigned lists and their resources.</li>
+<li><strong>🗑 Delete:</strong> Permanently deletes the group and unassigns any lists within it (the lists themselves are not deleted, only their assignment to this group).</li>
+<li><strong>⬇ Download All / ⬇ Download Instance:</strong>
+<ul>
+<li>If it's a regular group, this button is labeled "⬇ Download All."</li>
+<li>If it's an instance, it's labeled "⬇ Download Instance."</li>
+<li>Clicking this button will initiate the download of all missing resources across <em>all</em> lists assigned to this group (and recursively for any nested groups).</li>
+<li>While downloads are active, the button changes to "⏳ Downloading...".</li>
+</ul>
+</li>
+<li><strong>⚙ Group Settings:</strong> (Not explicitly shown in code but implied by <code>ListGroupSettingsModal::new</code>) This button will open a dedicated modal for group-specific configurations, such as toggling "Instance Mode" (described below).</li>
+</ul>
+<h3 id="instance-configuration"><a class="header" href="#instance-configuration">Instance Configuration</a></h3>
+<p>If the selected group is an <strong>Instance</strong>, a dedicated "Instance Configuration" panel will be visible:</p>
+<ul>
+<li><strong>Instance Directory:</strong>
+<ul>
+<li>This field specifies the <code>.minecraft</code> directory where all lists within this instance will download their resources.</li>
+<li>Click the "📁 <strong>Browse</strong>" button to open a file picker and select a directory on your system.</li>
+<li><strong>Note:</strong> If not set, it may try to infer a default based on your system.</li>
+</ul>
+</li>
+<li><strong>Game Version:</strong>
+<ul>
+<li>A dropdown menu where you can select a specific Minecraft Java Edition version for this instance.</li>
+<li>All lists within this instance will default to this game version for compatibility checks and downloads.</li>
+</ul>
+</li>
+<li><strong>💾 Save:</strong> Click this button to apply changes to the instance's directory and game version.</li>
+<li><strong>Download Path Information:</strong> Below the save button, Flux provides a helpful overview of where different resource types will be downloaded within the specified instance directory (e.g., <code>Mods ➡ &lt;instance_directory&gt;/mods</code>).</li>
+</ul>
+<h3 id="converting-tofrom-an-instance"><a class="header" href="#converting-tofrom-an-instance">Converting to/from an Instance</a></h3>
+<p>If a selected group is <strong>not</strong> an instance, you'll see a button:</p>
+<ul>
+<li><strong>🎮 Convert to Instance:</strong> Clicking this button transforms the current group into an instance, activating the "Instance Configuration" panel for it. All associated lists will then inherit its download directory and game version.</li>
+</ul>
+<p>If it is an instance, the "⚙ Group Settings" modal would likely contain an option to revert it to a regular group.</p>
+<hr />
+<h2 id="-productivity--context-menus"><a class="header" href="#-productivity--context-menus">🖱️ Productivity &amp; Context Menus</a></h2>
+<h3 id="drag--drop-dnd"><a class="header" href="#drag--drop-dnd">Drag &amp; Drop (DnD)</a></h3>
+<p>You can easily reorganize your sidebar using drag and drop:</p>
+<ul>
+<li><strong>Move Lists:</strong> Click and drag a list to move it into or out of a group, or reorder it within the same level.</li>
+<li><strong>Move Groups:</strong> Groups can also be dragged to reorder them or nest them within other groups (creating subgroups).</li>
+<li><strong>Visual Feedback:</strong> While dragging, a blue line indicates the drop target and position (before/after an item or inside a group).</li>
+<li><strong>Auto-Expand:</strong> Hovering over a collapsed group while dragging will automatically expand it after a short delay, allowing you to drop items inside.</li>
+</ul>
+<h3 id="right-click-context-menus"><a class="header" href="#right-click-context-menus">Right-Click Context Menus</a></h3>
+<p>Right-clicking on a list group in the sidebar will open a context menu with quick actions, similar to those in the header, for that specific group (e.g., Duplicate, Delete).</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="-importing-resources"><a class="header" href="#-importing-resources">📥 Importing Resources</a></h1>
+<p>Flux provides several ways to import existing resource collections or Minecraft folders, allowing you to quickly set up new lists without starting from scratch. All import options are accessible via the <strong>"Import"</strong> button in the sidebar.</p>
+<hr />
+<h2 id="-import-from-file"><a class="header" href="#-import-from-file">💾 Import from File</a></h2>
+<p>This method allows you to import resource lists from various file formats. The behavior after selecting a file depends on its extension.</p>
+<h3 id="supported-file-types--behavior"><a class="header" href="#supported-file-types--behavior">Supported File Types &amp; Behavior</a></h3>
+<ul>
+<li>
+<p><strong>Flux List Files (<code>.toml</code>, <code>.mmd</code>):</strong></p>
+<ul>
+<li>These are Flux's native or compatible formats for comprehensive list exports.</li>
+<li>Importing these files will directly create a new list based on the file's configuration and projects, preserving all details.</li>
+</ul>
+</li>
+<li>
+<p><strong>Legacy Mod List Files (<code>.mods</code>, <code>.all-mods</code>, <code>.queue-mods</code>):</strong></p>
+<ul>
+<li>These are older, simpler text-based formats often used to list mods by their names or IDs.</li>
+<li>When importing these, a <strong>"Legacy Import Modal"</strong> will appear. This modal allows you to define the properties of the <em>new list</em> that will be created from these legacy entries.</li>
+</ul>
+</li>
+<li>
+<p><strong>Unsupported File Types:</strong></p>
+<ul>
+<li>Attempting to import any other file type will result in an <strong>"Unsupported file type for import" notification</strong>.</li>
+</ul>
+</li>
+</ul>
+<h3 id="how-to-import"><a class="header" href="#how-to-import">How to Import</a></h3>
+<ol>
+<li>
+<p>Click the <strong>"Import" button</strong> in the sidebar.</p>
+</li>
+<li>
+<p>Select <strong>"From File"</strong> from the options.</p>
+</li>
+<li>
+<p>A file dialog will open. Navigate to and select your <code>.toml</code>, <code>.mmd</code>, <code>.mods</code>, <code>.all-mods</code>, or <code>.queue-mods</code> file.</p>
+<ul>
+<li><strong>For Flux List Files (<code>.toml</code>, <code>.mmd</code>):</strong> The list will be processed and added to your sidebar automatically.</li>
+<li><strong>For Legacy Mod List Files (<code>.mods</code>, <code>.all-mods</code>, <code>.queue-mods</code>):</strong>
+<ul>
+<li>A modal window will appear, pre-filling a suggested <strong>List Name</strong> (usually derived from the file name).</li>
+<li>You <em>must</em> configure the <strong>Resource Type</strong> (e.g., Mod), <strong>Game Version</strong>, <strong>Game Loader</strong>, and the <strong>Download Directory</strong> for this new list.</li>
+<li>Click <strong>"Import"</strong> within the modal to proceed.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+<h3 id="import-process--results-for-legacy-mod-list-files"><a class="header" href="#import-process--results-for-legacy-mod-list-files">Import Process &amp; Results (for Legacy Mod List Files)</a></h3>
+<ul>
+<li>After configuring a legacy import, a progress modal may appear, showing the status of matching projects from the file to Modrinth's database.</li>
+<li>If any entries from the legacy file cannot be found or matched on Modrinth, they will be listed as <strong>"Unresolved"</strong> in the import results. You can then confirm the import (creating a list with only the resolvable items) or cancel the operation. Unresolved items will not be added to your new list.</li>
+</ul>
+<hr />
+<h2 id="-import-modrinth-collection"><a class="header" href="#-import-modrinth-collection">🌐 Import Modrinth Collection</a></h2>
+<p>Importing a Modrinth collection allows you to easily set up a new resource list based on a collection curated on Modrinth.</p>
+<h3 id="how-to-import-1"><a class="header" href="#how-to-import-1">How to Import</a></h3>
+<ol>
+<li>Click the <strong>"Import" button</strong> in the sidebar.</li>
+<li>Select <strong>"Modrinth Collection"</strong>.</li>
+<li>A modal window will prompt you to enter the <strong>Modrinth Collection URL</strong> or its unique <strong>ID</strong>.
+<ul>
+<li>Example URL: <code>https://modrinth.com/collection/ZCxg7r1U</code></li>
+<li>Example ID: <code>ZCxg7r1U</code></li>
+</ul>
+</li>
+<li>Click <strong>"Import"</strong>.</li>
+</ol>
+<h3 id="configuration--finalization"><a class="header" href="#configuration--finalization">Configuration &amp; Finalization</a></h3>
+<ul>
+<li>Flux will first load the collection's data from Modrinth. During this time, a <strong>"Loading collection..."</strong> message will be displayed.</li>
+<li>Once loaded, if the collection contains projects, you will enter a "finalizing" step:
+<ul>
+<li><strong>List Name:</strong> A default name based on the collection will be suggested.</li>
+<li><strong>Resource Type:</strong> If the collection contains multiple resource types (e.g., both mods and resource packs), Flux will alert you. You can select one resource type for the current import, and then re-import the collection for other types if desired.</li>
+<li><strong>Game Version / Game Loader / Download Directory:</strong> Configure these settings for your new list.</li>
+</ul>
+</li>
+<li>Click <strong>"Import"</strong> again to create the new list with all matched projects from the Modrinth collection.</li>
+</ul>
+<hr />
+<h2 id="-import-from-minecraft-folder"><a class="header" href="#-import-from-minecraft-folder">📦 Import from Minecraft Folder</a></h2>
+<p>This feature allows you to scan an existing Minecraft folder (e.g., your <code>.minecraft</code> directory or a specific instance folder) for installed resources and import them into a new Flux list.</p>
+<p>The import process guides you through a few steps:</p>
+<h3 id="1-select-folder"><a class="header" href="#1-select-folder">1. Select Folder</a></h3>
+<ol>
+<li>Click the <strong>"Import"</strong> button in the sidebar.</li>
+<li>Select <strong>"From Folder"</strong>.</li>
+<li>Choose the <strong>Resource Type</strong> you want to detect (e.g., <code>Mod</code>, <code>Shader</code>, <code>Resource Pack</code>). This helps Flux focus its scan.</li>
+<li>Specify the <strong>Folder</strong> you want to scan. You can type the path directly or use the <strong>"Browse..."</strong> button to select it via a file dialog.</li>
+<li>Click <strong>"Import"</strong> to begin the scan.</li>
+</ol>
+<h3 id="2-scanning"><a class="header" href="#2-scanning">2. Scanning</a></h3>
+<p>Flux will now scan the specified folder. This step involves:</p>
+<ul>
+<li>Identifying files matching the selected resource type.</li>
+<li>Attempting to resolve these files against the Modrinth database to find corresponding projects.</li>
+<li>Reporting progress on detected files and matches.</li>
+<li>Any errors encountered during the scan will be displayed.</li>
+</ul>
+<p>Once the scan is complete, the modal automatically transitions to the "Review" step.</p>
+<h3 id="3-review-detected-files"><a class="header" href="#3-review-detected-files">3. Review Detected Files</a></h3>
+<p>In this step, you can review the files Flux detected and their potential matches on Modrinth.</p>
+<ul>
+<li><strong>File List:</strong> Each detected file is listed with its original filename, a cleaned-up name for easier identification, and the detected Minecraft version and loader.</li>
+<li><strong>Match Status:</strong>
+<ul>
+<li><strong>Exact Match:</strong> If Flux finds a unique, strong match for a file, it will be automatically selected and marked "Exact Match" (green).</li>
+<li><strong>Selected:</strong> If you manually choose a match, it will be marked "Selected."</li>
+<li><strong>No Matches Found:</strong> If no matches are found, you'll see a "No matches found" (red) message.</li>
+</ul>
+</li>
+<li><strong>Actions for Each File:</strong>
+<ul>
+<li><strong>Change / Select Match:</strong> For files with multiple potential matches or to change an existing selection, click "Change" or the dropdown to select a different match from the list.</li>
+<li><strong>🔍 Search Manually...:</strong> If you don't find the correct match in the dropdown or if no matches were found, you can manually search Modrinth for the project. This will open a new search modal, pre-filled with the detected file name. Once a selection is made, you'll return to the review screen.</li>
+<li><strong>⊗ Skip this file:</strong> If you don't want to include a particular file in your new list, you can skip it. Skipped files are marked "Skipped" (gray). You can "Undo" skipping later.</li>
+</ul>
+</li>
+<li><strong>Show Unresolved:</strong> A filter button allows you to quickly view only the files that still require a decision (not skipped or selected).</li>
+</ul>
+<p>Once all files are either skipped or have a selected match, the "Continue" button will become active, allowing you to proceed.</p>
+<h3 id="4-new-list-settings"><a class="header" href="#4-new-list-settings">4. New List Settings</a></h3>
+<p>In the final step, you configure the settings for your new list, similar to creating a fresh list.</p>
+<ol>
+<li><strong>List Name:</strong> Enter a name for your new resource list. By default, this will be the name of the folder you imported from.</li>
+<li><strong>Resource Type:</strong> This will be pre-selected based on your choice in the first step.</li>
+<li><strong>Minecraft Version:</strong> Select the target Minecraft version for this list. Flux may suggest a version based on its scan.</li>
+<li><strong>Game Loader:</strong> Select the desired game loader (e.g., Fabric, Forge, Quilt). Flux may suggest a loader.</li>
+<li><strong>Download Directory:</strong> Specify where resources for this list should be downloaded.</li>
+</ol>
+<p>After configuring these settings, click <strong>"Import"</strong>. Flux will create your new list, add all the selected projects, and then close the modal.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="toolbar--search"><a class="header" href="#toolbar--search">Toolbar &amp; Search</a></h1>
+<p>The toolbar at the top of the Resource Manager's main view provides quick access to essential actions for managing your current resource list, including refresh options, search functionality, and bulk download/update actions.</p>
+<hr />
+<h2 id="-add-resource"><a class="header" href="#-add-resource">➕ Add Resource</a></h2>
+<p>The <strong>"Add [Resource Type]"</strong> button (e.g., "➕ Add Mod", "➕ Add Shader") is the primary way to introduce new resources to your list.</p>
+<ul>
+<li>Clicking this button opens a <strong>Search Modal</strong>.</li>
+<li><strong>Search Modal Usage:</strong>
+<ul>
+<li>Enter your search query in the provided text field.</li>
+<li>You can toggle <strong>"Match version/loader"</strong> to filter results more precisely to your list's configured Minecraft version and loader (e.g., Fabric for 1.21.1).</li>
+<li>Once you find the desired project, click the <strong>"Add"</strong> button next to it.</li>
+</ul>
+</li>
+<li>The selected project will then be added to your current list in the Resource Manager.</li>
+<li><strong>Disabled in Offline Mode:</strong> This feature requires an internet connection to search Modrinth and is therefore disabled when Flux is in offline mode.</li>
+</ul>
+<hr />
+<h2 id="-refresh-files"><a class="header" href="#-refresh-files">🔄 Refresh Files</a></h2>
+<p>The <strong>"Refresh"</strong> button (🔄 icon) initiates a scan of the list's configured download directory.</p>
+<ul>
+<li><strong>Standard Click:</strong> Re-indexes the files on your disk to ensure Flux has the most up-to-date information on what's installed and its status. This is useful if you've manually added or removed files from the directory.</li>
+<li><strong>Shift + Click:</strong> Performs a deeper refresh, re-indexing files <em>and</em> forcing a recalculation of all project dependencies. This can resolve issues where dependency status appears incorrect after significant changes or if you suspect data corruption.</li>
+</ul>
+<blockquote>
+<p>💡 <strong>Spinner:</strong> While a refresh or scan is active, the refresh button will transform into a spinning icon (⏳) to indicate that files are being processed.</p>
+</blockquote>
+<hr />
+<h2 id="-search-resources"><a class="header" href="#-search-resources">🔍 Search Resources</a></h2>
+<p>The search bar, labeled "🔍 Search [Resource Type]...", allows you to filter the displayed resources within your current list.</p>
+<ul>
+<li><strong>Keyword Search:</strong> Type keywords to filter projects by their <strong>name</strong>. The search is case-insensitive.</li>
+<li><strong>Include Dependencies:</strong> To extend your search to include the names of <em>dependencies</em> that projects in your list rely on, prepend your search query with an ampersand (<code>&amp;</code>).
+<ul>
+<li>Example: <code>&amp;fabric</code> might show mods that require Fabric API, even if "fabric" isn't in their name.</li>
+</ul>
+</li>
+<li><strong>Clear Search:</strong> Click the <strong>"❌"</strong> button next to the search bar to quickly clear your query.</li>
+</ul>
+<hr />
+<h2 id="-download-all"><a class="header" href="#-download-all">⬇ Download All</a></h2>
+<p>The <strong>"Download All"</strong> button streamlines the process of getting all missing resources for your list.</p>
+<ul>
+<li>This button will appear as <strong>"⬇ Download All"</strong> when there are projects in your list that are not yet downloaded.</li>
+<li>Clicking it will queue all currently missing, unarchived projects for download.</li>
+<li><strong>"⏳ Downloading..."</strong>: While downloads are in progress, the button will change to indicate the active download status.</li>
+<li><strong>Disabled in Offline Mode:</strong> This feature, like all Modrinth interaction, is disabled when Flux is in offline mode.</li>
+</ul>
+<hr />
+<h2 id="-update-all"><a class="header" href="#-update-all">🔄 Update All</a></h2>
+<p>If your list has "Auto-Update Enabled" (configured in List Settings), this button will not appear. If auto-updates are disabled, the <strong>"Update All"</strong> button becomes visible when one or more projects in your list have a newer version available on Modrinth.</p>
+<ul>
+<li>Clicking <strong>"🔄 Update All"</strong> will attempt to download the latest compatible versions for all projects that are currently outdated.</li>
+<li><strong>Disabled in Offline Mode:</strong> This feature is unavailable when Flux is in offline mode.</li>
+</ul>
+<hr />
+<h2 id="-delete-x-selected"><a class="header" href="#-delete-x-selected">🗑 Delete X selected</a></h2>
+<p>This button appears when you have selected multiple projects in your list (using Ctrl/Cmd + click or Shift + click).</p>
+<ul>
+<li>The text will indicate how many projects are selected (e.g., "🗑 Delete 3 selected").</li>
+<li>Clicking this button will remove all selected projects from your list.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="list-actions--settings"><a class="header" href="#list-actions--settings">List Actions &amp; Settings</a></h1>
+<p>When you have a list open in the Resource Manager's main view, a dedicated set of tools appears at the top right of the panel. These allow you to manage the list itself, including its configuration, duplication, and export.</p>
+<hr />
+<h2 id="-list-settings"><a class="header" href="#-list-settings">⚙ List Settings</a></h2>
+<p>The <strong>"List Settings"</strong> button opens a modal window specific to the currently active list. Here, you can define critical parameters that affect how resources are discovered, downloaded, and managed for this particular list.</p>
+<p><strong>Configurable Options:</strong></p>
+<ul>
+<li><strong>Minecraft Game Version:</strong> The specific Minecraft version this list is designed for (e.g., <code>1.21.1</code>).</li>
+<li><strong>Game Loader:</strong> The mod loader required for this list (e.g., <code>Fabric</code>, <code>Forge</code>, <code>Quilt</code>).</li>
+<li><strong>Resource Type:</strong> Defines what kind of resources this list primarily manages (e.g., <code>Mod</code>, <code>Shader</code>, <code>Resource Pack</code>).</li>
+<li><strong>Download Directory:</strong> The local folder where resources for this list will be downloaded. This can be configured as a custom path or set to inherit from an instance group if the list is part of one.</li>
+<li><strong>Auto-Update Enabled:</strong> Toggle whether installed resources in this list should automatically check for and apply updates.</li>
+</ul>
+<p>After making changes, click <strong>"Save"</strong>. The Resource Manager will then re-evaluate the list's compatibility and download status based on the new settings. You will also see the list's unique <code>ID</code> at the bottom of this modal.</p>
+<hr />
+<h2 id="-export"><a class="header" href="#-export">📤 Export</a></h2>
+<p>The <strong>"Export"</strong> button allows you to save your current list of resources to a file, which can then be shared with others or used for backup.</p>
+<ul>
+<li>Upon clicking, a file save dialog will appear, prompting you to choose a location and filename for your export.</li>
+<li><strong>Export Formats:</strong>
+<ul>
+<li><strong>Flux (<code>.mmd</code>):</strong> This is the native export format for Flux, containing detailed information about your list and its resources.</li>
+<li><strong>Legacy Mod List (for <code>Mods</code> only):</strong> If you are exporting a <code>Mod</code> list and choose a non-Flux format, Flux can export a simpler list that might be compatible with other mod managers.</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="-open-folder"><a class="header" href="#-open-folder">📂 Open Folder</a></h2>
+<p>Clicking <strong>"Open Folder"</strong> will instantly open the configured download directory for the current list in your operating system's file explorer. This provides quick access to your installed resources for manual inspection or management.</p>
+<hr />
+<h2 id="-duplicate"><a class="header" href="#-duplicate">👥 Duplicate</a></h2>
+<p>The <strong>"Duplicate"</strong> button creates an exact copy of the active list. The new list will appear in your sidebar with a similar name (e.g., "New List (Copy)"), containing all the same projects and settings as the original. This is useful for creating variations of a modpack or for testing changes without affecting your primary list.</p>
+<hr />
+<h2 id="-rename"><a class="header" href="#-rename">✏ Rename</a></h2>
+<p>To change the name of your open list, click the <strong>"Rename"</strong> button.</p>
+<ul>
+<li>An inline text input field will appear, pre-filled with the current list name.</li>
+<li>Type in your desired new name.</li>
+<li>Press <code>Enter</code> or click the <strong>"✔"</strong> button to confirm the rename.</li>
+<li>Click the <strong>"❌"</strong> button to cancel the renaming process.</li>
+</ul>
+<hr />
+<h2 id="-delete"><a class="header" href="#-delete">🗑 Delete</a></h2>
+<p>The <strong>"Delete"</strong> button, prominently colored in red, allows you to permanently remove the current list.</p>
+<ul>
+<li>Deleting a list removes it from Flux and unassigns any associated resource files, but it generally <strong>does not delete the physical files from your disk</strong>. This ensures you don't lose your mods if you simply want to remove the list from the resource manager.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="managing-resources"><a class="header" href="#managing-resources">Managing Resources</a></h1>
+<p>This section details how to add, manage, update, and remove individual resources (mods, shaders, etc.) within your active list. Flux provides intuitive tools and visual indicators to keep your game content organized and up-to-date.</p>
+<h2 id="adding-resources"><a class="header" href="#adding-resources">Adding Resources</a></h2>
+<p>To add new resources to your list, use the "Add [Resource Type]" button prominently displayed at the top of the main content area.</p>
+<ul>
+<li>
+<p><strong>"➕ Add [Resource Type]" Button:</strong> Click this button (e.g., "➕ Add Mod") to open the <strong>Search Modal</strong>. This modal allows you to browse and select resources directly from Modrinth, filtering by compatibility with your list's configured game version and loader.</p>
+</li>
+<li>
+<p><strong>Offline Mode:</strong> This button will be disabled and grayed out when Flux is in offline mode, as it requires an internet connection to search Modrinth.</p>
+</li>
+<li>
+<p><strong>Keyboard Shortcut:</strong> After typing your query in the Search Modal, you can simply press <strong><code>Enter</code></strong> to trigger the search without clicking the button.</p>
+</li>
+<li>
+<p><strong>Smart Filtering:</strong> Keep <strong>"Match version/loader"</strong> checked to ensure you only see projects compatible with your current list's Minecraft version and loader (Fabric/NeoForge/etc.).</p>
+</li>
+</ul>
+<h2 id="the-reload-button"><a class="header" href="#the-reload-button">The Reload Button</a></h2>
+<p>The "Reload" button (🔄) is a vital tool for ensuring Flux's view of your files is current with your disk.</p>
+<ul>
+<li><strong>Standard Click (🔄):</strong> A regular click on this button triggers a re-indexing of files in your list's download directory. Use this if you manually add or remove files, or if you suspect the displayed status of your resources is out of sync.</li>
+<li><strong>Shift+Click (🔄 + Shift):</strong> Holding <code>Shift</code> while clicking "Reload" forces a full recalculation of all project dependencies. This can resolve issues where dependency relationships might appear incorrect or if a mod's requirements have recently changed.</li>
+<li><strong>Loading Indicator:</strong> While files are being scanned or re-indexed, the button will change to a spinner icon (⏳) to indicate activity.</li>
+</ul>
+<h2 id="auto-update-mode"><a class="header" href="#auto-update-mode">Auto-Update Mode</a></h2>
+<p>Flux offers an "Auto-Update" mode, configurable in the List Settings. This mode affects how updates are handled across your list.</p>
+<ul>
+<li><strong>If Auto-Update is enabled:</strong> Flux will automatically select and download the latest compatible versions for your resources whenever available, ensuring your list is always current without manual intervention.</li>
+<li><strong>If Auto-Update is disabled:</strong> A "🔄 Update All" button will appear if any resources in your list have a newer version available. You will also see individual "🔄 Update" buttons next to each outdated resource, allowing for granular control over updates.</li>
+</ul>
+<h2 id="individual-resource-entries"><a class="header" href="#individual-resource-entries">Individual Resource Entries</a></h2>
+<p>Each resource in your list is displayed as an entry with its icon, name, version, author, and various status indicators and action buttons.</p>
+<h3 id="resource-details"><a class="header" href="#resource-details">Resource Details</a></h3>
+<ul>
+<li><strong>Icon:</strong> A small icon representing the resource (e.g., a gear for Mod Menu, a cube for Sodium).</li>
+<li><strong>Name:</strong> The name of the resource, often displayed as a hyperlink. Clicking the name will open the resource's page on Modrinth in your web browser.</li>
+<li><strong>Version &amp; Author:</strong> Displays the currently selected version (e.g., <code>v17.0.0-beta.2</code>) and the author of the project (e.g., <code>by Prospector</code>).</li>
+</ul>
+<h3 id="status-indicators"><a class="header" href="#status-indicators">Status Indicators</a></h3>
+<p>Next to each resource, you may see one or more of these indicators:</p>
+<ul>
+<li><strong><code>✅</code> (Downloaded):</strong> Indicates the resource's currently selected version is present and matches its expected hash on disk.</li>
+<li><strong><code>⏳ Downloading...</code> (with Progress Bar):</strong> Shown when the resource is actively being downloaded or is in the download queue, along with a percentage progress.</li>
+<li><strong><code>❌</code> (Failed):</strong> Appears if a download or metadata retrieval for the resource failed. Clicking this button allows you to clear cached metadata and version data, prompting a re-attempt to load.</li>
+<li><strong><code>📁 Missing</code>:</strong> Indicates that the resource is part of your list and compatible, but its file is not currently present in the download directory. You will see a "Download" button to obtain it.</li>
+<li><strong><code>🔄 Update Available</code>:</strong> If auto-update is disabled and a newer version of the resource is found online, this badge will appear.</li>
+<li><strong><code>❌ Incompatible</code>:</strong> This resource is not compatible with the current game version and loader settings of your list.
+<ul>
+<li><strong>"🔒 Overrule" Button:</strong> You can choose to force-enable the resource despite incompatibility warnings. Use this with caution.</li>
+</ul>
+</li>
+<li><strong><code>⚠ Incompatible Overruled</code>:</strong> Indicates that you have previously overruled an incompatibility warning for this resource.
+<ul>
+<li><strong>"🔓 Revoke" Button:</strong> Click to revert the override, which will re-enable compatibility checks.</li>
+</ul>
+</li>
+</ul>
+<h3 id="dependency-management"><a class="header" href="#dependency-management">Dependency Management</a></h3>
+<p>Flux helps you manage resource dependencies:</p>
+<ul>
+<li><strong><code>+N Dependencies</code> Badge:</strong> If a resource requires other mods to function, this badge will show the count of its required dependencies. Clicking this badge will expand the entry to display the dependent resources, indented below the main resource.</li>
+<li><strong>Dependent Resources:</strong> When expanded, dependencies are shown with smaller icons and indented, indicating their subordinate relationship. They generally inherit the status of their parent.</li>
+<li><strong>Dependency Impact on Actions:</strong> Certain actions (like archiving or deleting) may be restricted if a resource is required by another. A tooltip will explain why the action is disabled.</li>
+</ul>
+<h3 id="action-buttons-per-resource"><a class="header" href="#action-buttons-per-resource">Action Buttons (Per Resource)</a></h3>
+<p>These buttons appear on the right side of each resource entry, allowing you to manage individual items.</p>
+<ul>
+<li><strong>Download / Update Button:</strong>
+<ul>
+<li>If the resource is missing, a "Download" button (blue) will appear.</li>
+<li>If a newer version is available and auto-update is off, an "🔄 Update" button (light blue) will appear.</li>
+<li>These buttons are disabled if the resource is incompatible (unless overruled) or in offline mode.</li>
+</ul>
+</li>
+<li><strong>Archive / Unarchive Button:</strong>
+<ul>
+<li><strong><code>📁 Archive</code> (light yellow):</strong> Moves the resource to an "Archived Projects" section at the bottom of the list. Archived resources are not downloaded or loaded by the game but remain in your list for easy restoration.</li>
+<li><strong><code>📂 Unarchive</code> (light yellow):</strong> Appears for archived resources, moving them back into the active list.</li>
+<li><strong>Restrictions:</strong> This action is disabled if the resource has other projects that depend on it. A tooltip will inform you of the blocking dependencies.</li>
+</ul>
+</li>
+<li><strong>Delete Button (🗑):</strong>
+<ul>
+<li><strong>Light Red <code>🗑</code>:</strong> For resources without dependents, clicking this button permanently removes the resource from your list and deletes its file from disk.</li>
+<li><strong>Orange <code>🗑</code>:</strong> If the resource has other projects that depend on it, clicking this button will "demote" it to an auto-managed state (meaning it's kept in the list because others need it, but it's no longer considered a manually added project). Its file will remain on disk.</li>
+</ul>
+</li>
+</ul>
+<h2 id="unknown-files"><a class="header" href="#unknown-files">Unknown Files</a></h2>
+<p>Below your active and archived projects, Flux may display an "Unknown Projects" section.</p>
+<ul>
+<li><strong>Purpose:</strong> This section lists files found in your list's download directory that are not linked to any known project in your list. These could be leftover files, manually placed mods, or files Flux couldn't identify.</li>
+<li><strong>Expandable Section:</strong> Click the expand button (▶ / 🔽) next to "Unknown Projects ([Count])" to show or hide these files.</li>
+<li><strong>"🗑 Delete All" Button:</strong> Available within the expanded "Unknown Projects" section, this button allows you to delete all unknown files with a single click.</li>
+<li><strong>Individual Unknown Entries:</strong> Each unknown file is shown with a generic icon (❓), its filename, and a "No metadata available" label. An individual <code>🗑</code> button is provided to delete that specific file.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="-dependencies--archives"><a class="header" href="#-dependencies--archives">🧩 Dependencies &amp; Archives</a></h1>
+<p>Flux provides robust tools to manage project dependencies, archive unused resources, and clean up unassociated files, ensuring your Minecraft installation remains organized and efficient.</p>
+<h2 id="managing-dependencies"><a class="header" href="#managing-dependencies">Managing Dependencies</a></h2>
+<p>Dependencies are other resources that a specific mod, shader, or pack requires to function correctly. Flux automatically detects and manages these relationships, simplifying the installation process.</p>
+<h3 id="displaying-dependencies"><a class="header" href="#displaying-dependencies">Displaying Dependencies</a></h3>
+<p>When a resource in your list has required dependencies, a badge like <code>+N Dependencies</code> will appear below its name and author. The "N" indicates the number of other projects that are necessary for this resource to work.</p>
+<h3 id="expanding-and-viewing-dependencies"><a class="header" href="#expanding-and-viewing-dependencies">Expanding and Viewing Dependencies</a></h3>
+<p>Clicking the <code>+N Dependencies</code> badge will expand the entry, revealing the list of required projects. These dependent projects are displayed with a slightly indented visual style and simplified interaction options, making it clear they are managed as part of their parent resource.</p>
+<h3 id="dependency-handling-during-actions"><a class="header" href="#dependency-handling-during-actions">Dependency Handling During Actions</a></h3>
+<ul>
+<li><strong>Downloading &amp; Updating:</strong> When you download or update a resource, Flux automatically attempts to download or update its required dependencies to compatible versions.</li>
+<li><strong>Archiving:</strong> A resource that is required by another project <strong>cannot be archived</strong>. If you try, a tooltip will inform you which projects depend on it. This prevents you from accidentally breaking your mod setup.</li>
+<li><strong>Deleting:</strong> If you attempt to delete a project that is required by others, the delete button's tooltip will change, indicating that deleting it will "demote" it to an auto-managed state. This means it will remain in your list (as an auto-managed project) because another active project still requires it, but it will no longer be considered a manually added item. To fully remove it, all dependent projects must first be removed or archived.</li>
+</ul>
+<h3 id="identifying-missing-dependencies"><a class="header" href="#identifying-missing-dependencies">Identifying Missing Dependencies</a></h3>
+<p>If a listed project (or one of its dependencies) is not present in your download directory despite being enabled and compatible, it will display a <code>📁 Missing</code> badge. This helps you quickly identify and resolve any missing files by prompting you to download them.</p>
+<h2 id="archiving-resources"><a class="header" href="#archiving-resources">Archiving Resources</a></h2>
+<p>Archiving allows you to temporarily disable and hide resources without permanently deleting them. This is useful for testing different mod combinations or reducing clutter in your active list.</p>
+<h3 id="archiving--unarchiving-individual-resources"><a class="header" href="#archiving--unarchiving-individual-resources">Archiving &amp; Unarchiving Individual Resources</a></h3>
+<p>Each resource entry has "📁 Archive" and "📂 Unarchive" buttons.</p>
+<ul>
+<li>Clicking <strong>📁 Archive</strong> moves the selected resource(s) to the "Archived Projects" section. This hides them from your main view and prevents them from being loaded into Minecraft.</li>
+<li>Clicking <strong>📂 Unarchive</strong> restores the resource(s) to your active list. When unarchiving, Flux will attempt to scroll the restored item(s) back into view.</li>
+</ul>
+<p><strong>Important:</strong> You cannot archive a project that has active dependents. You must first remove or archive all projects that depend on it.</p>
+<h3 id="archiving--unarchiving-multiple-resources-context-menu"><a class="header" href="#archiving--unarchiving-multiple-resources-context-menu">Archiving &amp; Unarchiving Multiple Resources (Context Menu)</a></h3>
+<p>To manage multiple resources at once:</p>
+<ol>
+<li><strong>Select</strong> one or more resources (use <code>Ctrl</code>/<code>Cmd</code> + click for multiple, <code>Shift</code> + click for a range).</li>
+<li><strong>Right-click</strong> on any selected resource to open the context menu.</li>
+<li>Choose <strong>📁 Archive Selected</strong> or <strong>📂 Unarchive Selected</strong> to apply the action to all selected items.</li>
+</ol>
+<h3 id="viewing-archived-resources"><a class="header" href="#viewing-archived-resources">Viewing Archived Resources</a></h3>
+<p>Archived resources are kept in a separate, collapsible section below your active projects.</p>
+<ul>
+<li>Click the <strong>▶ Archived Projects (N)</strong> button to expand this section and view all currently archived resources. The "N" indicates the total count of archived projects.</li>
+<li>Clicking <strong>🔽 Archived Projects (N)</strong> will collapse the section again.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="-productivity--shortcuts"><a class="header" href="#-productivity--shortcuts">⚡ Productivity &amp; Shortcuts</a></h1>
+<p>The Flux's Resource Manager is designed to streamline your workflow with powerful productivity features, including multi-selection, context menus, and keyboard shortcuts.</p>
+<hr />
+<h2 id="-multi-selection"><a class="header" href="#-multi-selection">🖱️ Multi-Selection</a></h2>
+<p>Managing many resources or lists can be tedious one-by-one. Flux provides familiar multi-selection methods to help you act on multiple items at once in both the main project list and the sidebar.</p>
+<h3 id="in-the-project-list-main-panel"><a class="header" href="#in-the-project-list-main-panel">In the Project List (Main Panel)</a></h3>
+<ul>
+<li><strong>Select Single Item:</strong> Click on any project entry. This will deselect any previously selected items and highlight the clicked project.</li>
+<li><strong>Select Multiple Items (Non-Contiguous):</strong>
+<ul>
+<li>Hold <code>Ctrl</code> (Windows/Linux) or <code>Command</code> (macOS) and click on individual projects. Each click will toggle the selection status of that project (add if not selected, remove if already selected).</li>
+</ul>
+</li>
+<li><strong>Select a Range of Items:</strong>
+<ul>
+<li>Click on the first project you want to select.</li>
+<li>Hold <code>Shift</code> and click on the last project in your desired range. All projects between the first and last clicked (inclusive) will be selected.</li>
+<li>If combined with <code>Ctrl</code>/<code>Command</code>, <code>Shift + Click</code> will add the range to your existing selection without clearing it first.</li>
+</ul>
+</li>
+<li><strong>Clear Selection:</strong>
+<ul>
+<li>Press the <code>Escape</code> key.</li>
+<li>Click on an empty area within the project list.</li>
+</ul>
+</li>
+</ul>
+<h3 id="in-the-sidebar-lists--groups"><a class="header" href="#in-the-sidebar-lists--groups">In the Sidebar (Lists &amp; Groups)</a></h3>
+<p>Multi-selection in the sidebar works identically to the project list, allowing you to select multiple <code>Lists</code> or <code>List Groups</code> for bulk actions (e.g., deleting several items at once).</p>
+<ul>
+<li><strong>Select Single Item:</strong> Click on any list or list group entry.</li>
+<li><strong>Select Multiple Items (Non-Contiguous):</strong> Hold <code>Ctrl</code> (Windows/Linux) or <code>Command</code> (macOS) and click on individual sidebar items.</li>
+<li><strong>Select a Range of Items:</strong> Hold <code>Shift</code> and click on the last item in your desired range.</li>
+<li><strong>Clear Selection:</strong> Click on an empty area within the sidebar.</li>
+</ul>
+<hr />
+<h2 id="-context-menus-right-click"><a class="header" href="#-context-menus-right-click">📋 Context Menus (Right-Click)</a></h2>
+<p>Right-clicking on items in the Resource Manager reveals context-sensitive menus, offering quick access to relevant actions.</p>
+<h3 id="project-context-menu-main-panel"><a class="header" href="#project-context-menu-main-panel">Project Context Menu (Main Panel)</a></h3>
+<p>Right-click on one or more selected projects in the main panel to bring up options for those projects.</p>
+<ul>
+<li><strong>Copy:</strong> Copies the selected projects to the clipboard.</li>
+<li><strong>Cut:</strong> Cuts the selected projects, preparing them to be moved to another list.</li>
+<li><strong>Paste:</strong> Pastes projects from the clipboard into the current list.
+<ul>
+<li>This option is only available if there are compatible projects in the clipboard and the resource types match (e.g., cannot paste a Mod into a Shader list).</li>
+<li>If you "Cut" projects, pasting them here will <em>move</em> them from their original list. If you "Copy" them, pasting will create duplicates.</li>
+</ul>
+</li>
+<li><strong>Download Selected:</strong> Initiates the download of the latest compatible version for all selected projects that are currently missing.</li>
+<li><strong>Update Selected:</strong> Updates all selected projects to their latest compatible versions. Only available when automatic updates are disabled and updates are detected.</li>
+<li><strong>Archive Selected:</strong> Moves the selected projects to the "Archived Projects" section of the current list. Projects with active dependents cannot be archived.</li>
+<li><strong>Unarchive Selected:</strong> Moves selected archived projects back to the active project list.</li>
+<li><strong>Delete Selected:</strong> Permanently removes the selected projects from the current list and deletes their associated files from disk. Projects with active dependents cannot be deleted without first removing the dependents or making them auto-managed.</li>
+</ul>
+<h3 id="list-context-menu-sidebar"><a class="header" href="#list-context-menu-sidebar">List Context Menu (Sidebar)</a></h3>
+<p>Right-click on a single list in the sidebar to access options for that specific list. If you have multiple lists selected via multi-select, right-clicking on any of them will open the context menu for all selected lists.</p>
+<ul>
+<li><strong>Move to Group:</strong> A sub-menu appears, allowing you to move the list into an existing List Group or to remove it from any group ("No Group").</li>
+<li><strong>Open Folder:</strong> Opens the download directory for the selected list in your system's file explorer.</li>
+<li><strong>Duplicate:</strong> Creates an exact copy of the selected list, including all its projects and settings.</li>
+<li><strong>Delete:</strong> Removes the list and all its contained projects from Flux.</li>
+</ul>
+<h3 id="list-group-context-menu-sidebar"><a class="header" href="#list-group-context-menu-sidebar">List Group Context Menu (Sidebar)</a></h3>
+<p>Right-click on a single list group in the sidebar to access options for that group. If you have multiple list groups selected via multi-select, right-clicking on any of them will open the context menu for all selected groups.</p>
+<ul>
+<li><strong>Create Subgroup:</strong> Opens a modal to create a new, nested List Group directly within the selected parent group.</li>
+<li><strong>Rename:</strong> Opens a modal to change the name of the selected List Group.</li>
+<li><strong>Duplicate:</strong> Creates a duplicate of the selected List Group, including all its subgroups and associated lists.</li>
+<li><strong>Delete:</strong> Removes the List Group and all its contained subgroups and lists from Flux.</li>
+</ul>
+<hr />
+<h2 id="-keyboard-shortcuts"><a class="header" href="#-keyboard-shortcuts">⌨️ Keyboard Shortcuts</a></h2>
+<p>Speed up your interactions with these handy keyboard shortcuts.</p>
+<ul>
+<li><strong><code>Delete</code></strong>: Deletes all currently selected items (Lists or List Groups) from the sidebar.</li>
+<li><strong><code>Enter</code></strong>: Confirms renaming actions when an input field is active (e.g., renaming a list or list group).</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="-resource-manager-settings"><a class="header" href="#-resource-manager-settings">⚙️ Resource Manager Settings</a></h1>
+<p>The <strong>Resource Manager Settings</strong> provide options to configure the overall behavior of the Resource Manager module, independent of any specific list or game instance. These settings help streamline your workflow, manage application data caching, and handle backups.</p>
+<h2 id="accessing-settings"><a class="header" href="#accessing-settings">Accessing Settings</a></h2>
+<p>To open the Resource Manager Settings modal:</p>
+<ol>
+<li>Locate the <code>Settings</code> button in the top-right corner of the Flux window. This is the <strong>global application settings</strong> button.</li>
+<li>Within the global settings, there should be a dedicated section or tab for "Resource Manager Settings." (The provided code snippet is for the modal itself, not its entry point in the main UI, but this is the logical user flow).</li>
+</ol>
+<h2 id="general-settings"><a class="header" href="#general-settings">General Settings</a></h2>
+<p>These settings are designed to customize default names for new lists and groups.</p>
+<h3 id="default-list-name"><a class="header" href="#default-list-name">Default List Name</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Sets the default name that will be automatically assigned to any new list you create. This can save time if you frequently create lists with a common prefix or theme.</li>
+<li><strong>Usage:</strong> Type your desired default name into the text field.</li>
+</ul>
+<h3 id="default-list-group-name"><a class="header" href="#default-list-group-name">Default List Group Name</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Sets the default name for any new list groups you create in the sidebar. Useful for organizing your groups consistently.</li>
+<li><strong>Usage:</strong> Enter your preferred default group name into the text field.</li>
+</ul>
+<h3 id="saving-changes"><a class="header" href="#saving-changes">Saving Changes</a></h3>
+<p>After making any adjustments to the General Settings, click the <strong>💾 Save</strong> button to apply your changes. These settings will persist across application restarts.</p>
+<h2 id="backup--restore"><a class="header" href="#backup--restore">Backup &amp; Restore</a></h2>
+<p>This section allows you to export all your Resource Manager settings and lists into a single <code>.flux-rm</code> backup file, or import them from such a file. This is useful for migrating your data, sharing configurations, or creating restore points.</p>
+<h3 id="export-backup"><a class="header" href="#export-backup">Export Backup</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Creates a <code>.flux-rm</code> file containing all your current Resource Manager settings and lists.</li>
+<li><strong>Usage:</strong>
+<ol>
+<li>Click the <strong>📤 Export Backup</strong> button.</li>
+<li>A file dialog will appear, pre-filling a suggested file name (<code>flux-resource-manager-backup.flux-rm</code>).</li>
+<li>Choose your desired location and file name, then click <code>Save</code>.</li>
+<li>A progress indicator will show while the backup is being created.</li>
+</ol>
+</li>
+</ul>
+<h3 id="import-backup"><a class="header" href="#import-backup">Import Backup</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Loads settings and lists from a <code>.flux-rm</code> backup file, overwriting your current configuration.</li>
+<li><strong>Usage:</strong>
+<ol>
+<li>Click the <strong>📥 Import Backup</strong> button.</li>
+<li>A file dialog will appear. Select the <code>.flux-rm</code> file you wish to import, then click <code>Open</code>.</li>
+<li>A <strong>Warning Modal</strong> will appear, detailing the implications of importing a backup.
+<ul>
+<li><strong>Important:</strong> Importing a backup will <strong>OVERWRITE</strong> all existing Resource Manager settings and lists. Your current data will be replaced.</li>
+<li>The application will automatically reload all data after the import.</li>
+</ul>
+</li>
+<li>Review the warning carefully. If you wish to proceed, click <strong>✔ Yes, Import</strong>. If you change your mind, click <strong>❌ Cancel</strong>.</li>
+<li>A progress indicator will show while the backup is being imported.</li>
+</ol>
+</li>
+</ul>
+<h3 id="backup-progress"><a class="header" href="#backup-progress">Backup Progress</a></h3>
+<p>While an export or import operation is in progress, a spinner and a message indicating the current status (e.g., "Exporting items (1/5)") will be displayed. The export/import buttons will be disabled during this time.</p>
+<h2 id="advanced-options"><a class="header" href="#advanced-options">Advanced Options</a></h2>
+<p>The Advanced Options section offers more granular control, primarily focused on <strong>Cache Management</strong>. This section is collapsed by default to prevent accidental changes for most users.</p>
+<p>To view and interact with advanced options:</p>
+<ul>
+<li>Click the <strong>▶ Advanced</strong> button (or <strong>🔽 Advanced</strong> if already open) to expand this section.</li>
+</ul>
+<h3 id="cache-management"><a class="header" href="#cache-management">Cache Management</a></h3>
+<p>The Resource Manager extensively uses various caches to store downloaded search results, project metadata, icons, versions, and more. While this speeds up browsing and operations, sometimes a cache can become corrupted or outdated, leading to loading issues. Clearing specific caches can help resolve these problems, but be aware that the application will need to re-fetch that data, which may temporarily slow down operations.</p>
+<h4 id="cache-types"><a class="header" href="#cache-types">Cache Types</a></h4>
+<p>You can selectively clear the following types of cache:</p>
+<ul>
+<li><strong>Game Loader Cache:</strong> Stores information about available game loaders (e.g., Fabric, Forge, Quilt).</li>
+<li><strong>Game Version Cache:</strong> Stores data on supported Minecraft game versions.</li>
+<li><strong>Slug Cache:</strong> Caches project "slugs" (short, unique identifiers for projects) used for API lookups.</li>
+<li><strong>Metadata Cache:</strong> Stores detailed information about Modrinth projects (descriptions, authors, tags, etc.).</li>
+<li><strong>Versions Cache:</strong> Caches the available file versions for specific projects, filtered by game version and loader.</li>
+<li><strong>Icons Cache:</strong> Stores project icons, both on disk and in GPU memory.</li>
+<li><strong>Artifact Cache:</strong> Contains the downloaded <code>.jar</code>, <code>.zip</code>, or other resource files themselves.</li>
+<li><strong>File Index Cache:</strong> An internal index of files found on your disk, used for fast lookup of installed resources.</li>
+</ul>
+<h4 id="important-notes"><a class="header" href="#important-notes">Important Notes:</a></h4>
+<ul>
+<li><strong>Restart Required:</strong> If you clear the <strong>Game Loader Cache</strong> or <strong>Game Version Cache</strong>, you will need to <strong>restart Flux</strong> for the changes to fully take effect. The application will indicate this if you select these options.</li>
+<li><strong>Re-fetching Data:</strong> Clearing any cache will require the application to re-download or re-index that specific data type when needed, which can cause a brief delay.</li>
+</ul>
+<h4 id="clearing-cache"><a class="header" href="#clearing-cache">Clearing Cache</a></h4>
+<ol>
+<li><strong>Select Caches:</strong> Check the boxes next to the cache types you wish to clear.</li>
+<li><strong>Confirm:</strong> Click the <strong>🗑 Clear Cache</strong> button.</li>
+</ol>
+<p>Once clicked, the selected caches will be cleared from disk and/or memory.</p>
+<div style="break-before: page; page-break-before: always;"></div><div style="break-before: page; page-break-before: always;"></div><h1 id="-frequently-asked-questions"><a class="header" href="#-frequently-asked-questions">💬 Frequently Asked Questions</a></h1>
+<h3 id="is-flux-free"><a class="header" href="#is-flux-free">Is Flux free?</a></h3>
+<p>Yes. Flux is free to use.</p>
+<h3 id="is-there-any-monetization-planned"><a class="header" href="#is-there-any-monetization-planned">Is there any monetization planned?</a></h3>
+<p>No. There are no plans for ads, subscriptions, or "premium" features. It is a tool built by the community, for the community.</p>
+<h3 id="can-i-download-mods-from-curseforge"><a class="header" href="#can-i-download-mods-from-curseforge">Can I download mods from CurseForge?</a></h3>
+<p>Currently, Flux focuses on the Modrinth API for its speed and open nature.
+Support for other platforms is not planned at this immediate time.</p>
+<h3 id="does-it-support-cracked-accounts"><a class="header" href="#does-it-support-cracked-accounts">Does it support cracked accounts?</a></h3>
+<p>Flux allows the use of offline/cracked accounts.
+However, we do not recommend using them as they lack official security features and do not support official multiplayer servers.</p>
+<h3 id="how-can-i-submit-a-feature-request"><a class="header" href="#how-can-i-submit-a-feature-request">How can I submit a feature request?</a></h3>
+<p>We welcome community suggestions!
+You can submit a feature request by opening an <a href="https://github.com/allwepro/minecraft-mod-downloader/issues">issue</a> on our GitHub and selecting the "Feature Request" template.</p>
+<h3 id="which-operating-systems-are-supported"><a class="header" href="#which-operating-systems-are-supported">Which operating systems are supported?</a></h3>
+<p>Flux is designed to be cross-platform and is available for Windows, macOS, and Linux.</p>
+<h3 id="how-do-i-report-a-bug"><a class="header" href="#how-do-i-report-a-bug">How do I report a bug?</a></h3>
+<p>Please open an <a href="https://github.com/allwepro/minecraft-mod-downloader/issues">issue</a> on our GitHub repository with as much detail as possible, including logs and steps to reproduce the problem.</p>
+<h3 id="are-other-languages-supported"><a class="header" href="#are-other-languages-supported">Are other languages supported?</a></h3>
+<p>Currently, Flux is only available in English.
+We may consider adding support for additional languages in the future based on community interest.</p>
+<h3 id="is-the-source-code-available"><a class="header" href="#is-the-source-code-available">Is the source code available?</a></h3>
+<p>Yes. Flux is open-source. You can view, audit, or contribute to the code on our official <a href="https://github.com/allwepro/minecraft-mod-downloader">GitHub Repository</a>.</p>
 
                     </main>
 

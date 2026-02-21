@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Introduction - Flux Launcher &amp; Resource Manager Manual</title>
+        <title>Toolbar &amp; Search - Flux Launcher &amp; Resource Manager Manual</title>
 
 
         <!-- Custom HTML head -->
@@ -12,34 +12,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon.svg">
-        <link rel="shortcut icon" href="favicon.png">
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        <link rel="stylesheet" href="css/print.css" media="print">
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "";
+            const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex.js";
+            window.path_to_searchindex_js = "../../searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc.js"></script>
+        <script src="../../toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -106,7 +106,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -141,7 +141,7 @@
                     <h1 class="menu-title">Flux Launcher &amp; Resource Manager Manual</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/allwepro/flux-project" title="Git repository" aria-label="Git repository">
@@ -178,30 +178,78 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="-flux-project"><a class="header" href="#-flux-project">🧩 Flux Project</a></h1>
-<p>Flux Project is a fast, reliable <strong>Minecraft Project &amp; Resource Management Tool</strong> written in <strong>Rust</strong>.</p>
-<p>Modern Minecraft management often feels cluttered. Flux provides a sleek, responsive, cross-platform <strong>GUI</strong> for browsing and installing any resource hosted on <strong>Modrinth</strong>, with automatic detection of compatible Minecraft versions and loaders.</p>
-<h3 id="-key-capabilities"><a class="header" href="#-key-capabilities">🚀 Key Capabilities</a></h3>
+                        <h1 id="toolbar--search"><a class="header" href="#toolbar--search">Toolbar &amp; Search</a></h1>
+<p>The toolbar at the top of the Resource Manager's main view provides quick access to essential actions for managing your current resource list, including refresh options, search functionality, and bulk download/update actions.</p>
+<hr />
+<h2 id="-add-resource"><a class="header" href="#-add-resource">➕ Add Resource</a></h2>
+<p>The <strong>"Add [Resource Type]"</strong> button (e.g., "➕ Add Mod", "➕ Add Shader") is the primary way to introduce new resources to your list.</p>
 <ul>
-<li><strong>Unified Manager:</strong> One interface for mods, shaders, resource packs, datapacks, and plugins.</li>
-<li><strong>Smart Detection:</strong> Automatic filtering for your specific Minecraft version and loader (Fabric/Quilt/Forge).</li>
-<li><strong>One-Click Updates:</strong> Keep your entire library current with a single click.</li>
-<li><strong>Performance First:</strong> Built in Rust to ensure the app stays out of your way while gaming.</li>
+<li>Clicking this button opens a <strong>Search Modal</strong>.</li>
+<li><strong>Search Modal Usage:</strong>
+<ul>
+<li>Enter your search query in the provided text field.</li>
+<li>You can toggle <strong>"Match version/loader"</strong> to filter results more precisely to your list's configured Minecraft version and loader (e.g., Fabric for 1.21.1).</li>
+<li>Once you find the desired project, click the <strong>"Add"</strong> button next to it.</li>
+</ul>
+</li>
+<li>The selected project will then be added to your current list in the Resource Manager.</li>
+<li><strong>Disabled in Offline Mode:</strong> This feature requires an internet connection to search Modrinth and is therefore disabled when Flux is in offline mode.</li>
+</ul>
+<hr />
+<h2 id="-refresh-files"><a class="header" href="#-refresh-files">🔄 Refresh Files</a></h2>
+<p>The <strong>"Refresh"</strong> button (🔄 icon) initiates a scan of the list's configured download directory.</p>
+<ul>
+<li><strong>Standard Click:</strong> Re-indexes the files on your disk to ensure Flux has the most up-to-date information on what's installed and its status. This is useful if you've manually added or removed files from the directory.</li>
+<li><strong>Shift + Click:</strong> Performs a deeper refresh, re-indexing files <em>and</em> forcing a recalculation of all project dependencies. This can resolve issues where dependency status appears incorrect after significant changes or if you suspect data corruption.</li>
 </ul>
 <blockquote>
-<p>⚙️ <strong>Note:</strong> Flux focuses on <strong>Modrinth</strong> resources for <strong>Minecraft: Java Edition</strong>.</p>
+<p>💡 <strong>Spinner:</strong> While a refresh or scan is active, the refresh button will transform into a spinning icon (⏳) to indicate that files are being processed.</p>
 </blockquote>
 <hr />
-<h3 id="disclaimer"><a class="header" href="#disclaimer">Disclaimer</a></h3>
-<p>Flux Project is an <strong>independent project</strong> and is <strong>not affiliated, endorsed, or associated</strong> with <strong>Mojang AB</strong>, <strong>Microsoft Corporation</strong>, <strong>Modrinth</strong>, or <strong>Rinth Inc.</strong>
-All trademarks and copyrights belong to their respective owners. Flux is developed by a passionate few of Minecraft enthusiasts and is provided as-is without any warranties. Use at your own risk.</p>
+<h2 id="-search-resources"><a class="header" href="#-search-resources">🔍 Search Resources</a></h2>
+<p>The search bar, labeled "🔍 Search [Resource Type]...", allows you to filter the displayed resources within your current list.</p>
+<ul>
+<li><strong>Keyword Search:</strong> Type keywords to filter projects by their <strong>name</strong>. The search is case-insensitive.</li>
+<li><strong>Include Dependencies:</strong> To extend your search to include the names of <em>dependencies</em> that projects in your list rely on, prepend your search query with an ampersand (<code>&amp;</code>).
+<ul>
+<li>Example: <code>&amp;fabric</code> might show mods that require Fabric API, even if "fabric" isn't in their name.</li>
+</ul>
+</li>
+<li><strong>Clear Search:</strong> Click the <strong>"❌"</strong> button next to the search bar to quickly clear your query.</li>
+</ul>
+<hr />
+<h2 id="-download-all"><a class="header" href="#-download-all">⬇ Download All</a></h2>
+<p>The <strong>"Download All"</strong> button streamlines the process of getting all missing resources for your list.</p>
+<ul>
+<li>This button will appear as <strong>"⬇ Download All"</strong> when there are projects in your list that are not yet downloaded.</li>
+<li>Clicking it will queue all currently missing, unarchived projects for download.</li>
+<li><strong>"⏳ Downloading..."</strong>: While downloads are in progress, the button will change to indicate the active download status.</li>
+<li><strong>Disabled in Offline Mode:</strong> This feature, like all Modrinth interaction, is disabled when Flux is in offline mode.</li>
+</ul>
+<hr />
+<h2 id="-update-all"><a class="header" href="#-update-all">🔄 Update All</a></h2>
+<p>If your list has "Auto-Update Enabled" (configured in List Settings), this button will not appear. If auto-updates are disabled, the <strong>"Update All"</strong> button becomes visible when one or more projects in your list have a newer version available on Modrinth.</p>
+<ul>
+<li>Clicking <strong>"🔄 Update All"</strong> will attempt to download the latest compatible versions for all projects that are currently outdated.</li>
+<li><strong>Disabled in Offline Mode:</strong> This feature is unavailable when Flux is in offline mode.</li>
+</ul>
+<hr />
+<h2 id="-delete-x-selected"><a class="header" href="#-delete-x-selected">🗑 Delete X selected</a></h2>
+<p>This button appears when you have selected multiple projects in your list (using Ctrl/Cmd + click or Shift + click).</p>
+<ul>
+<li>The text will indicate how many projects are selected (e.g., "🗑 Delete 3 selected").</li>
+<li>Clicking this button will remove all selected projects from your list.</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../usage/resource-manager/importing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
 
-                            <a rel="next prefetch" href="installation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../usage/resource-manager/list_actions_settings.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -211,8 +259,11 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../usage/resource-manager/importing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
 
-                    <a rel="next prefetch" href="installation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../usage/resource-manager/list_actions_settings.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -227,13 +278,13 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
         </script>
 
 
-        <script src="elasticlunr.min.js"></script>
-        <script src="mark.min.js"></script>
-        <script src="searcher.js"></script>
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
 
-        <script src="clipboard.min.js"></script>
-        <script src="highlight.js"></script>
-        <script src="book.js"></script>
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
 
         <!-- Custom JS scripts -->
 

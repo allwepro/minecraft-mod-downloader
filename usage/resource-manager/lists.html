@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Introduction - Flux Launcher &amp; Resource Manager Manual</title>
+        <title>Lists - Flux Launcher &amp; Resource Manager Manual</title>
 
 
         <!-- Custom HTML head -->
@@ -12,34 +12,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon.svg">
-        <link rel="shortcut icon" href="favicon.png">
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        <link rel="stylesheet" href="css/print.css" media="print">
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "";
+            const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex.js";
+            window.path_to_searchindex_js = "../../searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc.js"></script>
+        <script src="../../toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -106,7 +106,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -141,7 +141,7 @@
                     <h1 class="menu-title">Flux Launcher &amp; Resource Manager Manual</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/allwepro/flux-project" title="Git repository" aria-label="Git repository">
@@ -178,30 +178,71 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="-flux-project"><a class="header" href="#-flux-project">🧩 Flux Project</a></h1>
-<p>Flux Project is a fast, reliable <strong>Minecraft Project &amp; Resource Management Tool</strong> written in <strong>Rust</strong>.</p>
-<p>Modern Minecraft management often feels cluttered. Flux provides a sleek, responsive, cross-platform <strong>GUI</strong> for browsing and installing any resource hosted on <strong>Modrinth</strong>, with automatic detection of compatible Minecraft versions and loaders.</p>
-<h3 id="-key-capabilities"><a class="header" href="#-key-capabilities">🚀 Key Capabilities</a></h3>
-<ul>
-<li><strong>Unified Manager:</strong> One interface for mods, shaders, resource packs, datapacks, and plugins.</li>
-<li><strong>Smart Detection:</strong> Automatic filtering for your specific Minecraft version and loader (Fabric/Quilt/Forge).</li>
-<li><strong>One-Click Updates:</strong> Keep your entire library current with a single click.</li>
-<li><strong>Performance First:</strong> Built in Rust to ensure the app stays out of your way while gaming.</li>
-</ul>
-<blockquote>
-<p>⚙️ <strong>Note:</strong> Flux focuses on <strong>Modrinth</strong> resources for <strong>Minecraft: Java Edition</strong>.</p>
-</blockquote>
+                        <h1 id="-lists-creating-and-managing-your-collections"><a class="header" href="#-lists-creating-and-managing-your-collections">📂 Lists: Creating and Managing Your Collections</a></h1>
+<p>Lists are the fundamental building blocks within Flux's Resource Manager. Each list represents a self-contained collection of Minecraft resources (mods, shaders, resource packs, etc.) tailored for a specific Minecraft version and loader combination. Think of them as dedicated profiles for your different gameplay experiences.</p>
 <hr />
-<h3 id="disclaimer"><a class="header" href="#disclaimer">Disclaimer</a></h3>
-<p>Flux Project is an <strong>independent project</strong> and is <strong>not affiliated, endorsed, or associated</strong> with <strong>Mojang AB</strong>, <strong>Microsoft Corporation</strong>, <strong>Modrinth</strong>, or <strong>Rinth Inc.</strong>
-All trademarks and copyrights belong to their respective owners. Flux is developed by a passionate few of Minecraft enthusiasts and is provided as-is without any warranties. Use at your own risk.</p>
+<h3 id="understanding-the-lists-sidebar"><a class="header" href="#understanding-the-lists-sidebar">Understanding the Lists Sidebar</a></h3>
+<p>The left sidebar of the Resource Manager is where all your lists are displayed and managed.</p>
+<p><img src="../../images/resource-manager/first_list.png" alt="Flux Sidebar" /></p>
+<p>Each list entry provides a quick overview of its configuration:</p>
+<ul>
+<li><strong>List Name:</strong> The user-defined name for your collection (e.g., "New List").</li>
+<li><strong>Resource Type Badge (e.g., <code>Mod</code>):</strong> Indicates the primary type of content this list is designed for. While often <code>Mod</code>, Flux supports others like <code>Shader</code>, <code>Resource Pack</code>, etc., though the current UI primarily shows <code>Mod</code> for general resource lists.</li>
+<li><strong>Minecraft Version Badge (e.g., <code>1.21.11</code>):</strong> The target Minecraft version for this list.</li>
+<li><strong>Loader Type Badge (e.g., <code>Fabric</code>):</strong> The specific Minecraft loader (Fabric, Forge, Quilt, NeoForge, Vanilla) configured for this list.</li>
+<li><strong>Resource Count Badge (e.g., <code>0</code> or <code>2</code>):</strong> Shows the current number of resources installed in this list.</li>
+</ul>
+<p>When a list is selected, it will be highlighted in the sidebar, and its contents will be displayed in the main view.</p>
+<hr />
+<h3 id="creating-a-new-list"><a class="header" href="#creating-a-new-list">Creating a New List</a></h3>
+<p>To start a fresh collection of resources:</p>
+<ol>
+<li>Click the green <strong><code>+ Create</code></strong> button in the top-left of the sidebar.</li>
+<li>A dialog will appear (not shown in screenshots, but implied) prompting you to:
+<ul>
+<li><strong>Name your new list.</strong> Choose a descriptive name.</li>
+<li><strong>Select the target Minecraft Version.</strong> This ensures compatible resources are suggested.</li>
+<li><strong>Choose the desired Loader Type.</strong></li>
+<li><strong>If necessary, pick your preferred download destination.</strong></li>
+</ul>
+</li>
+<li>After confirmation, your new list will appear in the sidebar and be automatically selected.</li>
+</ol>
+<p>Newly created lists will initially show <strong>"No items in this list"</strong> in the main view, ready for you to add resources.</p>
+<hr />
+<h3 id="searching-your-lists"><a class="header" href="#searching-your-lists">Searching Your Lists</a></h3>
+<p>As your collection grows, you might have many lists. The <strong><code>Search Lists...</code></strong> input field at the top of the sidebar helps you quickly find a specific list:</p>
+<ul>
+<li>Type keywords into the search bar. The sidebar will dynamically filter, showing only lists whose names match your input.</li>
+<li>To clear the search and see all lists again, simply delete the text from the search bar.</li>
+</ul>
+<hr />
+<h3 id="deleting-a-list"><a class="header" href="#deleting-a-list">Deleting a List</a></h3>
+<p>To remove a list you no longer need:</p>
+<ol>
+<li>Select the list you wish to delete from the sidebar.</li>
+<li>In the top-right action bar of the main view, click the <strong><code>Delete</code></strong> button (red trash can icon).</li>
+<li>A confirmation dialog will appear. Confirm to permanently remove the list and all its associated resources and configurations.</li>
+</ol>
+<p><strong>Warning:</strong> Deleting a list is irreversible and will remove all downloaded mods and configuration specific to that list. Ensure you have backed up any important data if necessary.</p>
+<hr />
+<h3 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h3>
+<p>Now that you know how to create and manage lists, you can:</p>
+<ul>
+<li><strong><a href="groups_instances.html">Organize them further with Groups &amp; Instances</a></strong></li>
+<li><strong><a href="importing.html">Import existing collections</a></strong></li>
+<li><strong><a href="managing_resources.html">Add resources to your lists</a></strong></li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../usage/resource-manager/get_started.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
 
-                            <a rel="next prefetch" href="installation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../usage/resource-manager/groups_instances.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -211,8 +252,11 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../usage/resource-manager/get_started.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
 
-                    <a rel="next prefetch" href="installation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../usage/resource-manager/groups_instances.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -227,13 +271,13 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
         </script>
 
 
-        <script src="elasticlunr.min.js"></script>
-        <script src="mark.min.js"></script>
-        <script src="searcher.js"></script>
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
 
-        <script src="clipboard.min.js"></script>
-        <script src="highlight.js"></script>
-        <script src="book.js"></script>
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
 
         <!-- Custom JS scripts -->
 

@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Introduction - Flux Launcher &amp; Resource Manager Manual</title>
+        <title>Dependencies &amp; Archives - Flux Launcher &amp; Resource Manager Manual</title>
 
 
         <!-- Custom HTML head -->
@@ -12,34 +12,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon.svg">
-        <link rel="shortcut icon" href="favicon.png">
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        <link rel="stylesheet" href="css/print.css" media="print">
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "";
+            const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex.js";
+            window.path_to_searchindex_js = "../../searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc.js"></script>
+        <script src="../../toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -106,7 +106,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -141,7 +141,7 @@
                     <h1 class="menu-title">Flux Launcher &amp; Resource Manager Manual</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/allwepro/flux-project" title="Git repository" aria-label="Git repository">
@@ -178,30 +178,54 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="-flux-project"><a class="header" href="#-flux-project">🧩 Flux Project</a></h1>
-<p>Flux Project is a fast, reliable <strong>Minecraft Project &amp; Resource Management Tool</strong> written in <strong>Rust</strong>.</p>
-<p>Modern Minecraft management often feels cluttered. Flux provides a sleek, responsive, cross-platform <strong>GUI</strong> for browsing and installing any resource hosted on <strong>Modrinth</strong>, with automatic detection of compatible Minecraft versions and loaders.</p>
-<h3 id="-key-capabilities"><a class="header" href="#-key-capabilities">🚀 Key Capabilities</a></h3>
+                        <h1 id="-dependencies--archives"><a class="header" href="#-dependencies--archives">🧩 Dependencies &amp; Archives</a></h1>
+<p>Flux provides robust tools to manage project dependencies, archive unused resources, and clean up unassociated files, ensuring your Minecraft installation remains organized and efficient.</p>
+<h2 id="managing-dependencies"><a class="header" href="#managing-dependencies">Managing Dependencies</a></h2>
+<p>Dependencies are other resources that a specific mod, shader, or pack requires to function correctly. Flux automatically detects and manages these relationships, simplifying the installation process.</p>
+<h3 id="displaying-dependencies"><a class="header" href="#displaying-dependencies">Displaying Dependencies</a></h3>
+<p>When a resource in your list has required dependencies, a badge like <code>+N Dependencies</code> will appear below its name and author. The "N" indicates the number of other projects that are necessary for this resource to work.</p>
+<h3 id="expanding-and-viewing-dependencies"><a class="header" href="#expanding-and-viewing-dependencies">Expanding and Viewing Dependencies</a></h3>
+<p>Clicking the <code>+N Dependencies</code> badge will expand the entry, revealing the list of required projects. These dependent projects are displayed with a slightly indented visual style and simplified interaction options, making it clear they are managed as part of their parent resource.</p>
+<h3 id="dependency-handling-during-actions"><a class="header" href="#dependency-handling-during-actions">Dependency Handling During Actions</a></h3>
 <ul>
-<li><strong>Unified Manager:</strong> One interface for mods, shaders, resource packs, datapacks, and plugins.</li>
-<li><strong>Smart Detection:</strong> Automatic filtering for your specific Minecraft version and loader (Fabric/Quilt/Forge).</li>
-<li><strong>One-Click Updates:</strong> Keep your entire library current with a single click.</li>
-<li><strong>Performance First:</strong> Built in Rust to ensure the app stays out of your way while gaming.</li>
+<li><strong>Downloading &amp; Updating:</strong> When you download or update a resource, Flux automatically attempts to download or update its required dependencies to compatible versions.</li>
+<li><strong>Archiving:</strong> A resource that is required by another project <strong>cannot be archived</strong>. If you try, a tooltip will inform you which projects depend on it. This prevents you from accidentally breaking your mod setup.</li>
+<li><strong>Deleting:</strong> If you attempt to delete a project that is required by others, the delete button's tooltip will change, indicating that deleting it will "demote" it to an auto-managed state. This means it will remain in your list (as an auto-managed project) because another active project still requires it, but it will no longer be considered a manually added item. To fully remove it, all dependent projects must first be removed or archived.</li>
 </ul>
-<blockquote>
-<p>⚙️ <strong>Note:</strong> Flux focuses on <strong>Modrinth</strong> resources for <strong>Minecraft: Java Edition</strong>.</p>
-</blockquote>
-<hr />
-<h3 id="disclaimer"><a class="header" href="#disclaimer">Disclaimer</a></h3>
-<p>Flux Project is an <strong>independent project</strong> and is <strong>not affiliated, endorsed, or associated</strong> with <strong>Mojang AB</strong>, <strong>Microsoft Corporation</strong>, <strong>Modrinth</strong>, or <strong>Rinth Inc.</strong>
-All trademarks and copyrights belong to their respective owners. Flux is developed by a passionate few of Minecraft enthusiasts and is provided as-is without any warranties. Use at your own risk.</p>
+<h3 id="identifying-missing-dependencies"><a class="header" href="#identifying-missing-dependencies">Identifying Missing Dependencies</a></h3>
+<p>If a listed project (or one of its dependencies) is not present in your download directory despite being enabled and compatible, it will display a <code>📁 Missing</code> badge. This helps you quickly identify and resolve any missing files by prompting you to download them.</p>
+<h2 id="archiving-resources"><a class="header" href="#archiving-resources">Archiving Resources</a></h2>
+<p>Archiving allows you to temporarily disable and hide resources without permanently deleting them. This is useful for testing different mod combinations or reducing clutter in your active list.</p>
+<h3 id="archiving--unarchiving-individual-resources"><a class="header" href="#archiving--unarchiving-individual-resources">Archiving &amp; Unarchiving Individual Resources</a></h3>
+<p>Each resource entry has "📁 Archive" and "📂 Unarchive" buttons.</p>
+<ul>
+<li>Clicking <strong>📁 Archive</strong> moves the selected resource(s) to the "Archived Projects" section. This hides them from your main view and prevents them from being loaded into Minecraft.</li>
+<li>Clicking <strong>📂 Unarchive</strong> restores the resource(s) to your active list. When unarchiving, Flux will attempt to scroll the restored item(s) back into view.</li>
+</ul>
+<p><strong>Important:</strong> You cannot archive a project that has active dependents. You must first remove or archive all projects that depend on it.</p>
+<h3 id="archiving--unarchiving-multiple-resources-context-menu"><a class="header" href="#archiving--unarchiving-multiple-resources-context-menu">Archiving &amp; Unarchiving Multiple Resources (Context Menu)</a></h3>
+<p>To manage multiple resources at once:</p>
+<ol>
+<li><strong>Select</strong> one or more resources (use <code>Ctrl</code>/<code>Cmd</code> + click for multiple, <code>Shift</code> + click for a range).</li>
+<li><strong>Right-click</strong> on any selected resource to open the context menu.</li>
+<li>Choose <strong>📁 Archive Selected</strong> or <strong>📂 Unarchive Selected</strong> to apply the action to all selected items.</li>
+</ol>
+<h3 id="viewing-archived-resources"><a class="header" href="#viewing-archived-resources">Viewing Archived Resources</a></h3>
+<p>Archived resources are kept in a separate, collapsible section below your active projects.</p>
+<ul>
+<li>Click the <strong>▶ Archived Projects (N)</strong> button to expand this section and view all currently archived resources. The "N" indicates the total count of archived projects.</li>
+<li>Clicking <strong>🔽 Archived Projects (N)</strong> will collapse the section again.</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../usage/resource-manager/managing_resources.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
 
-                            <a rel="next prefetch" href="installation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../usage/resource-manager/productivity.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -211,8 +235,11 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../usage/resource-manager/managing_resources.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
 
-                    <a rel="next prefetch" href="installation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../usage/resource-manager/productivity.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -227,13 +254,13 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
         </script>
 
 
-        <script src="elasticlunr.min.js"></script>
-        <script src="mark.min.js"></script>
-        <script src="searcher.js"></script>
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
 
-        <script src="clipboard.min.js"></script>
-        <script src="highlight.js"></script>
-        <script src="book.js"></script>
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
 
         <!-- Custom JS scripts -->
 

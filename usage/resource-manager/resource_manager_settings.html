@@ -1,0 +1,320 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Resource Manager Settings - Flux Launcher &amp; Resource Manager Manual</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Flux Launcher &amp; Resource Manager Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/allwepro/flux-project" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="-resource-manager-settings"><a class="header" href="#-resource-manager-settings">⚙️ Resource Manager Settings</a></h1>
+<p>The <strong>Resource Manager Settings</strong> provide options to configure the overall behavior of the Resource Manager module, independent of any specific list or game instance. These settings help streamline your workflow, manage application data caching, and handle backups.</p>
+<h2 id="accessing-settings"><a class="header" href="#accessing-settings">Accessing Settings</a></h2>
+<p>To open the Resource Manager Settings modal:</p>
+<ol>
+<li>Locate the <code>Settings</code> button in the top-right corner of the Flux window. This is the <strong>global application settings</strong> button.</li>
+<li>Within the global settings, there should be a dedicated section or tab for "Resource Manager Settings." (The provided code snippet is for the modal itself, not its entry point in the main UI, but this is the logical user flow).</li>
+</ol>
+<h2 id="general-settings"><a class="header" href="#general-settings">General Settings</a></h2>
+<p>These settings are designed to customize default names for new lists and groups.</p>
+<h3 id="default-list-name"><a class="header" href="#default-list-name">Default List Name</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Sets the default name that will be automatically assigned to any new list you create. This can save time if you frequently create lists with a common prefix or theme.</li>
+<li><strong>Usage:</strong> Type your desired default name into the text field.</li>
+</ul>
+<h3 id="default-list-group-name"><a class="header" href="#default-list-group-name">Default List Group Name</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Sets the default name for any new list groups you create in the sidebar. Useful for organizing your groups consistently.</li>
+<li><strong>Usage:</strong> Enter your preferred default group name into the text field.</li>
+</ul>
+<h3 id="saving-changes"><a class="header" href="#saving-changes">Saving Changes</a></h3>
+<p>After making any adjustments to the General Settings, click the <strong>💾 Save</strong> button to apply your changes. These settings will persist across application restarts.</p>
+<h2 id="backup--restore"><a class="header" href="#backup--restore">Backup &amp; Restore</a></h2>
+<p>This section allows you to export all your Resource Manager settings and lists into a single <code>.flux-rm</code> backup file, or import them from such a file. This is useful for migrating your data, sharing configurations, or creating restore points.</p>
+<h3 id="export-backup"><a class="header" href="#export-backup">Export Backup</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Creates a <code>.flux-rm</code> file containing all your current Resource Manager settings and lists.</li>
+<li><strong>Usage:</strong>
+<ol>
+<li>Click the <strong>📤 Export Backup</strong> button.</li>
+<li>A file dialog will appear, pre-filling a suggested file name (<code>flux-resource-manager-backup.flux-rm</code>).</li>
+<li>Choose your desired location and file name, then click <code>Save</code>.</li>
+<li>A progress indicator will show while the backup is being created.</li>
+</ol>
+</li>
+</ul>
+<h3 id="import-backup"><a class="header" href="#import-backup">Import Backup</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Loads settings and lists from a <code>.flux-rm</code> backup file, overwriting your current configuration.</li>
+<li><strong>Usage:</strong>
+<ol>
+<li>Click the <strong>📥 Import Backup</strong> button.</li>
+<li>A file dialog will appear. Select the <code>.flux-rm</code> file you wish to import, then click <code>Open</code>.</li>
+<li>A <strong>Warning Modal</strong> will appear, detailing the implications of importing a backup.
+<ul>
+<li><strong>Important:</strong> Importing a backup will <strong>OVERWRITE</strong> all existing Resource Manager settings and lists. Your current data will be replaced.</li>
+<li>The application will automatically reload all data after the import.</li>
+</ul>
+</li>
+<li>Review the warning carefully. If you wish to proceed, click <strong>✔ Yes, Import</strong>. If you change your mind, click <strong>❌ Cancel</strong>.</li>
+<li>A progress indicator will show while the backup is being imported.</li>
+</ol>
+</li>
+</ul>
+<h3 id="backup-progress"><a class="header" href="#backup-progress">Backup Progress</a></h3>
+<p>While an export or import operation is in progress, a spinner and a message indicating the current status (e.g., "Exporting items (1/5)") will be displayed. The export/import buttons will be disabled during this time.</p>
+<h2 id="advanced-options"><a class="header" href="#advanced-options">Advanced Options</a></h2>
+<p>The Advanced Options section offers more granular control, primarily focused on <strong>Cache Management</strong>. This section is collapsed by default to prevent accidental changes for most users.</p>
+<p>To view and interact with advanced options:</p>
+<ul>
+<li>Click the <strong>▶ Advanced</strong> button (or <strong>🔽 Advanced</strong> if already open) to expand this section.</li>
+</ul>
+<h3 id="cache-management"><a class="header" href="#cache-management">Cache Management</a></h3>
+<p>The Resource Manager extensively uses various caches to store downloaded search results, project metadata, icons, versions, and more. While this speeds up browsing and operations, sometimes a cache can become corrupted or outdated, leading to loading issues. Clearing specific caches can help resolve these problems, but be aware that the application will need to re-fetch that data, which may temporarily slow down operations.</p>
+<h4 id="cache-types"><a class="header" href="#cache-types">Cache Types</a></h4>
+<p>You can selectively clear the following types of cache:</p>
+<ul>
+<li><strong>Game Loader Cache:</strong> Stores information about available game loaders (e.g., Fabric, Forge, Quilt).</li>
+<li><strong>Game Version Cache:</strong> Stores data on supported Minecraft game versions.</li>
+<li><strong>Slug Cache:</strong> Caches project "slugs" (short, unique identifiers for projects) used for API lookups.</li>
+<li><strong>Metadata Cache:</strong> Stores detailed information about Modrinth projects (descriptions, authors, tags, etc.).</li>
+<li><strong>Versions Cache:</strong> Caches the available file versions for specific projects, filtered by game version and loader.</li>
+<li><strong>Icons Cache:</strong> Stores project icons, both on disk and in GPU memory.</li>
+<li><strong>Artifact Cache:</strong> Contains the downloaded <code>.jar</code>, <code>.zip</code>, or other resource files themselves.</li>
+<li><strong>File Index Cache:</strong> An internal index of files found on your disk, used for fast lookup of installed resources.</li>
+</ul>
+<h4 id="important-notes"><a class="header" href="#important-notes">Important Notes:</a></h4>
+<ul>
+<li><strong>Restart Required:</strong> If you clear the <strong>Game Loader Cache</strong> or <strong>Game Version Cache</strong>, you will need to <strong>restart Flux</strong> for the changes to fully take effect. The application will indicate this if you select these options.</li>
+<li><strong>Re-fetching Data:</strong> Clearing any cache will require the application to re-download or re-index that specific data type when needed, which can cause a brief delay.</li>
+</ul>
+<h4 id="clearing-cache"><a class="header" href="#clearing-cache">Clearing Cache</a></h4>
+<ol>
+<li><strong>Select Caches:</strong> Check the boxes next to the cache types you wish to clear.</li>
+<li><strong>Confirm:</strong> Click the <strong>🗑 Clear Cache</strong> button.</li>
+</ol>
+<p>Once clicked, the selected caches will be cleared from disk and/or memory.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../usage/resource-manager/productivity.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../usage/resource-manager/technical-details/tests.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../usage/resource-manager/productivity.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../usage/resource-manager/technical-details/tests.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

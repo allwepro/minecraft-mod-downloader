@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Introduction - Flux Launcher &amp; Resource Manager Manual</title>
+        <title>Get Started - Flux Launcher &amp; Resource Manager Manual</title>
 
 
         <!-- Custom HTML head -->
@@ -12,34 +12,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon.svg">
-        <link rel="shortcut icon" href="favicon.png">
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        <link rel="stylesheet" href="css/print.css" media="print">
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "";
+            const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex.js";
+            window.path_to_searchindex_js = "../../searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc.js"></script>
+        <script src="../../toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -106,7 +106,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -141,7 +141,7 @@
                     <h1 class="menu-title">Flux Launcher &amp; Resource Manager Manual</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/allwepro/flux-project" title="Git repository" aria-label="Git repository">
@@ -178,30 +178,101 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="-flux-project"><a class="header" href="#-flux-project">🧩 Flux Project</a></h1>
-<p>Flux Project is a fast, reliable <strong>Minecraft Project &amp; Resource Management Tool</strong> written in <strong>Rust</strong>.</p>
-<p>Modern Minecraft management often feels cluttered. Flux provides a sleek, responsive, cross-platform <strong>GUI</strong> for browsing and installing any resource hosted on <strong>Modrinth</strong>, with automatic detection of compatible Minecraft versions and loaders.</p>
-<h3 id="-key-capabilities"><a class="header" href="#-key-capabilities">🚀 Key Capabilities</a></h3>
-<ul>
-<li><strong>Unified Manager:</strong> One interface for mods, shaders, resource packs, datapacks, and plugins.</li>
-<li><strong>Smart Detection:</strong> Automatic filtering for your specific Minecraft version and loader (Fabric/Quilt/Forge).</li>
-<li><strong>One-Click Updates:</strong> Keep your entire library current with a single click.</li>
-<li><strong>Performance First:</strong> Built in Rust to ensure the app stays out of your way while gaming.</li>
-</ul>
-<blockquote>
-<p>⚙️ <strong>Note:</strong> Flux focuses on <strong>Modrinth</strong> resources for <strong>Minecraft: Java Edition</strong>.</p>
-</blockquote>
+                        <h2 id="-get-started-with-fluxs-resource-manager"><a class="header" href="#-get-started-with-fluxs-resource-manager">🚀 Get Started with Flux's Resource Manager!</a></h2>
+<p>Welcome to Flux! This guide will quickly show you how to create your first mod list, add resources, and get them downloaded. Let's get your Minecraft setup ready!
+As a first step you need to have Flux installed. If you haven't done that yet, check out our <a href="../../installation.html">Installation Guide</a> first.
+Then after successfully installing Flux, you can open the Resource Manager by clicking the "Resource Manager" text in the top left if it's not already open.</p>
 <hr />
-<h3 id="disclaimer"><a class="header" href="#disclaimer">Disclaimer</a></h3>
-<p>Flux Project is an <strong>independent project</strong> and is <strong>not affiliated, endorsed, or associated</strong> with <strong>Mojang AB</strong>, <strong>Microsoft Corporation</strong>, <strong>Modrinth</strong>, or <strong>Rinth Inc.</strong>
-All trademarks and copyrights belong to their respective owners. Flux is developed by a passionate few of Minecraft enthusiasts and is provided as-is without any warranties. Use at your own risk.</p>
+<h2 id="1-the-resource-manager-interface"><a class="header" href="#1-the-resource-manager-interface">1. The Resource Manager Interface</a></h2>
+<p>The Resource Manager has two main areas:</p>
+<ul>
+<li><strong>Left Sidebar:</strong> Where you manage your different <strong>Lists</strong> (your mod profiles).</li>
+<li><strong>Main View:</strong> Shows the content of your selected list, where you add and manage resources.</li>
+</ul>
+<p><img src="../../images/resource-manager/fresh_start.png" alt="Resource Manager Overview" /></p>
+<hr />
+<h2 id="2-start-your-first-list"><a class="header" href="#2-start-your-first-list">2. Start Your First List</a></h2>
+<p>You have two main ways to begin: <strong>Create a New List</strong> from scratch or <strong>Import an Existing Collection.</strong></p>
+<h3 id="option-a-create-a-new-list-recommended-for-beginners"><a class="header" href="#option-a-create-a-new-list-recommended-for-beginners">Option A: Create a New List (Recommended for beginners)</a></h3>
+<ol>
+<li>
+<p><strong>Click "➕ Create"</strong>: Find this green button at the top-left of the sidebar.
+<img src="../../images/resource-manager/create_button.png" alt="Create List Button" /></p>
+</li>
+<li>
+<p><strong>Configure Your List</strong>: A dialog will ask for essential details. These define which mods are compatible.</p>
+<ul>
+<li><strong>Name:</strong> Give it a clear name (e.g., "My Survival Mods").</li>
+<li><strong>Minecraft Version:</strong> Select your target Minecraft version (e.g., <code>1.21.11</code>).</li>
+<li><strong>Loader Type:</strong> Choose your mod loader (e.g., <code>Fabric</code>, <code>Forge</code>).</li>
+<li><strong>Download Directory:</strong> This is where Flux will save your files. You can leave the default.</li>
+</ul>
+<p><img src="../../images/resource-manager/new_list_dialog.png" alt="New List Dialog" /></p>
+</li>
+<li>
+<p><strong>Confirm</strong>: Click "Create" to add your new, empty list to the sidebar.</p>
+</li>
+</ol>
+<h3 id="option-b-import-an-existing-collection-if-you-have-one"><a class="header" href="#option-b-import-an-existing-collection-if-you-have-one">Option B: Import an Existing Collection (If you have one)</a></h3>
+<p>If you already have an existing Minecraft folder or a Modrinth collection:</p>
+<ol>
+<li>
+<p><strong>Click "Import"</strong>: This button is at the top of the sidebar.</p>
+</li>
+<li>
+<p><strong>Choose an Option</strong>: Select "From File" (for <code>.mmd</code> or legacy mod lists), "Modrinth Collection" (for a URL), or "From Minecraft Folder" (to scan an existing game folder). Follow the prompts to set it up.</p>
+<p><img src="../../images/resource-manager/import_options.png" alt="Import Options" /></p>
+</li>
+</ol>
+<hr />
+<p><img src="../../images/resource-manager/first_list.png" alt="Resource Manager First List" /></p>
+<h2 id="3-add-resources-to-your-list"><a class="header" href="#3-add-resources-to-your-list">3. Add Resources to Your List</a></h2>
+<p>Now, let's find some mods! Flux connects directly to Modrinth.</p>
+<ol>
+<li>
+<p><strong>Click "➕ Add [Resource Type]"</strong>: In the main view, click the button (e.g., "➕ Add Mod"). This opens the <strong>Search Modal</strong>.</p>
+</li>
+<li>
+<p><strong>Search &amp; Add</strong>:</p>
+<ul>
+<li>Type keywords (e.g., "Sodium").</li>
+<li>Results automatically filter for your list's <strong>Minecraft Version</strong> and <strong>Loader Type</strong>.</li>
+<li>Click the <strong>"Add"</strong> button next to each resource you want.</li>
+<li>Close the modal when done.</li>
+</ul>
+<p><img src="../../images/resource-manager/search_modal.png" alt="Search Modal" /></p>
+</li>
+<li>
+<p><strong>Resources Appear</strong>: The added resources will now be in your list, showing a <code>📁 Missing</code> badge.
+<img src="../../images/resource-manager/resource_added_to_list.png" alt="Added Resource In List" /></p>
+</li>
+</ol>
+<hr />
+<h2 id="4-download-your-resources"><a class="header" href="#4-download-your-resources">4. Download Your Resources</a></h2>
+<p>Time to get the files onto your computer!</p>
+<ol>
+<li>
+<p><strong>Click "⬇ Download All"</strong>: This button, found in the toolbar at the top right of the main view, will download all missing resources in your list.</p>
+</li>
+<li>
+<p><strong>Check Progress</strong>: The button changes to "⏳ Downloading...", and individual resources show progress.
+<img src="../../images/resource-manager/downloading_resources.png" alt="Downloading Resources" /></p>
+</li>
+<li>
+<p><strong>Finished!</strong>: Once downloaded, resources show a <code>✅</code> badge, meaning they're ready!
+<img src="../../images/resource-manager/resource_downloaded.png" alt="Resource Downloaded" /></p>
+</li>
+</ol>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../usage/resource-manager.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
 
-                            <a rel="next prefetch" href="installation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../usage/resource-manager/lists.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -211,8 +282,11 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../usage/resource-manager.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
 
-                    <a rel="next prefetch" href="installation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../usage/resource-manager/lists.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -227,13 +301,13 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
         </script>
 
 
-        <script src="elasticlunr.min.js"></script>
-        <script src="mark.min.js"></script>
-        <script src="searcher.js"></script>
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
 
-        <script src="clipboard.min.js"></script>
-        <script src="highlight.js"></script>
-        <script src="book.js"></script>
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
 
         <!-- Custom JS scripts -->
 

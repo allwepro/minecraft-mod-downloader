@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Introduction - Flux Launcher &amp; Resource Manager Manual</title>
+        <title>Installation - Flux Launcher &amp; Resource Manager Manual</title>
 
 
         <!-- Custom HTML head -->
@@ -178,30 +178,57 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="-flux-project"><a class="header" href="#-flux-project">🧩 Flux Project</a></h1>
-<p>Flux Project is a fast, reliable <strong>Minecraft Project &amp; Resource Management Tool</strong> written in <strong>Rust</strong>.</p>
-<p>Modern Minecraft management often feels cluttered. Flux provides a sleek, responsive, cross-platform <strong>GUI</strong> for browsing and installing any resource hosted on <strong>Modrinth</strong>, with automatic detection of compatible Minecraft versions and loaders.</p>
-<h3 id="-key-capabilities"><a class="header" href="#-key-capabilities">🚀 Key Capabilities</a></h3>
-<ul>
-<li><strong>Unified Manager:</strong> One interface for mods, shaders, resource packs, datapacks, and plugins.</li>
-<li><strong>Smart Detection:</strong> Automatic filtering for your specific Minecraft version and loader (Fabric/Quilt/Forge).</li>
-<li><strong>One-Click Updates:</strong> Keep your entire library current with a single click.</li>
-<li><strong>Performance First:</strong> Built in Rust to ensure the app stays out of your way while gaming.</li>
-</ul>
-<blockquote>
-<p>⚙️ <strong>Note:</strong> Flux focuses on <strong>Modrinth</strong> resources for <strong>Minecraft: Java Edition</strong>.</p>
-</blockquote>
+                        <h1 id="-installation"><a class="header" href="#-installation">🚀 Installation</a></h1>
+<p>Getting started with Flux is straightforward. We provide pre-compiled binaries for Windows, macOS, and Linux.</p>
+<h3 id="1-download"><a class="header" href="#1-download">1. Download</a></h3>
+<p>Head over to the <strong><a href="https://github.com/allwepro/minecraft-mod-downloader/releases">GitHub Releases</a></strong> page and grab the latest version for your operating system.</p>
+<h3 id="2-unpack-and-run"><a class="header" href="#2-unpack-and-run">2. Unpack and Run</a></h3>
+<p>The release is typically provided in a compressed format (zip/tar.gz).</p>
+<ol>
+<li><strong>Unpack:</strong> Extract the contents of the downloaded folder to a location of your choice.</li>
+<li><strong>Execute:</strong> Locate the <code>flux</code> executable and run it.</li>
+</ol>
+<h3 id="-security-warnings"><a class="header" href="#-security-warnings">🛡️ Security Warnings</a></h3>
+<p>Since Flux is an independent, open-source project and is not "code-signed" with expensive certificates from Microsoft or Apple, your operating system may flag it as "untrusted."</p>
+<p><strong>This is a standard procedure for many open-source tools.</strong> Below is how to safely proceed:</p>
+<h4 id="windows-smartscreen"><a class="header" href="#windows-smartscreen"><strong>Windows (SmartScreen)</strong></a></h4>
+<p><strong>Why this appears:</strong> Windows SmartScreen flags any executable that hasn't been downloaded by thousands of users yet or isn't signed by a registered corporation.</p>
+<ol>
+<li>When the blue "Windows protected your PC" popup appears, click <strong>"More info"</strong>.</li>
+<li>A new button will appear. Click <strong>"Run anyway"</strong>.</li>
+</ol>
+<p><img src="images/smartscreen.png" alt="Windows SmartScreen Security" /></p>
+<h4 id="macos-gatekeeper"><a class="header" href="#macos-gatekeeper"><strong>MacOS (Gatekeeper)</strong></a></h4>
+<p><strong>Why this appears:</strong> macOS Gatekeeper blocks apps that are not from the App Store or from "Identified Developers".</p>
+<ol>
+<li>If you see a '"flux" not Opened' message, click <strong>Done</strong>.</li>
+<li>Open <strong>System Settings</strong> (or System Preferences) &gt; <strong>Privacy &amp; Security</strong>.</li>
+<li>Scroll down to the <strong>Security</strong> section.</li>
+<li>You will see a message saying 'Flux was blocked to protect your Mac.' Click <strong>"Open Anyway"</strong>.</li>
+<li>If you see another prompt saying 'Open "flux"?', click <strong>"Open Anyway"</strong> to confirm you want to run the app.</li>
+<li>Enter your password if prompted to confirm.</li>
+</ol>
+<p><img src="images/gatekeeper.png" alt="MacOS Gatekeeper Security" /></p>
 <hr />
-<h3 id="disclaimer"><a class="header" href="#disclaimer">Disclaimer</a></h3>
-<p>Flux Project is an <strong>independent project</strong> and is <strong>not affiliated, endorsed, or associated</strong> with <strong>Mojang AB</strong>, <strong>Microsoft Corporation</strong>, <strong>Modrinth</strong>, or <strong>Rinth Inc.</strong>
-All trademarks and copyrights belong to their respective owners. Flux is developed by a passionate few of Minecraft enthusiasts and is provided as-is without any warranties. Use at your own risk.</p>
+<h3 id="-compile-from-source"><a class="header" href="#-compile-from-source">🛠️ Compile from Source</a></h3>
+<p>If you prefer not to use pre-compiled binaries, you can build Flux directly from the source code:</p>
+<pre><code class="language-bash"># Clone the repository
+git clone https://github.com/allwepro/minecraft-mod-downloader.git
+cd minecraft-mod-downloader
+
+# Build and run in release mode
+cargo run --release
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="introduction.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
 
-                            <a rel="next prefetch" href="installation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="usage.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -211,8 +238,11 @@ All trademarks and copyrights belong to their respective owners. Flux is develop
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="introduction.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
 
-                    <a rel="next prefetch" href="installation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="usage.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

@@ -1,0 +1,330 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Managing Resources - Flux Launcher &amp; Resource Manager Manual</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Flux Launcher &amp; Resource Manager Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/allwepro/flux-project" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="managing-resources"><a class="header" href="#managing-resources">Managing Resources</a></h1>
+<p>This section details how to add, manage, update, and remove individual resources (mods, shaders, etc.) within your active list. Flux provides intuitive tools and visual indicators to keep your game content organized and up-to-date.</p>
+<h2 id="adding-resources"><a class="header" href="#adding-resources">Adding Resources</a></h2>
+<p>To add new resources to your list, use the "Add [Resource Type]" button prominently displayed at the top of the main content area.</p>
+<ul>
+<li>
+<p><strong>"➕ Add [Resource Type]" Button:</strong> Click this button (e.g., "➕ Add Mod") to open the <strong>Search Modal</strong>. This modal allows you to browse and select resources directly from Modrinth, filtering by compatibility with your list's configured game version and loader.</p>
+</li>
+<li>
+<p><strong>Offline Mode:</strong> This button will be disabled and grayed out when Flux is in offline mode, as it requires an internet connection to search Modrinth.</p>
+</li>
+<li>
+<p><strong>Keyboard Shortcut:</strong> After typing your query in the Search Modal, you can simply press <strong><code>Enter</code></strong> to trigger the search without clicking the button.</p>
+</li>
+<li>
+<p><strong>Smart Filtering:</strong> Keep <strong>"Match version/loader"</strong> checked to ensure you only see projects compatible with your current list's Minecraft version and loader (Fabric/NeoForge/etc.).</p>
+</li>
+</ul>
+<h2 id="the-reload-button"><a class="header" href="#the-reload-button">The Reload Button</a></h2>
+<p>The "Reload" button (🔄) is a vital tool for ensuring Flux's view of your files is current with your disk.</p>
+<ul>
+<li><strong>Standard Click (🔄):</strong> A regular click on this button triggers a re-indexing of files in your list's download directory. Use this if you manually add or remove files, or if you suspect the displayed status of your resources is out of sync.</li>
+<li><strong>Shift+Click (🔄 + Shift):</strong> Holding <code>Shift</code> while clicking "Reload" forces a full recalculation of all project dependencies. This can resolve issues where dependency relationships might appear incorrect or if a mod's requirements have recently changed.</li>
+<li><strong>Loading Indicator:</strong> While files are being scanned or re-indexed, the button will change to a spinner icon (⏳) to indicate activity.</li>
+</ul>
+<h2 id="auto-update-mode"><a class="header" href="#auto-update-mode">Auto-Update Mode</a></h2>
+<p>Flux offers an "Auto-Update" mode, configurable in the List Settings. This mode affects how updates are handled across your list.</p>
+<ul>
+<li><strong>If Auto-Update is enabled:</strong> Flux will automatically select and download the latest compatible versions for your resources whenever available, ensuring your list is always current without manual intervention.</li>
+<li><strong>If Auto-Update is disabled:</strong> A "🔄 Update All" button will appear if any resources in your list have a newer version available. You will also see individual "🔄 Update" buttons next to each outdated resource, allowing for granular control over updates.</li>
+</ul>
+<h2 id="individual-resource-entries"><a class="header" href="#individual-resource-entries">Individual Resource Entries</a></h2>
+<p>Each resource in your list is displayed as an entry with its icon, name, version, author, and various status indicators and action buttons.</p>
+<h3 id="resource-details"><a class="header" href="#resource-details">Resource Details</a></h3>
+<ul>
+<li><strong>Icon:</strong> A small icon representing the resource (e.g., a gear for Mod Menu, a cube for Sodium).</li>
+<li><strong>Name:</strong> The name of the resource, often displayed as a hyperlink. Clicking the name will open the resource's page on Modrinth in your web browser.</li>
+<li><strong>Version &amp; Author:</strong> Displays the currently selected version (e.g., <code>v17.0.0-beta.2</code>) and the author of the project (e.g., <code>by Prospector</code>).</li>
+</ul>
+<h3 id="status-indicators"><a class="header" href="#status-indicators">Status Indicators</a></h3>
+<p>Next to each resource, you may see one or more of these indicators:</p>
+<ul>
+<li><strong><code>✅</code> (Downloaded):</strong> Indicates the resource's currently selected version is present and matches its expected hash on disk.</li>
+<li><strong><code>⏳ Downloading...</code> (with Progress Bar):</strong> Shown when the resource is actively being downloaded or is in the download queue, along with a percentage progress.</li>
+<li><strong><code>❌</code> (Failed):</strong> Appears if a download or metadata retrieval for the resource failed. Clicking this button allows you to clear cached metadata and version data, prompting a re-attempt to load.</li>
+<li><strong><code>📁 Missing</code>:</strong> Indicates that the resource is part of your list and compatible, but its file is not currently present in the download directory. You will see a "Download" button to obtain it.</li>
+<li><strong><code>🔄 Update Available</code>:</strong> If auto-update is disabled and a newer version of the resource is found online, this badge will appear.</li>
+<li><strong><code>❌ Incompatible</code>:</strong> This resource is not compatible with the current game version and loader settings of your list.
+<ul>
+<li><strong>"🔒 Overrule" Button:</strong> You can choose to force-enable the resource despite incompatibility warnings. Use this with caution.</li>
+</ul>
+</li>
+<li><strong><code>⚠ Incompatible Overruled</code>:</strong> Indicates that you have previously overruled an incompatibility warning for this resource.
+<ul>
+<li><strong>"🔓 Revoke" Button:</strong> Click to revert the override, which will re-enable compatibility checks.</li>
+</ul>
+</li>
+</ul>
+<h3 id="dependency-management"><a class="header" href="#dependency-management">Dependency Management</a></h3>
+<p>Flux helps you manage resource dependencies:</p>
+<ul>
+<li><strong><code>+N Dependencies</code> Badge:</strong> If a resource requires other mods to function, this badge will show the count of its required dependencies. Clicking this badge will expand the entry to display the dependent resources, indented below the main resource.</li>
+<li><strong>Dependent Resources:</strong> When expanded, dependencies are shown with smaller icons and indented, indicating their subordinate relationship. They generally inherit the status of their parent.</li>
+<li><strong>Dependency Impact on Actions:</strong> Certain actions (like archiving or deleting) may be restricted if a resource is required by another. A tooltip will explain why the action is disabled.</li>
+</ul>
+<h3 id="action-buttons-per-resource"><a class="header" href="#action-buttons-per-resource">Action Buttons (Per Resource)</a></h3>
+<p>These buttons appear on the right side of each resource entry, allowing you to manage individual items.</p>
+<ul>
+<li><strong>Download / Update Button:</strong>
+<ul>
+<li>If the resource is missing, a "Download" button (blue) will appear.</li>
+<li>If a newer version is available and auto-update is off, an "🔄 Update" button (light blue) will appear.</li>
+<li>These buttons are disabled if the resource is incompatible (unless overruled) or in offline mode.</li>
+</ul>
+</li>
+<li><strong>Archive / Unarchive Button:</strong>
+<ul>
+<li><strong><code>📁 Archive</code> (light yellow):</strong> Moves the resource to an "Archived Projects" section at the bottom of the list. Archived resources are not downloaded or loaded by the game but remain in your list for easy restoration.</li>
+<li><strong><code>📂 Unarchive</code> (light yellow):</strong> Appears for archived resources, moving them back into the active list.</li>
+<li><strong>Restrictions:</strong> This action is disabled if the resource has other projects that depend on it. A tooltip will inform you of the blocking dependencies.</li>
+</ul>
+</li>
+<li><strong>Delete Button (🗑):</strong>
+<ul>
+<li><strong>Light Red <code>🗑</code>:</strong> For resources without dependents, clicking this button permanently removes the resource from your list and deletes its file from disk.</li>
+<li><strong>Orange <code>🗑</code>:</strong> If the resource has other projects that depend on it, clicking this button will "demote" it to an auto-managed state (meaning it's kept in the list because others need it, but it's no longer considered a manually added project). Its file will remain on disk.</li>
+</ul>
+</li>
+</ul>
+<h2 id="unknown-files"><a class="header" href="#unknown-files">Unknown Files</a></h2>
+<p>Below your active and archived projects, Flux may display an "Unknown Projects" section.</p>
+<ul>
+<li><strong>Purpose:</strong> This section lists files found in your list's download directory that are not linked to any known project in your list. These could be leftover files, manually placed mods, or files Flux couldn't identify.</li>
+<li><strong>Expandable Section:</strong> Click the expand button (▶ / 🔽) next to "Unknown Projects ([Count])" to show or hide these files.</li>
+<li><strong>"🗑 Delete All" Button:</strong> Available within the expanded "Unknown Projects" section, this button allows you to delete all unknown files with a single click.</li>
+<li><strong>Individual Unknown Entries:</strong> Each unknown file is shown with a generic icon (❓), its filename, and a "No metadata available" label. An individual <code>🗑</code> button is provided to delete that specific file.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../usage/resource-manager/list_actions_settings.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../../usage/resource-manager/dependencies_archives.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../usage/resource-manager/list_actions_settings.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../../usage/resource-manager/dependencies_archives.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
