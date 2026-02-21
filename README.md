@@ -1,4 +1,4 @@
-# 👾 Flux Project
+# 🧩 Flux Launcher
 
 A fast, reliable **Minecraft Launcher & Resource Management Tool** written in **Rust**.  
 
@@ -14,10 +14,15 @@ A fast, reliable **Minecraft Launcher & Resource Management Tool** written in **
 
 ## 🧭 Overview
 
-**Flux Project** is a modern desktop application that makes downloading and managing Minecraft content effortless.  
+**Flux Launcher** is a modern desktop application that makes downloading and managing Minecraft content effortless.  
 It provides a sleek, responsive, cross-platform **GUI** for browsing and installing **any resource hosted on Modrinth**, with automatic detection of compatible Minecraft versions and loaders.
 
 > ⚙️ Supports **Modrinth** resources for **Minecraft: Java Edition**, including mods, shaders, resource packs, datapacks, and plugins.
+
+---
+
+## 📖 Documentation & User Guide
+Access the full user manual, installation guides, and technical details here: 👉 [**Open the Wiki**](https://allwepro.github.io/minecraft-mod-downloader/)
 
 ---
 
