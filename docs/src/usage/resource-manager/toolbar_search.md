@@ -14,7 +14,7 @@ The **"Add [Resource Type]"** button (e.g., "➕ Add Mod", "➕ Add Shader") is 
     -   You can toggle **"Match version/loader"** to filter results more precisely to your list's configured Minecraft version and loader (e.g., Fabric for 1.21.1).
     -   Once you find the desired project, click the **"Add"** button next to it.
 -   The selected project will then be added to your current list in the Resource Manager.
--   **Disabled in Offline Mode:** This feature requires an internet connection to search Modrinth and is therefore disabled when Flux Launcher is in offline mode.
+-   **Disabled in Offline Mode:** This feature requires an internet connection to search Modrinth and is therefore disabled when Flux is in offline mode.
 
 ---
 
@@ -22,7 +22,7 @@ The **"Add [Resource Type]"** button (e.g., "➕ Add Mod", "➕ Add Shader") is 
 
 The **"Refresh"** button (🔄 icon) initiates a scan of the list's configured download directory.
 
--   **Standard Click:** Re-indexes the files on your disk to ensure Flux Launcher has the most up-to-date information on what's installed and its status. This is useful if you've manually added or removed files from the directory.
+-   **Standard Click:** Re-indexes the files on your disk to ensure Flux has the most up-to-date information on what's installed and its status. This is useful if you've manually added or removed files from the directory.
 -   **Shift + Click:** Performs a deeper refresh, re-indexing files *and* forcing a recalculation of all project dependencies. This can resolve issues where dependency status appears incorrect after significant changes or if you suspect data corruption.
 
 > 💡 **Spinner:** While a refresh or scan is active, the refresh button will transform into a spinning icon (⏳) to indicate that files are being processed.
@@ -47,7 +47,7 @@ The **"Download All"** button streamlines the process of getting all missing res
 -   This button will appear as **"⬇ Download All"** when there are projects in your list that are not yet downloaded.
 -   Clicking it will queue all currently missing, unarchived projects for download.
 -   **"⏳ Downloading..."**: While downloads are in progress, the button will change to indicate the active download status.
--   **Disabled in Offline Mode:** This feature, like all Modrinth interaction, is disabled when Flux Launcher is in offline mode.
+-   **Disabled in Offline Mode:** This feature, like all Modrinth interaction, is disabled when Flux is in offline mode.
 
 ---
 
@@ -56,7 +56,7 @@ The **"Download All"** button streamlines the process of getting all missing res
 If your list has "Auto-Update Enabled" (configured in List Settings), this button will not appear. If auto-updates are disabled, the **"Update All"** button becomes visible when one or more projects in your list have a newer version available on Modrinth.
 
 -   Clicking **"🔄 Update All"** will attempt to download the latest compatible versions for all projects that are currently outdated.
--   **Disabled in Offline Mode:** This feature is unavailable when Flux Launcher is in offline mode.
+-   **Disabled in Offline Mode:** This feature is unavailable when Flux is in offline mode.
 
 ---
 

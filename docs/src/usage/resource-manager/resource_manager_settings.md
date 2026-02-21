@@ -5,7 +5,7 @@ The **Resource Manager Settings** provide options to configure the overall behav
 ## Accessing Settings
 
 To open the Resource Manager Settings modal:
-1.  Locate the `Settings` button in the top-right corner of the Flux Launcher window. This is the **global application settings** button.
+1.  Locate the `Settings` button in the top-right corner of the Flux window. This is the **global application settings** button.
 2.  Within the global settings, there should be a dedicated section or tab for "Resource Manager Settings." (The provided code snippet is for the modal itself, not its entry point in the main UI, but this is the logical user flow).
 
 ## General Settings
@@ -74,7 +74,7 @@ You can selectively clear the following types of cache:
 -   **File Index Cache:** An internal index of files found on your disk, used for fast lookup of installed resources.
 
 #### Important Notes:
--   **Restart Required:** If you clear the **Game Loader Cache** or **Game Version Cache**, you will need to **restart Flux Launcher** for the changes to fully take effect. The application will indicate this if you select these options.
+-   **Restart Required:** If you clear the **Game Loader Cache** or **Game Version Cache**, you will need to **restart Flux** for the changes to fully take effect. The application will indicate this if you select these options.
 -   **Re-fetching Data:** Clearing any cache will require the application to re-download or re-index that specific data type when needed, which can cause a brief delay.
 
 #### Clearing Cache

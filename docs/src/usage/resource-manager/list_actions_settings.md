@@ -26,7 +26,7 @@ The **"Export"** button allows you to save your current list of resources to a f
 
 -   Upon clicking, a file save dialog will appear, prompting you to choose a location and filename for your export.
 -   **Export Formats:**
-    -   **Flux Launcher (`.mmd`):** This is the native export format for Flux Launcher, containing detailed information about your list and its resources.
+    -   **Flux (`.mmd`):** This is the native export format for Flux, containing detailed information about your list and its resources.
     -   **Legacy Mod List (for `Mods` only):** If you are exporting a `Mod` list and choose a non-Flux format, Flux can export a simpler list that might be compatible with other mod managers.
 
 ---
@@ -58,4 +58,4 @@ To change the name of your open list, click the **"Rename"** button.
 
 The **"Delete"** button, prominently colored in red, allows you to permanently remove the current list.
 
--   Deleting a list removes it from Flux Launcher and unassigns any associated resource files, but it generally **does not delete the physical files from your disk**. This ensures you don't lose your mods if you simply want to remove the list from the launcher.
+-   Deleting a list removes it from Flux and unassigns any associated resource files, but it generally **does not delete the physical files from your disk**. This ensures you don't lose your mods if you simply want to remove the list from the resource manager.

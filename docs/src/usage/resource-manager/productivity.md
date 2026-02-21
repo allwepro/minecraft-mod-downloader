@@ -1,12 +1,12 @@
 # ⚡ Productivity & Shortcuts
 
-The Flux Launcher's Resource Manager is designed to streamline your workflow with powerful productivity features, including multi-selection, context menus, and keyboard shortcuts.
+The Flux's Resource Manager is designed to streamline your workflow with powerful productivity features, including multi-selection, context menus, and keyboard shortcuts.
 
 ---
 
 ## 🖱️ Multi-Selection
 
-Managing many resources or lists can be tedious one-by-one. Flux Launcher provides familiar multi-selection methods to help you act on multiple items at once in both the main project list and the sidebar.
+Managing many resources or lists can be tedious one-by-one. Flux provides familiar multi-selection methods to help you act on multiple items at once in both the main project list and the sidebar.
 
 ### In the Project List (Main Panel)
 
@@ -58,7 +58,7 @@ Right-click on a single list in the sidebar to access options for that specific 
 -   **Move to Group:** A sub-menu appears, allowing you to move the list into an existing List Group or to remove it from any group ("No Group").
 -   **Open Folder:** Opens the download directory for the selected list in your system's file explorer.
 -   **Duplicate:** Creates an exact copy of the selected list, including all its projects and settings.
--   **Delete:** Removes the list and all its contained projects from Flux Launcher.
+-   **Delete:** Removes the list and all its contained projects from Flux.
 
 ### List Group Context Menu (Sidebar)
 
@@ -67,7 +67,7 @@ Right-click on a single list group in the sidebar to access options for that gro
 -   **Create Subgroup:** Opens a modal to create a new, nested List Group directly within the selected parent group.
 -   **Rename:** Opens a modal to change the name of the selected List Group.
 -   **Duplicate:** Creates a duplicate of the selected List Group, including all its subgroups and associated lists.
--   **Delete:** Removes the List Group and all its contained subgroups and lists from Flux Launcher.
+-   **Delete:** Removes the List Group and all its contained subgroups and lists from Flux.
 
 ---
 

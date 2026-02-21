@@ -1,6 +1,6 @@
 # 📦 Resource Manager Overview
 
-The Resource Manager is the core of Flux Launcher, designed for efficient organization and control of your Minecraft content. It features a dual-pane interface: a **Sidebar** for list management and a **Main View** for resource interaction.
+The Resource Manager is the core of Flux, designed for efficient organization and control of your Minecraft content. It features a dual-pane interface: a **Sidebar** for list management and a **Main View** for resource interaction.
 
 ### ⚙️ General Settings
 - **[Resource Manager Settings](resource-manager/resource_manager_settings.md):** Configure the Resource Manager's behavior and access advanced options that apply specifically to the resource manager.

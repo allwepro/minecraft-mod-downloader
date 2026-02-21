@@ -1,6 +1,6 @@
 # 📂 Lists: Creating and Managing Your Collections
 
-Lists are the fundamental building blocks within Flux Launcher's Resource Manager. Each list represents a self-contained collection of Minecraft resources (mods, shaders, resource packs, etc.) tailored for a specific Minecraft version and loader combination. Think of them as dedicated profiles for your different gameplay experiences.
+Lists are the fundamental building blocks within Flux's Resource Manager. Each list represents a self-contained collection of Minecraft resources (mods, shaders, resource packs, etc.) tailored for a specific Minecraft version and loader combination. Think of them as dedicated profiles for your different gameplay experiences.
 
 ---
 
@@ -8,7 +8,7 @@ Lists are the fundamental building blocks within Flux Launcher's Resource Manage
 
 The left sidebar of the Resource Manager is where all your lists are displayed and managed.
 
-![Flux Launcher Sidebar](../../images/resource-manager/first_list.png)
+![Flux Sidebar](../../images/resource-manager/first_list.png)
 
 Each list entry provides a quick overview of its configuration:
 -   **List Name:** The user-defined name for your collection (e.g., "New List").

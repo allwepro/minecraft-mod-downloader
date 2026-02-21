@@ -1,6 +1,6 @@
 # 🧭 Usage Overview
 
-This section covers how to navigate and use the different components of Flux Launcher. Whether you are looking to launch the game or manage your mod library, you can find the specific guides below.
+This section covers how to navigate and use the different components of Flux. Whether you are looking to launch the game or manage your mod library, you can find the specific guides below.
 
 ---
 

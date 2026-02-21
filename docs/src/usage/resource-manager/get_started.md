@@ -1,8 +1,8 @@
-## 🚀 Get Started with Flux Launcher's Resource Manager!
+## 🚀 Get Started with Flux's Resource Manager!
 
-Welcome to Flux Launcher! This guide will quickly show you how to create your first mod list, add resources, and get them downloaded. Let's get your Minecraft setup ready!
-As a first step you need to have Flux Launcher installed. If you haven't done that yet, check out our [Installation Guide](../../installation.md) first.
-Then after successfully installing Flux Launcher, you can open the Resource Manager by clicking the "Resource Manager" text in the top left if it's not already open.
+Welcome to Flux! This guide will quickly show you how to create your first mod list, add resources, and get them downloaded. Let's get your Minecraft setup ready!
+As a first step you need to have Flux installed. If you haven't done that yet, check out our [Installation Guide](../../installation.md) first.
+Then after successfully installing Flux, you can open the Resource Manager by clicking the "Resource Manager" text in the top left if it's not already open.
 
 ---
 
@@ -51,7 +51,7 @@ If you already have an existing Minecraft folder or a Modrinth collection:
 
 ## 3. Add Resources to Your List
 
-Now, let's find some mods! Flux Launcher connects directly to Modrinth.
+Now, let's find some mods! Flux connects directly to Modrinth.
 
 1.  **Click "➕ Add [Resource Type]"**: In the main view, click the button (e.g., "➕ Add Mod"). This opens the **Search Modal**.
 

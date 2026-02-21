@@ -1,6 +1,6 @@
 # 👥 Groups & Instances
 
-Flux Launcher provides powerful organizational features through **Groups** and **Instances** in the sidebar. These allow you to categorize your resource lists and manage dedicated Minecraft game setups more effectively.
+Flux provides powerful organizational features through **Groups** and **Instances** in the sidebar. These allow you to categorize your resource lists and manage dedicated Minecraft game setups more effectively.
 
 ---
 
@@ -64,7 +64,7 @@ If the selected group is an **Instance**, a dedicated "Instance Configuration" p
     *   A dropdown menu where you can select a specific Minecraft Java Edition version for this instance.
     *   All lists within this instance will default to this game version for compatibility checks and downloads.
 *   **💾 Save:** Click this button to apply changes to the instance's directory and game version.
-*   **Download Path Information:** Below the save button, Flux Launcher provides a helpful overview of where different resource types will be downloaded within the specified instance directory (e.g., `Mods ➡ <instance_directory>/mods`).
+*   **Download Path Information:** Below the save button, Flux provides a helpful overview of where different resource types will be downloaded within the specified instance directory (e.g., `Mods ➡ <instance_directory>/mods`).
 
 ### Converting to/from an Instance
 

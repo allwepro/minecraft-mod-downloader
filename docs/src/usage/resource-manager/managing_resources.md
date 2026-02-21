@@ -1,20 +1,20 @@
 # Managing Resources
 
-This section details how to add, manage, update, and remove individual resources (mods, shaders, etc.) within your active list. Flux Launcher provides intuitive tools and visual indicators to keep your game content organized and up-to-date.
+This section details how to add, manage, update, and remove individual resources (mods, shaders, etc.) within your active list. Flux provides intuitive tools and visual indicators to keep your game content organized and up-to-date.
 
 ## Adding Resources
 
 To add new resources to your list, use the "Add [Resource Type]" button prominently displayed at the top of the main content area.
 
 *   **"➕ Add [Resource Type]" Button:** Click this button (e.g., "➕ Add Mod") to open the **Search Modal**. This modal allows you to browse and select resources directly from Modrinth, filtering by compatibility with your list's configured game version and loader.
-*   **Offline Mode:** This button will be disabled and grayed out when Flux Launcher is in offline mode, as it requires an internet connection to search Modrinth.
+*   **Offline Mode:** This button will be disabled and grayed out when Flux is in offline mode, as it requires an internet connection to search Modrinth.
 
 *   **Keyboard Shortcut:** After typing your query in the Search Modal, you can simply press **`Enter`** to trigger the search without clicking the button.
 *   **Smart Filtering:** Keep **"Match version/loader"** checked to ensure you only see projects compatible with your current list's Minecraft version and loader (Fabric/NeoForge/etc.).
 
 ## The Reload Button
 
-The "Reload" button (🔄) is a vital tool for ensuring Flux Launcher's view of your files is current with your disk.
+The "Reload" button (🔄) is a vital tool for ensuring Flux's view of your files is current with your disk.
 
 *   **Standard Click (🔄):** A regular click on this button triggers a re-indexing of files in your list's download directory. Use this if you manually add or remove files, or if you suspect the displayed status of your resources is out of sync.
 *   **Shift+Click (🔄 + Shift):** Holding `Shift` while clicking "Reload" forces a full recalculation of all project dependencies. This can resolve issues where dependency relationships might appear incorrect or if a mod's requirements have recently changed.
@@ -22,9 +22,9 @@ The "Reload" button (🔄) is a vital tool for ensuring Flux Launcher's view of 
 
 ## Auto-Update Mode
 
-Flux Launcher offers an "Auto-Update" mode, configurable in the List Settings. This mode affects how updates are handled across your list.
+Flux offers an "Auto-Update" mode, configurable in the List Settings. This mode affects how updates are handled across your list.
 
-*   **If Auto-Update is enabled:** Flux Launcher will automatically select and download the latest compatible versions for your resources whenever available, ensuring your list is always current without manual intervention.
+*   **If Auto-Update is enabled:** Flux will automatically select and download the latest compatible versions for your resources whenever available, ensuring your list is always current without manual intervention.
 *   **If Auto-Update is disabled:** A "🔄 Update All" button will appear if any resources in your list have a newer version available. You will also see individual "🔄 Update" buttons next to each outdated resource, allowing for granular control over updates.
 
 ## Individual Resource Entries
@@ -53,7 +53,7 @@ Next to each resource, you may see one or more of these indicators:
 
 ### Dependency Management
 
-Flux Launcher helps you manage resource dependencies:
+Flux helps you manage resource dependencies:
 
 *   **`+N Dependencies` Badge:** If a resource requires other mods to function, this badge will show the count of its required dependencies. Clicking this badge will expand the entry to display the dependent resources, indented below the main resource.
 *   **Dependent Resources:** When expanded, dependencies are shown with smaller icons and indented, indicating their subordinate relationship. They generally inherit the status of their parent.
@@ -77,7 +77,7 @@ These buttons appear on the right side of each resource entry, allowing you to m
 
 ## Unknown Files
 
-Below your active and archived projects, Flux Launcher may display an "Unknown Projects" section.
+Below your active and archived projects, Flux may display an "Unknown Projects" section.
 
 *   **Purpose:** This section lists files found in your list's download directory that are not linked to any known project in your list. These could be leftover files, manually placed mods, or files Flux couldn't identify.
 *   **Expandable Section:** Click the expand button (▶ / 🔽) next to "Unknown Projects ([Count])" to show or hide these files.

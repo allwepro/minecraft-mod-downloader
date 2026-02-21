@@ -1,10 +1,10 @@
 # 🧩 Dependencies & Archives
 
-Flux Launcher provides robust tools to manage project dependencies, archive unused resources, and clean up unassociated files, ensuring your Minecraft installation remains organized and efficient.
+Flux provides robust tools to manage project dependencies, archive unused resources, and clean up unassociated files, ensuring your Minecraft installation remains organized and efficient.
 
 ## Managing Dependencies
 
-Dependencies are other resources that a specific mod, shader, or pack requires to function correctly. Flux Launcher automatically detects and manages these relationships, simplifying the installation process.
+Dependencies are other resources that a specific mod, shader, or pack requires to function correctly. Flux automatically detects and manages these relationships, simplifying the installation process.
 
 ### Displaying Dependencies
 When a resource in your list has required dependencies, a badge like `+N Dependencies` will appear below its name and author. The "N" indicates the number of other projects that are necessary for this resource to work.
@@ -13,7 +13,7 @@ When a resource in your list has required dependencies, a badge like `+N Depende
 Clicking the `+N Dependencies` badge will expand the entry, revealing the list of required projects. These dependent projects are displayed with a slightly indented visual style and simplified interaction options, making it clear they are managed as part of their parent resource.
 
 ### Dependency Handling During Actions
-*   **Downloading & Updating:** When you download or update a resource, Flux Launcher automatically attempts to download or update its required dependencies to compatible versions.
+*   **Downloading & Updating:** When you download or update a resource, Flux automatically attempts to download or update its required dependencies to compatible versions.
 *   **Archiving:** A resource that is required by another project **cannot be archived**. If you try, a tooltip will inform you which projects depend on it. This prevents you from accidentally breaking your mod setup.
 *   **Deleting:** If you attempt to delete a project that is required by others, the delete button's tooltip will change, indicating that deleting it will "demote" it to an auto-managed state. This means it will remain in your list (as an auto-managed project) because another active project still requires it, but it will no longer be considered a manually added item. To fully remove it, all dependent projects must first be removed or archived.
 
