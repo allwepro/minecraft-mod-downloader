@@ -22,7 +22,7 @@ It provides a sleek, responsive, cross-platform **GUI** for browsing and install
 ---
 
 ## 📖 Documentation & User Guide
-Access the full user manual, installation guides, and technical details here: 👉 [**Open the Wiki**](https://allwepro.github.io/minecraft-mod-downloader/)
+Access the full user manual, installation guides, and technical details here: 👉 [**Open the Wiki**](https://allwepro.github.io/flux-project/)
 
 ---
 
