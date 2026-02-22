@@ -272,10 +272,7 @@ impl ModalWindow for FolderImportModal {
                                                             ui.label(format!("- {}", name));
                                                         }
 
-                                                        if (matches.len() > 1
-                                                            || !sess.exact_matches.contains(&idx))
-                                                            && ui.small_button("Change").clicked()
-                                                        {
+                                                        if ui.small_button("Change").clicked() {
                                                             sess.selected_matches.remove(&idx);
                                                             sess.exact_matches.remove(&idx);
                                                             sess.manually_cleared.insert(idx);
@@ -323,6 +320,7 @@ impl ModalWindow for FolderImportModal {
                                                             {
                                                                 sess.skipped_items.insert(idx);
                                                                 sess.manually_cleared.remove(&idx);
+                                                                sess.selected_matches.remove(&idx);
                                                             }
                                                         });
                                                     });
@@ -343,6 +341,7 @@ impl ModalWindow for FolderImportModal {
 
                                                     if ui.small_button("Skip").clicked() {
                                                         sess.skipped_items.insert(idx);
+                                                        sess.selected_matches.remove(&idx);
                                                     }
                                                 });
                                                 if !is_skipped {
@@ -422,6 +421,7 @@ impl ModalWindow for FolderImportModal {
                                 if let Some(sess) = session {
                                     sess.selected_matches
                                         .iter()
+                                        .filter(|(idx, _)| !sess.skipped_items.contains(idx))
                                         .filter_map(|(idx, match_idx)| {
                                             sess.candidates
                                                 .get(*idx)
@@ -490,6 +490,7 @@ impl FolderImportModal {
                     results.push((project_lnk, data.name));
                     sess.selected_matches.insert(candidate_idx, match_idx);
                     sess.manually_cleared.remove(&candidate_idx);
+                    sess.skipped_items.remove(&candidate_idx);
                 }
             }
             state
@@ -520,6 +521,7 @@ impl FolderImportModal {
         for (idx, candidate) in session.candidates.iter().enumerate() {
             if session.selected_matches.contains_key(&idx)
                 || session.manually_cleared.contains(&idx)
+                || session.skipped_items.contains(&idx)
             {
                 continue;
             }
