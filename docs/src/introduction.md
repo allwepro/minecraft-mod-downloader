@@ -1,0 +1,19 @@
+# 🧩 Flux Project
+
+Flux Project is a fast, reliable **Minecraft Project & Resource Management Tool** written in **Rust**.
+
+Modern Minecraft management often feels cluttered. Flux provides a sleek, responsive, cross-platform **GUI** for browsing and installing any resource hosted on **Modrinth**, with automatic detection of compatible Minecraft versions and loaders.
+
+### 🚀 Key Capabilities
+- **Unified Manager:** One interface for mods, shaders, resource packs, datapacks, and plugins.
+- **Smart Detection:** Automatic filtering for your specific Minecraft version and loader (Fabric/Quilt/Forge).
+- **One-Click Updates:** Keep your entire library current with a single click.
+- **Performance First:** Built in Rust to ensure the app stays out of your way while gaming.
+
+> ⚙️ **Note:** Flux focuses on **Modrinth** resources for **Minecraft: Java Edition**.
+
+---
+
+### Disclaimer
+Flux Project is an **independent project** and is **not affiliated, endorsed, or associated** with **Mojang AB**, **Microsoft Corporation**, **Modrinth**, or **Rinth Inc.**
+All trademarks and copyrights belong to their respective owners. Flux is developed by a passionate few of Minecraft enthusiasts and is provided as-is without any warranties. Use at your own risk.
