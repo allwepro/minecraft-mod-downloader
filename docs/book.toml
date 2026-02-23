@@ -1,0 +1,8 @@
+[book]
+authors = ["Flux Project Contributors"]
+language = "en"
+src = "src"
+title = "Flux Launcher & Resource Manager Manual"
+
+[output.html]
+git-repository-url = "https://github.com/allwepro/flux-project"
