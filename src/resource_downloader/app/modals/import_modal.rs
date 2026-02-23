@@ -3,7 +3,7 @@ use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::ListLnk;
 use eframe::egui;
 use egui::{Id, Ui};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct ImportModal {
@@ -58,7 +58,7 @@ impl ModalWindow for ImportModal {
             self.item_count = list.read().project_count() as i32;
         }
 
-        if let Some(name) = Self::extract_name(&self.file_path) {
+        if let Some(name) = Self::extract_name(self.file_path.clone()) {
             self.new_list_name = name;
         }
     }
@@ -77,7 +77,7 @@ impl ModalWindow for ImportModal {
 }
 
 impl ImportModal {
-    fn extract_name(path: &Path) -> Option<String> {
+    fn extract_name(path: PathBuf) -> Option<String> {
         path.file_stem()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string())
@@ -101,7 +101,7 @@ mod tests {
         for (input, expected) in cases {
             let path = PathBuf::from(input);
             assert_eq!(
-                ImportModal::extract_name(&path),
+                ImportModal::extract_name(path),
                 expected.map(|s| s.to_string()),
                 "Failed for input: {}",
                 input

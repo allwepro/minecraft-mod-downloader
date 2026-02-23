@@ -1,0 +1,35 @@
+name: Rust CI Skip
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths-ignore:
+      - 'src/**'
+      - 'Cargo.toml'
+
+jobs:
+  fmt:
+    name: Rust Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping Rust Format Check for non-Rust changes"
+
+  clippy:
+    name: Rust Linter Check
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping Rust Linter Check for non-Rust changes"
+
+  audit:
+    name: Rust Security + Dependencies Check
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping Security Check for non-Rust changes"
+
+  build_and_test:
+    name: Rust Build & Test Check
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping Build/Test for non-Rust changes"
