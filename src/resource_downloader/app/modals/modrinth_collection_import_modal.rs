@@ -176,3 +176,32 @@ fn parse_collection_id(input: &str) -> Option<String> {
         Some(input.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_collection_id_full_url() {
+        let input = "https://modrinth.com/collection/ZCxg7r1U";
+        assert_eq!(parse_collection_id(input), Some("ZCxg7r1U".to_string()));
+    }
+
+    #[test]
+    fn test_parse_collection_id_with_query() {
+        let input = "https://modrinth.com/collection/ZCxg7r1U?hl=en-US";
+        assert_eq!(parse_collection_id(input), Some("ZCxg7r1U".to_string()));
+    }
+
+    #[test]
+    fn test_parse_collection_id_raw_id() {
+        let input = "ZCxg7r1U";
+        assert_eq!(parse_collection_id(input), Some("ZCxg7r1U".to_string()));
+    }
+
+    #[test]
+    fn test_parse_collection_id_empty() {
+        assert_eq!(parse_collection_id(""), None);
+        assert_eq!(parse_collection_id("   "), None);
+    }
+}

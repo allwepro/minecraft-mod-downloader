@@ -3,7 +3,7 @@ use crate::resource_downloader::business::SharedRDState;
 use crate::resource_downloader::domain::ListLnk;
 use eframe::egui;
 use egui::{Id, Ui};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
 pub struct ImportModal {
@@ -58,10 +58,8 @@ impl ModalWindow for ImportModal {
             self.item_count = list.read().project_count() as i32;
         }
 
-        if let Some(file_name) = self.file_path.file_stem()
-            && let Some(name_str) = file_name.to_str()
-        {
-            self.new_list_name = name_str.to_string();
+        if let Some(name) = Self::extract_name(&self.file_path) {
+            self.new_list_name = name;
         }
     }
 
@@ -75,5 +73,39 @@ impl ModalWindow for ImportModal {
             list.write().set_list_name(self.new_list_name.clone());
         }
         self.state.read().list_pool.save(&self.list);
+    }
+}
+
+impl ImportModal {
+    fn extract_name(path: &Path) -> Option<String> {
+        path.file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_name() {
+        let cases = vec![
+            ("/path/to/my_list.json", Some("my_list")),
+            ("list.mmd", Some("list")),
+            ("no_extension", Some("no_extension")),
+            (".hidden", Some(".hidden")),
+            ("", None),
+        ];
+
+        for (input, expected) in cases {
+            let path = PathBuf::from(input);
+            assert_eq!(
+                ImportModal::extract_name(&path),
+                expected.map(|s| s.to_string()),
+                "Failed for input: {}",
+                input
+            );
+        }
     }
 }
