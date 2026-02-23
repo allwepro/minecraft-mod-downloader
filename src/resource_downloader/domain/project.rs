@@ -479,3 +479,81 @@ impl ProjectVersion {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resource_downloader::domain::ResourceType;
+
+    #[test]
+    fn test_project_dependency_type_logic() {
+        let det = ProjectDependencyType::Required;
+        assert_eq!(
+            det.get_effective_type(Some(false)),
+            ProjectDependencyType::Incompatible
+        );
+        assert_eq!(
+            det.get_effective_type(Some(true)),
+            ProjectDependencyType::Required
+        );
+        assert_eq!(
+            det.get_effective_type(None),
+            ProjectDependencyType::Required
+        );
+
+        let ignored = ProjectDependencyType::Ignored;
+        assert!(ignored.needs_managing(Some(true)));
+        assert!(!ignored.needs_managing(Some(false)));
+    }
+
+    #[test]
+    fn test_project_creation() {
+        let p = Project::new(
+            "p1".to_string(),
+            ResourceType::Mod,
+            true,
+            "Test Mod".to_string(),
+            "Description".to_string(),
+            "Author".to_string(),
+        );
+
+        assert_eq!(p.get_id(), "p1");
+        assert_eq!(p.get_name(), "Test Mod");
+        assert!(p.is_manual());
+        assert!(!p.is_archived());
+    }
+
+    #[test]
+    fn test_project_dependents() {
+        let mut p = Project::new(
+            "p1".to_string(),
+            ResourceType::Mod,
+            true,
+            "Target".to_string(),
+            "Desc".to_string(),
+            "Author".to_string(),
+        );
+
+        let dep_lnk = ProjectLnk::from(&"p2".to_string());
+        p.add_dependent(dep_lnk.clone());
+        assert!(p.has_dependent(&dep_lnk));
+        assert_eq!(p.dependent_count(), 1);
+
+        p.remove_dependent(dep_lnk.clone());
+        assert!(!p.has_dependent(&dep_lnk));
+    }
+
+    #[test]
+    fn test_safe_filename() {
+        let p = Project::new(
+            "p1".to_string(),
+            ResourceType::Mod,
+            true,
+            "Test Mod 1.2.3".to_string(),
+            "Desc".to_string(),
+            "Author".to_string(),
+        );
+
+        assert_eq!(p.get_safe_filename(), "Test_Mod_123.jar");
+    }
+}

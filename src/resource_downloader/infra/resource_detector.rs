@@ -313,3 +313,152 @@ impl ResourceDetector {
         name.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resource_downloader::domain::{GameLoader, GameVersion, ResourceType};
+
+    fn setup() -> (ResourceDetector, Vec<GameLoader>, Vec<GameVersion>) {
+        let detector = ResourceDetector;
+        let loaders = vec![
+            GameLoader {
+                id: "fabric".to_string(),
+                name: "Fabric".to_string(),
+            },
+            GameLoader {
+                id: "forge".to_string(),
+                name: "Forge".to_string(),
+            },
+            GameLoader {
+                id: "quilt".to_string(),
+                name: "Quilt".to_string(),
+            },
+        ];
+        let versions = vec![
+            GameVersion::release("1.21.1".to_string()),
+            GameVersion::release("1.20.1".to_string()),
+            GameVersion::release("1.20".to_string()),
+            GameVersion::release("1.19.4".to_string()),
+            GameVersion::release("1.19.2".to_string()),
+            GameVersion::release("1.18.2".to_string()),
+        ];
+        (detector, loaders, versions)
+    }
+
+    #[test]
+    fn test_simple_detection() {
+        let (detector, loaders, versions) = setup();
+        let entries = vec!["MouseWheelie-fabric-1.6.4+mc1.20.1.jar".to_string()];
+        let (results, _, _) =
+            detector.detect_resources(entries, ResourceType::Mod, loaders, versions);
+
+        assert_eq!(results.len(), 1);
+        let (_, cleaned_name, version, loader) = &results[0];
+        assert_eq!(cleaned_name, "MouseWheelie");
+        assert_eq!(version.name, "1.20.1");
+        assert_eq!(loader.id, "fabric");
+    }
+
+    #[test]
+    fn test_version_range_plus() {
+        let (detector, loaders, versions) = setup();
+        let entries = vec!["Sodium-1.20.1-plus.jar".to_string()];
+        let (results, _, _) =
+            detector.detect_resources(entries, ResourceType::Mod, loaders, versions);
+
+        assert_eq!(results.len(), 1);
+        let (_, _, version, _) = &results[0];
+        assert_eq!(version.name, "1.20.1");
+    }
+
+    #[test]
+    fn test_name_remapping() {
+        let (detector, loaders, versions) = setup();
+        let entries = vec!["iris-mc1.20.1-1.6.9.jar".to_string()];
+        let (results, _, _) =
+            detector.detect_resources(entries, ResourceType::Mod, loaders, versions);
+
+        assert_eq!(results.len(), 1);
+        let (_, cleaned_name, _, _) = &results[0];
+        assert_eq!(cleaned_name, "Iris Shaders");
+    }
+
+    #[test]
+    fn test_url_encoded_names() {
+        let (detector, loaders, versions) = setup();
+        let entries = vec!["%5BEMF%5D%20Entity%20Model%20Features-1.20.1.jar".to_string()];
+        let (results, _, _) =
+            detector.detect_resources(entries, ResourceType::Mod, loaders, versions);
+
+        assert_eq!(results.len(), 1);
+        let (_, cleaned_name, _, _) = &results[0];
+        assert_eq!(cleaned_name, "[EMF] Entity Model Features");
+    }
+
+    #[test]
+    fn test_suggested_version_and_loader() {
+        let (detector, loaders, versions) = setup();
+        let entries = vec![
+            "mod-a-fabric-1.20.1.jar".to_string(),
+            "mod-b-fabric-1.20.1.jar".to_string(),
+            "mod-c-forge-1.19.4.jar".to_string(),
+        ];
+        let (_, best_v, best_l) =
+            detector.detect_resources(entries, ResourceType::Mod, loaders, versions);
+
+        assert_eq!(best_v.unwrap().name, "1.20.1");
+        assert_eq!(best_l.unwrap().id, "fabric");
+    }
+
+    #[test]
+    fn test_unknown_detection() {
+        let (detector, loaders, versions) = setup();
+        let entries = vec!["mystery-mod-v1.jar".to_string()];
+        let (results, _, _) =
+            detector.detect_resources(entries, ResourceType::Mod, loaders, versions);
+
+        assert_eq!(results.len(), 1);
+        let (_, cleaned_name, version, loader) = &results[0];
+        assert_eq!(cleaned_name, "Mystery Mod");
+        assert_eq!(version.name, "Unknown");
+        assert_eq!(loader.id, "unknown");
+    }
+
+    #[test]
+    fn test_detect_resources_from_dir() {
+        let (detector, loaders, versions) = setup();
+        let temp_dir = std::env::temp_dir().join("flux_launcher_test_import");
+        if temp_dir.exists() {
+            std::fs::remove_dir_all(&temp_dir).unwrap();
+        }
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let files = vec![
+            "Sodium-1.20.1.jar",
+            "Lithium-1.20.1.jar",
+            "Indium-1.20.1.jar",
+            "not-a-mod.txt",
+        ];
+
+        for file in files {
+            std::fs::File::create(temp_dir.join(file)).unwrap();
+        }
+
+        let (results, best_v, _best_l) = detector.detect_resources_from_dir(
+            temp_dir.clone(),
+            ResourceType::Mod,
+            loaders,
+            versions,
+        );
+
+        assert_eq!(results.len(), 3);
+        assert!(results.iter().any(|(_, name, _, _)| name == "Sodium"));
+        assert!(results.iter().any(|(_, name, _, _)| name == "Lithium"));
+        assert!(results.iter().any(|(_, name, _, _)| name == "Indium"));
+
+        assert_eq!(best_v.unwrap().name, "1.20.1");
+
+        std::fs::remove_dir_all(&temp_dir).unwrap();
+    }
+}

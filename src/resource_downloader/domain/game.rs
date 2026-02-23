@@ -141,3 +141,51 @@ impl Display for GameLoader {
         write!(f, "{}", self.name)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_game_version_release() {
+        let v = GameVersion::release("1.21.0".to_string());
+        assert_eq!(v.name, "1.21");
+        assert_eq!(v.channel, "release");
+    }
+
+    #[test]
+    fn test_game_version_from_string() {
+        let cases = vec![
+            ("1.21.1", "release"),
+            ("24w14a", "snapshot"),
+            ("1.20-pre1", "pre-release"),
+            ("1.19-rc2", "release-candidate"),
+            ("b1.7.3", "beta"),
+            ("a1.2.6", "alpha"),
+            ("inf-20100618", "inf-dev"),
+            ("c0.30.0", "classic"),
+        ];
+
+        for (input, expected_channel) in cases {
+            let v = GameVersion::from(&input.to_string());
+            assert_eq!(v.channel, expected_channel, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_game_version_comparison() {
+        let v1_20 = GameVersion::release("1.20".to_string());
+        let v1_20_1 = GameVersion::release("1.20.1".to_string());
+        let v1_21 = GameVersion::release("1.21".to_string());
+
+        assert!(v1_20_1 > v1_20);
+        assert!(v1_21 > v1_20_1);
+        assert!(v1_20 < v1_21);
+    }
+
+    #[test]
+    fn test_game_version_as_u64() {
+        let v = GameVersion::release("1.20.1".to_string());
+        assert_eq!(v.as_u64(), 1020001);
+    }
+}
