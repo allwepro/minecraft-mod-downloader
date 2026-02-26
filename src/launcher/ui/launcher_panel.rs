@@ -1,3 +1,7 @@
+// CLIPPY: nested ifs kept separate for readability in multi-step launch preflight evaluation;
+//         helper items defined after the test module to keep test helpers co-located with tests
+#![allow(clippy::collapsible_if, clippy::items_after_test_module)]
+
 use crate::infra::ConfigManager;
 use crate::launcher::ui::{JavaDownloadWindow, MinecraftDownloadWindow};
 use crate::launcher::{
@@ -385,7 +389,7 @@ impl LauncherPanel {
                         );
                     } else if self.fabric_installing {
                         let (progress, status) = {
-                            let guard = self.fabric_progress.lock().unwrap();
+                            let guard = self.fabric_progress.lock().unwrap_or_else(|p| p.into_inner());
                             (guard.0, guard.1.clone())
                         };
 

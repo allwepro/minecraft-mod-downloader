@@ -35,7 +35,10 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.89.0
+          toolchain: 1.85.0
 
-      - name: Run launcher-only tests
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --verbose
+
+      - name: Run launcher tests
         run: cargo test 'launcher::' --verbose

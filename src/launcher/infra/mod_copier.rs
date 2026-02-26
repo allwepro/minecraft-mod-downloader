@@ -1,5 +1,10 @@
+// CLIPPY: nested ifs kept separate for readability in version-requirement evaluation logic;
+//         chained str::replace calls kept explicit for clarity when normalising version strings
+#![allow(clippy::collapsible_if, clippy::collapsible_str_replace)]
+
 use anyhow::{Context, Result};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
@@ -32,6 +37,13 @@ enum DependencyMatch {
     Incompatible,
     Unverified,
 }
+
+const SYSTEM_PROVIDED_MOD_IDS: &[&str] = &[
+    "minecraft",
+    "fabricloader",
+    "java",
+    "java-base",
+];
 
 impl ModCopier {
     pub fn new() -> Self {
@@ -375,6 +387,20 @@ impl ModCopier {
         if unknown { None } else { Some(false) }
     }
 
+    /// Evaluates a single version requirement token against a concrete version string.
+    ///
+    /// Supported token formats (Fabric mod dependency syntax):
+    ///   `*`          — any version matches
+    ///   `>=1.20`     — greater-than-or-equal comparison
+    ///   `<=1.20`     — less-than-or-equal comparison
+    ///   `>1.20` / `<1.20` — strict comparisons
+    ///   `^1.20`      — compatible-with (same major, same or higher minor/patch)
+    ///   `~1.20`      — approximately-equal (same major+minor, higher patch)
+    ///   `=1.20`      — exact match
+    ///   `1.20.x` / `1.20.*` — wildcard patch (any patch for given major.minor)
+    ///
+    /// Returns `Some(true/false)` when the match can be determined, or `None` for
+    /// formats that are not yet handled (treated as "unverified" by the caller).
     fn eval_requirement_token(
         version: &str,
         version_nums: &Option<Vec<i32>>,
@@ -417,7 +443,31 @@ impl ModCopier {
             ">" => Some(cmp > 0),
             "<=" => Some(cmp <= 0),
             "<" => Some(cmp < 0),
-            "^" | "~" | "=" => {
+            "~" => {
+                // ~X.Y.Z: >=X.Y.Z AND <X.(Y+1).0 — lock all but last component
+                // ~X.Y:   >=X.Y   AND <X.(Y+1).0
+                // ~X:     >=X     (no upper lock)
+                if cmp < 0 {
+                    return Some(false);
+                }
+                let lock_len = target_nums.len().saturating_sub(1);
+                Some(
+                    version_nums
+                        .iter()
+                        .take(lock_len)
+                        .zip(target_nums.iter().take(lock_len))
+                        .all(|(a, b)| a == b),
+                )
+            }
+            "^" => {
+                // ^X.Y.Z: >=X.Y.Z AND <(X+1).0.0 — lock major
+                if cmp < 0 {
+                    Some(false)
+                } else {
+                    Some(version_nums.first() == target_nums.first())
+                }
+            }
+            "=" => {
                 if rest == version {
                     Some(true)
                 } else {
@@ -556,6 +606,23 @@ impl ModCopier {
         let mut report = ModValidationReport::default();
         let require_fabric = loader.eq_ignore_ascii_case("fabric");
 
+        // Pre-pass: collect mod IDs of every installed jar so we can detect missing deps.
+        let mut installed_mod_ids: HashSet<String> = HashSet::new();
+        if require_fabric {
+            if let Ok(entries) = std::fs::read_dir(mods_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|e| e.to_str()) == Some("jar") {
+                        if let Ok(meta) = Self::read_fabric_mod_json(&path) {
+                            if let Some(id) = meta.get("id").and_then(|v| v.as_str()) {
+                                installed_mod_ids.insert(id.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         for spec in mods {
             let mod_file = match Self::find_mod_file_sync(mods_dir, &spec.name)? {
                 Some(path) => path,
@@ -625,6 +692,21 @@ impl ModCopier {
                                 report.warnings.push(format!(
                                     "{} has unverified fabricloader requirement {}",
                                     spec.name, display
+                                ));
+                            }
+                        }
+                    }
+
+                    // Check that every mod-to-mod dependency is installed.
+                    if let Some(depends) = fabric_meta.get("depends").and_then(|v| v.as_object()) {
+                        for dep_id in depends.keys() {
+                            if SYSTEM_PROVIDED_MOD_IDS.contains(&dep_id.as_str()) {
+                                continue;
+                            }
+                            if !installed_mod_ids.contains(dep_id.as_str()) {
+                                report.errors.push(format!(
+                                    "{} requires {} which is not installed",
+                                    spec.name, dep_id
                                 ));
                             }
                         }
@@ -718,6 +800,26 @@ mod tests {
             ModCopier::eval_requirement_token("1.20.1", &nums, "*"),
             Some(true)
         );
+    }
+
+    #[test]
+    fn eval_requirement_token_tilde_allows_higher_patch() {
+        // ~1.21.9 should match 1.21.9 and above within the same major.minor
+        for (version, expected) in [
+            ("1.21.9",  true),   // exact target
+            ("1.21.10", true),   // one patch higher
+            ("1.21.11", true),   // two patches higher (the reported bug case)
+            ("1.21.8",  false),  // one patch lower
+            ("1.22.0",  false),  // next minor — outside range
+            ("1.20.11", false),  // previous minor
+        ] {
+            let nums = ModCopier::parse_numeric_version(version);
+            assert_eq!(
+                ModCopier::eval_requirement_token(version, &nums, "~1.21.9"),
+                Some(expected),
+                "~1.21.9 vs {version}"
+            );
+        }
     }
 
     #[test]
@@ -896,6 +998,106 @@ mod tests {
     }
 
     #[test]
+    fn validate_mods_for_launch_reports_missing_mod_dependency() {
+        let mods_dir = test_temp_dir("missing_mod_dep");
+
+        // Mod A requires fabric-api; fabric-api jar is absent.
+        write_fabric_mod_jar(
+            &mods_dir.join("ModA.jar"),
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "id": "mod-a",
+                "version": "1.0.0",
+                "depends": {
+                    "minecraft": ">=1.21",
+                    "fabric-api": "*"
+                }
+            }),
+        );
+
+        // --- missing dep → error ---
+        let specs = vec![ModValidationSpec {
+            name: "ModA".to_string(),
+            allow_incompatible: false,
+        }];
+        let report = ModCopier::validate_mods_for_launch(
+            &mods_dir, &specs, "fabric", "1.21.11", Some("0.18.4"),
+        )
+        .expect("validation should not fail");
+
+        assert!(
+            report.errors.iter().any(|e| e.contains("ModA") && e.contains("fabric-api")),
+            "should report fabric-api as missing"
+        );
+
+        // --- install fabric-api → no error ---
+        write_fabric_mod_jar(
+            &mods_dir.join("fabric-api.jar"),
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "id": "fabric-api",
+                "version": "0.100.0+1.21.11"
+            }),
+        );
+        let report2 = ModCopier::validate_mods_for_launch(
+            &mods_dir, &specs, "fabric", "1.21.11", Some("0.18.4"),
+        )
+        .expect("validation should not fail");
+
+        assert!(
+            !report2.errors.iter().any(|e| e.contains("fabric-api")),
+            "fabric-api present; should not report missing dep"
+        );
+
+        // --- allow_incompatible suppresses the error ---
+        let _ = std::fs::remove_file(mods_dir.join("fabric-api.jar"));
+        let specs_skip = vec![ModValidationSpec {
+            name: "ModA".to_string(),
+            allow_incompatible: true,
+        }];
+        let report3 = ModCopier::validate_mods_for_launch(
+            &mods_dir, &specs_skip, "fabric", "1.21.11", Some("0.18.4"),
+        )
+        .expect("validation should not fail");
+
+        assert!(
+            !report3.errors.iter().any(|e| e.contains("fabric-api")),
+            "allow_incompatible should suppress missing dep error"
+        );
+
+        // --- system deps (minecraft, fabricloader, java) never reported as missing ---
+        write_fabric_mod_jar(
+            &mods_dir.join("ModB.jar"),
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "id": "mod-b",
+                "version": "1.0.0",
+                "depends": {
+                    "minecraft": ">=1.21",
+                    "fabricloader": ">=0.14",
+                    "java": ">=17"
+                }
+            }),
+        );
+        let specs_b = vec![ModValidationSpec {
+            name: "ModB".to_string(),
+            allow_incompatible: false,
+        }];
+        let report4 = ModCopier::validate_mods_for_launch(
+            &mods_dir, &specs_b, "fabric", "1.21.11", Some("0.18.4"),
+        )
+        .expect("validation should not fail");
+
+        assert!(
+            report4.errors.is_empty(),
+            "system-provided deps must not be reported as missing: {:?}",
+            report4.errors
+        );
+
+        let _ = std::fs::remove_dir_all(&mods_dir);
+    }
+
+    #[test]
     fn validate_mods_for_launch_treats_dependency_arrays_as_or() {
         let mods_dir = test_temp_dir("validate_array_or");
         let mod_file = mods_dir.join("ViaFabric.jar");
@@ -1011,10 +1213,11 @@ mod tests {
         .expect("validation should not fail unexpectedly");
 
         assert!(
-            report
+            !report
                 .errors
                 .iter()
-                .any(|e| e.contains("Bobby requires minecraft ~1.21.9"))
+                .any(|e| e.contains("Bobby")),
+            "Bobby should be compatible with 1.21.11 via ~1.21.9"
         );
         assert!(
             report

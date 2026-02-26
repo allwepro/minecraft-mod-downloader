@@ -129,7 +129,7 @@ impl JavaDownloadWindow {
             .show(ctx, |ui| {
                 if self.downloading {
                     let (progress, status) = {
-                        let guard = self.progress.lock().unwrap();
+                        let guard = self.progress.lock().unwrap_or_else(|p| p.into_inner());
                         (guard.0, guard.1.clone())
                     };
 

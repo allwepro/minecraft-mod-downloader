@@ -1,3 +1,7 @@
+// CLIPPY: nested ifs kept separate for readability in multi-step rule evaluation;
+//         to_owned() calls kept explicit to clarify ownership transfers across function boundaries
+#![allow(clippy::collapsible_if, clippy::unnecessary_to_owned)]
+
 use super::{LaunchConfig, LaunchResult, ResolvedManifest, VersionManifest};
 use crate::launcher::infra::NativesExtractor;
 use anyhow::{Context, Result};
@@ -25,7 +29,10 @@ impl AdvancedLauncher {
 
         if !version_json_path.exists() {
             return Ok(LaunchResult::Failed {
-                error: format!("Version manifest not found: {}", version_json_path.display()),
+                error: format!(
+                    "Version manifest not found: {}",
+                    version_json_path.display()
+                ),
             });
         }
 
@@ -33,14 +40,10 @@ impl AdvancedLauncher {
             .context("Failed to parse/resolve version manifest")?;
 
         // Extract native libraries
-        let natives_dir = game_dir
-            .join("versions")
-            .join(version)
-            .join("natives");
+        let natives_dir = game_dir.join("versions").join(version).join("natives");
 
         let native_jars = NativesExtractor::get_native_jars(&manifest, game_dir);
         log::debug!("=== NATIVES DEBUG ===");
-        log::debug!("Found {} native JAR files", native_jars.len());
         log::info!("Found {} native JAR files", native_jars.len());
 
         if native_jars.is_empty() {
@@ -91,7 +94,10 @@ impl AdvancedLauncher {
             &jna_short_dir,
             classpath_info.jna_jar.as_deref(),
         )? {
-            let jna_boot = format!("-Djna.boot.library.path={}", jna_short_dir.to_string_lossy());
+            let jna_boot = format!(
+                "-Djna.boot.library.path={}",
+                jna_short_dir.to_string_lossy()
+            );
             Self::replace_or_push_arg(&mut jvm_args, "-Djna.boot.library.path=", jna_boot);
         }
 
@@ -102,10 +108,7 @@ impl AdvancedLauncher {
         }
 
         // Ensure LWJGL uses the extracted natives directory
-        let lwjgl_arg = format!(
-            "-Dorg.lwjgl.librarypath={}",
-            natives_dir.to_string_lossy()
-        );
+        let lwjgl_arg = format!("-Dorg.lwjgl.librarypath={}", natives_dir.to_string_lossy());
         Self::replace_or_push_arg(&mut jvm_args, "-Dorg.lwjgl.librarypath=", lwjgl_arg);
 
         // Optional: enable JNA debug logging to identify native load failures
@@ -165,7 +168,10 @@ impl AdvancedLauncher {
             Ok(child) => {
                 let pid = child.id();
                 log::info!("Minecraft launched successfully with PID: {}", pid);
-                std::mem::forget(child); // Let it run independently
+                // Intentionally detach the child process; we do not want to wait for it to exit.
+                // Dropping `child` would send SIGKILL on some platforms, so `mem::forget` is
+                // used to leak the handle and allow Minecraft to outlive the launcher process.
+                std::mem::forget(child);
                 Ok(LaunchResult::Success { pid })
             }
             Err(e) => {
@@ -177,10 +183,7 @@ impl AdvancedLauncher {
     }
 
     /// Build classpath from libraries
-    fn build_classpath(
-        manifest: &ResolvedManifest,
-        game_dir: &Path,
-    ) -> Result<ClasspathInfo> {
+    fn build_classpath(manifest: &ResolvedManifest, game_dir: &Path) -> Result<ClasspathInfo> {
         let mut classpath_entries = Vec::new();
         let libraries_dir = game_dir.join("libraries");
         let mut jna_jar = None;
@@ -210,10 +213,7 @@ impl AdvancedLauncher {
                 .join(format!("{}-{}.jar", artifact, lib_version));
 
             if library_path.exists() {
-                if jna_jar.is_none()
-                    && parts[0] == "net.java.dev.jna"
-                    && parts[1] == "jna"
-                {
+                if jna_jar.is_none() && parts[0] == "net.java.dev.jna" && parts[1] == "jna" {
                     jna_jar = Some(library_path.clone());
                 }
                 classpath_entries.push(library_path.to_string_lossy().to_string());
@@ -547,8 +547,11 @@ impl AdvancedLauncher {
         }
 
         let stub_source = target_dir.join(format!("mmd_{}_stub.c", name.to_lowercase()));
-        if std::fs::write(&stub_source, format!("int mmd_{}_stub(void){{return 0;}}\n", name))
-            .is_err()
+        if std::fs::write(
+            &stub_source,
+            format!("int mmd_{}_stub(void){{return 0;}}\n", name),
+        )
+        .is_err()
         {
             log::warn!("Failed to write {} stub source", name);
             return;
@@ -596,12 +599,7 @@ impl AdvancedLauncher {
     }
 
     #[cfg(target_os = "macos")]
-    fn fallback_framework_symlink(
-        dest: &Path,
-        framework_path: &str,
-        name: &str,
-        jna_debug: bool,
-    ) {
+    fn fallback_framework_symlink(dest: &Path, framework_path: &str, name: &str, jna_debug: bool) {
         #[cfg(unix)]
         {
             use std::os::unix::fs::symlink;
@@ -658,6 +656,12 @@ impl AdvancedLauncher {
     ) {
     }
 
+    /// Extracts the platform-specific JNA native shim from the Fabric/Minecraft JNA jar into a
+    /// short temporary directory.  JNA discovers its native library by scanning the jar it lives
+    /// in; on macOS the OS refuses to load dylibs from paths longer than ~1024 bytes, so we copy
+    /// the shim to a predictable short path under `$TMPDIR` and point JNA there via
+    /// `-Djna.boot.library.path`.  Without this, Minecraft hangs or crashes on startup when the
+    /// game directory path is long (e.g. inside a deeply-nested user home).
     fn ensure_jna_boot_library(
         manifest: &ResolvedManifest,
         game_dir: &Path,
@@ -716,7 +720,8 @@ impl AdvancedLauncher {
         game_dir: &Path,
         target_dir: &Path,
     ) -> Result<bool> {
-        let objc_jar = Self::find_library_jar(manifest, game_dir, "ca.weblite", "java-objc-bridge")?;
+        let objc_jar =
+            Self::find_library_jar(manifest, game_dir, "ca.weblite", "java-objc-bridge")?;
         let objc_jar = match objc_jar {
             Some(path) => path,
             None => return Ok(false),

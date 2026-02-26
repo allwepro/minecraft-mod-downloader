@@ -1,3 +1,6 @@
+// CLIPPY: nested ifs kept separate for readability in multi-step download and extraction logic
+#![allow(clippy::collapsible_if)]
+
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs::File;

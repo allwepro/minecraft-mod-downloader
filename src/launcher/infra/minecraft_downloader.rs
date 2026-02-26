@@ -1,3 +1,7 @@
+// CLIPPY: nested ifs kept separate for readability in multi-step download/verify logic;
+//         download helpers take many parameters to thread progress callbacks through call chains
+#![allow(clippy::collapsible_if, clippy::too_many_arguments)]
+
 use crate::launcher::domain::{Library, VersionManifest};
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
