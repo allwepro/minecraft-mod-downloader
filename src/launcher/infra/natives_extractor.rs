@@ -1,3 +1,6 @@
+// CLIPPY: nested ifs kept separate for readability in the multi-level native-library resolution logic
+#![allow(clippy::collapsible_if)]
+
 use anyhow::{Context, Result};
 use std::fs;
 use std::io::Read;
@@ -7,21 +10,16 @@ pub struct NativesExtractor;
 
 impl NativesExtractor {
     /// Extract native libraries from JAR files to target directory
-    pub fn extract_natives(
-        library_jars: &[PathBuf],
-        natives_dir: &Path,
-    ) -> Result<()> {
+    pub fn extract_natives(library_jars: &[PathBuf], natives_dir: &Path) -> Result<()> {
         // Remove old natives directory to ensure clean extraction
         if natives_dir.exists() {
             log::debug!("Removing old natives directory: {}", natives_dir.display());
-            fs::remove_dir_all(natives_dir)
-                .context("Failed to remove old natives directory")?;
+            fs::remove_dir_all(natives_dir).context("Failed to remove old natives directory")?;
         }
 
         // Create natives directory
         log::debug!("Creating natives directory: {}", natives_dir.display());
-        fs::create_dir_all(natives_dir)
-            .context("Failed to create natives directory")?;
+        fs::create_dir_all(natives_dir).context("Failed to create natives directory")?;
         log::debug!("Natives directory created successfully");
 
         log::info!("Extracting natives to: {}", natives_dir.display());
@@ -46,8 +44,8 @@ impl NativesExtractor {
         let file = fs::File::open(jar_path)
             .context(format!("Failed to open JAR: {}", jar_path.display()))?;
 
-        let mut archive = zip::ZipArchive::new(file)
-            .context("Failed to read JAR as ZIP archive")?;
+        let mut archive =
+            zip::ZipArchive::new(file).context("Failed to read JAR as ZIP archive")?;
 
         let mut extracted_count = 0;
         for i in 0..archive.len() {
@@ -56,11 +54,8 @@ impl NativesExtractor {
 
             // Only extract native library files
             if Self::is_native_file(&file_name) {
-                let target_path = natives_dir.join(
-                    Path::new(&file_name)
-                        .file_name()
-                        .unwrap_or_default()
-                );
+                let target_path =
+                    natives_dir.join(Path::new(&file_name).file_name().unwrap_or_default());
 
                 // Skip if already exists
                 if target_path.exists() {
@@ -105,7 +100,9 @@ impl NativesExtractor {
         };
 
         // Check if it's a native file and not in META-INF
-        native_extensions.iter().any(|ext| filename_lower.ends_with(ext))
+        native_extensions
+            .iter()
+            .any(|ext| filename_lower.ends_with(ext))
             && !filename.starts_with("META-INF/")
     }
 
@@ -117,6 +114,10 @@ impl NativesExtractor {
         let mut native_jars = Vec::new();
         let libraries_dir = game_dir.join("libraries");
         let classifier_suffix = Self::get_natives_classifier_suffix();
+        // On Apple Silicon (aarch64) we prefer `natives-macos-arm64` classifiers over the
+        // generic `natives-macos` ones when both are present in the manifest.  We pre-build a set
+        // of base coordinates (group:artifact:version) that have an arm64 variant so we can skip
+        // the x86_64 fallback later in the main loop, avoiding duplicate or incompatible natives.
         let arm64 = cfg!(target_os = "macos") && cfg!(target_arch = "aarch64");
         let mut arm64_coords = std::collections::HashSet::new();
 
