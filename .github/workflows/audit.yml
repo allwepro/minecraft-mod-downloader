@@ -22,7 +22,7 @@ jobs:
       - name: Install Rust (pinned stable)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.89.0
+          toolchain: 1.85.0
 
       - name: Cache cargo registry
         uses: actions/cache@v4
