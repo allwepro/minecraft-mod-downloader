@@ -18,3 +18,4 @@
 - **_KW 5_**: Meetingabwesenheit: Arbeit
 - **_KW 6_**: Meetingabwesenheit: Krank
 - **_KW 6_**: Krank
+- **_KW 9_**: Projektausstieg - kein Informatik mehr
