@@ -2,7 +2,6 @@
 # Rust / Cargo
 # =======================
 /target/
-/Cargo.lock
 **/*.rs.bk
 
 # Cargo build output
