@@ -542,24 +542,32 @@ impl ProjectList {
 
         if let Some(target_project) = self.get_project(project) {
             for dependent_id in target_project.get_dependents() {
-                if let Some(dependent_project) = self.get_project(dependent_id)
-                    && let Some(dependent_version) = dependent_project.get_version()
-                    && let Some(dependent_dependency) =
-                        dependent_version.get_depended_on(project.clone())
-                    && (!disallowed_mode
-                        && dependent_dependency
-                            .dependency_type
-                            .get_effective_type(dependent_dependency.manual_dependency_type)
-                            .is_positive()
-                        || disallowed_mode
-                            && dependent_dependency
-                                .dependency_type
-                                .get_effective_type(dependent_dependency.manual_dependency_type)
-                                .is_negative())
-                    && let Some(version_id) = dependent_dependency.version_id.clone()
-                    && !versions.contains(&version_id)
-                {
-                    versions.push(version_id);
+                if let Some(dependent_project) = self.get_project(dependent_id) {
+                    if let Some(dependent_version) = dependent_project.get_version() {
+                        if let Some(dependent_dependency) =
+                            dependent_version.get_depended_on(project.clone())
+                        {
+                            if !disallowed_mode
+                                && dependent_dependency
+                                    .dependency_type
+                                    .get_effective_type(dependent_dependency.manual_dependency_type)
+                                    .is_positive()
+                                || disallowed_mode
+                                    && dependent_dependency
+                                        .dependency_type
+                                        .get_effective_type(
+                                            dependent_dependency.manual_dependency_type,
+                                        )
+                                        .is_negative()
+                            {
+                                if let Some(version_id) = dependent_dependency.version_id.clone() {
+                                    if !versions.contains(&version_id) {
+                                        versions.push(version_id);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -614,9 +622,10 @@ impl ProjectList {
         for (dep_lnk, is_archived_after) in dependencies_after {
             if let Some((_, was_archived_before)) =
                 dependencies_before.iter().find(|(d, _)| d == &dep_lnk)
-                && was_archived_before != &is_archived_after
             {
-                mutation.add_changed(vec![dep_lnk]);
+                if was_archived_before != &is_archived_after {
+                    mutation.add_changed(vec![dep_lnk]);
+                }
             }
         }
 
@@ -677,14 +686,16 @@ impl ProjectList {
             MutationResult::new(MutationOutcome::DependenciesCleared).with_target(project.clone());
         mutation.add_changed(vec![project.clone()]);
 
-        let depended_on_projects: Vec<ProjectLnk> = if let Some(target_project) =
-            self.get_project_mut(project)
-            && let Some(version) = target_project.get_version_mut()
-        {
-            version.clear_depended_ons()
-        } else {
-            return MutationResult::not_found();
-        };
+        let depended_on_projects: Vec<ProjectLnk> =
+            if let Some(target_project) = self.get_project_mut(project) {
+                if let Some(version) = target_project.get_version_mut() {
+                    version.clear_depended_ons()
+                } else {
+                    return MutationResult::not_found();
+                }
+            } else {
+                return MutationResult::not_found();
+            };
 
         for depended_on_project in &depended_on_projects {
             if let Some(dep_project) = self.get_project_mut(depended_on_project) {

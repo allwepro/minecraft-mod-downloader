@@ -107,10 +107,10 @@ impl ModalWindow for FolderImportModal {
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.selected_folder);
 
-                    if ui.button("Browse...").clicked()
-                        && let Some(path) = Dialogs::pick_folder(&mut self.selected_folder)
-                    {
-                        self.selected_folder = path.display().to_string();
+                    if ui.button("Browse...").clicked() {
+                        if let Some(path) = Dialogs::pick_folder(&mut self.selected_folder) {
+                            self.selected_folder = path.display().to_string();
+                        }
                     }
                 });
 

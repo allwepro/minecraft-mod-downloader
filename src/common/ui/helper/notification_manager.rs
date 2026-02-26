@@ -73,7 +73,7 @@ impl SharedNotificationManager {
             }
         }
 
-        let screen_rect = ctx.content_rect();
+        let screen_rect = ctx.screen_rect();
         let base_width = 320.0;
         let margin = 20.0;
         let step_offset = 8.0;
@@ -256,11 +256,12 @@ impl SharedNotificationManager {
                 });
         }
 
-        if reset_timer
-            && let Some(idx) = active_idx_in_queue
-            && let Some(item) = inner.queue.get_mut(idx)
-        {
-            item.elapsed_secs = 0.0;
+        if reset_timer {
+            if let Some(idx) = active_idx_in_queue {
+                if let Some(item) = inner.queue.get_mut(idx) {
+                    item.elapsed_secs = 0.0;
+                }
+            }
         }
         if let Some(idx) = clicked_idx {
             inner.queue[idx].instance.on_click();

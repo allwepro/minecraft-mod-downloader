@@ -75,7 +75,7 @@ impl SharedModalManager {
                 .order(egui::Order::Background)
                 .fixed_pos(egui::pos2(0.0, 0.0))
                 .show(ctx, |ui| {
-                    let screen_rect = ctx.content_rect();
+                    let screen_rect = ctx.screen_rect();
                     ui.painter().rect_filled(
                         screen_rect,
                         0.0,

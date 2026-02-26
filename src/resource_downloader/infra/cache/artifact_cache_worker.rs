@@ -109,13 +109,16 @@ async fn process_download(
 ) -> bool {
     let cache_path = cache_dir.join(key);
 
-    if cache_path.exists()
-        && let Ok(metadata) = tokio::fs::metadata(&cache_path).await
-        && let Ok(modified) = metadata.modified()
-        && let Ok(elapsed) = SystemTime::now().duration_since(modified)
-        && elapsed > ARTIFACT_CACHE_TIME
-    {
-        let _ = tokio::fs::remove_file(&cache_path).await;
+    if cache_path.exists() {
+        if let Ok(metadata) = tokio::fs::metadata(&cache_path).await {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
+                    if elapsed > ARTIFACT_CACHE_TIME {
+                        let _ = tokio::fs::remove_file(&cache_path).await;
+                    }
+                }
+            }
+        }
     }
 
     let _permit = connection_limiter.acquire(1).await;
@@ -163,13 +166,16 @@ async fn cleanup_disk_cache(cache_dir: &PathBuf) -> anyhow::Result<()> {
     let mut entries = tokio::fs::read_dir(cache_dir).await?;
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        if path.is_file()
-            && let Ok(metadata) = tokio::fs::metadata(&path).await
-            && let Ok(modified) = metadata.modified()
-            && let Ok(elapsed) = SystemTime::now().duration_since(modified)
-            && elapsed > ARTIFACT_CACHE_TIME
-        {
-            let _ = tokio::fs::remove_file(&path).await;
+        if path.is_file() {
+            if let Ok(metadata) = tokio::fs::metadata(&path).await {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
+                        if elapsed > ARTIFACT_CACHE_TIME {
+                            let _ = tokio::fs::remove_file(&path).await;
+                        }
+                    }
+                }
+            }
         }
     }
     Ok(())

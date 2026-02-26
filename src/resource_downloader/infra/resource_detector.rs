@@ -84,14 +84,17 @@ impl ResourceDetector {
                             .filter(|v| v.as_u64() >= gv.as_u64())
                             .cloned()
                             .collect();
-                    } else if let Some(remaining) = suffix.strip_prefix('-')
-                        && let Some(end_gv) = sorted_gv.iter().find(|v| remaining.contains(&v.name))
-                    {
-                        supported_range = available_versions
-                            .iter()
-                            .filter(|v| v.as_u64() >= gv.as_u64() && v.as_u64() <= end_gv.as_u64())
-                            .cloned()
-                            .collect();
+                    } else if let Some(remaining) = suffix.strip_prefix('-') {
+                        if let Some(end_gv) = sorted_gv.iter().find(|v| remaining.contains(&v.name))
+                        {
+                            supported_range = available_versions
+                                .iter()
+                                .filter(|v| {
+                                    v.as_u64() >= gv.as_u64() && v.as_u64() <= end_gv.as_u64()
+                                })
+                                .cloned()
+                                .collect();
+                        }
                     }
 
                     if supported_range.is_empty() {
@@ -118,10 +121,10 @@ impl ResourceDetector {
                 }
             }
 
-            if let Some(idx) = self.find_generic_version_start(&stem)
-                && idx < metadata_start_index
-            {
-                metadata_start_index = idx;
+            if let Some(idx) = self.find_generic_version_start(&stem) {
+                if idx < metadata_start_index {
+                    metadata_start_index = idx;
+                }
             }
 
             let name_part = &stem[..metadata_start_index];
