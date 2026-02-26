@@ -1,5 +1,8 @@
 # MAXIM
-> TBA
+- Claude Opus 4.5 – Learning, code review, debugging, drafting
+- OpenAI Codex 5.3 – General coding assistance across the project
+
+All generated output was reviewed, audited, and adapted to project requirements.
 
 ---
 
