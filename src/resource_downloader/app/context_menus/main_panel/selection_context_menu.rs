@@ -56,18 +56,18 @@ impl SelectionContextMenu {
                     game_ver.clone(),
                     loader.clone()
                 );
-                if let Ok(Some(v_list)) = vers
-                    && !v_list.is_empty()
-                {
-                    let latest = v_list.first().unwrap();
-                    let list_guard = list_arc.read();
-                    if let Some(proj) = list_guard.get_project(p_lnk) {
-                        if let Some(cur_v) = proj.get_version() {
-                            if cur_v.artifact_hash != latest.artifact_hash {
+                if let Ok(Some(v_list)) = vers {
+                    if !v_list.is_empty() {
+                        let latest = v_list.first().unwrap();
+                        let list_guard = list_arc.read();
+                        if let Some(proj) = list_guard.get_project(p_lnk) {
+                            if let Some(cur_v) = proj.get_version() {
+                                if cur_v.artifact_hash != latest.artifact_hash {
+                                    updates_available.push(p_lnk.clone());
+                                }
+                            } else {
                                 updates_available.push(p_lnk.clone());
                             }
-                        } else {
-                            updates_available.push(p_lnk.clone());
                         }
                     }
                 }

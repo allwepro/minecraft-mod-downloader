@@ -80,12 +80,14 @@ impl ModalWindow for SettingsModal {
                     egui::Button::new("📤 Export Backup"),
                 )
                 .clicked()
-                && let Some(path) = rfd::FileDialog::new()
+            {
+                if let Some(path) = rfd::FileDialog::new()
                     .set_file_name("flux-resource-manager-backup.flux-rm")
                     .add_filter("Flux RM Backup", &["flux-rm"])
                     .save_file()
-            {
-                self.state.read().dispatch(Effect::ExportBackup { path });
+                {
+                    self.state.read().dispatch(Effect::ExportBackup { path });
+                }
             }
 
             if ui
@@ -94,12 +96,14 @@ impl ModalWindow for SettingsModal {
                     egui::Button::new("📥 Import Backup"),
                 )
                 .clicked()
-                && let Some(path) = rfd::FileDialog::new()
+            {
+                if let Some(path) = rfd::FileDialog::new()
                     .add_filter("Flux RM Backup", &["flux-rm"])
                     .pick_file()
-            {
-                self.pending_import_path = Some(path);
-                self.show_import_warning = true;
+                {
+                    self.pending_import_path = Some(path);
+                    self.show_import_warning = true;
+                }
             }
         });
 

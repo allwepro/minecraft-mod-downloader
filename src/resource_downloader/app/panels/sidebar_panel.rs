@@ -406,17 +406,17 @@ impl SidebarPanel {
 
     fn apply_edge_autoscroll(&self, ui: &mut Ui) {
         let clip_rect = ui.clip_rect();
-        if let Some(pointer_pos) = ui.ctx().pointer_hover_pos()
-            && clip_rect.contains(pointer_pos)
-        {
-            let margin = 20.0;
-            let speed = 5.0;
-            if pointer_pos.y < clip_rect.min.y + margin {
-                ui.scroll_with_delta(egui::vec2(0.0, speed));
-                ui.ctx().request_repaint();
-            } else if pointer_pos.y > clip_rect.max.y - margin {
-                ui.scroll_with_delta(egui::vec2(0.0, -speed));
-                ui.ctx().request_repaint();
+        if let Some(pointer_pos) = ui.ctx().pointer_hover_pos() {
+            if clip_rect.contains(pointer_pos) {
+                let margin = 20.0;
+                let speed = 5.0;
+                if pointer_pos.y < clip_rect.min.y + margin {
+                    ui.scroll_with_delta(egui::vec2(0.0, speed));
+                    ui.ctx().request_repaint();
+                } else if pointer_pos.y > clip_rect.max.y - margin {
+                    ui.scroll_with_delta(egui::vec2(0.0, -speed));
+                    ui.ctx().request_repaint();
+                }
             }
         }
     }
@@ -534,28 +534,27 @@ impl SidebarPanel {
 
         let has_payload = Self::has_dnd_payload(ui.ctx());
 
-        if is_dragging
-            && has_payload
-            && let Some(pos) = pointer_pos
-            && let Some(closest) = self.find_closest_target(pos)
-        {
-            self.visualize_drop_target(ui, &closest);
+        if is_dragging && has_payload {
+            if let Some(pos) = pointer_pos {
+                if let Some(closest) = self.find_closest_target(pos) {
+                    self.visualize_drop_target(ui, &closest);
+                }
+            }
         }
 
         let was_dragging = Self::has_dnd_payload(ui.ctx());
 
-        if was_dragging
-            && ui.input(|i| i.pointer.any_released())
-            && let Some(pos) = pointer_pos
-        {
-            let payload_opt = Self::get_dnd_payload(ui.ctx());
+        if was_dragging && ui.input(|i| i.pointer.any_released()) {
+            if let Some(pos) = pointer_pos {
+                let payload_opt = Self::get_dnd_payload(ui.ctx());
 
-            if let Some(payload) = payload_opt {
-                if let Some(closest) = self.find_closest_target(pos) {
-                    self.apply_drop(&closest, &payload);
+                if let Some(payload) = payload_opt {
+                    if let Some(closest) = self.find_closest_target(pos) {
+                        self.apply_drop(&closest, &payload);
+                    }
+
+                    Self::clear_dnd_payload(ui.ctx());
                 }
-
-                Self::clear_dnd_payload(ui.ctx());
             }
         }
     }
@@ -768,10 +767,10 @@ impl SidebarPanel {
                             } else {
                                 self.hover_group_start = Some((lg_lnk.clone(), current_time));
                             }
-                        } else if let Some((ref h_lnk, _)) = self.hover_group_start
-                            && h_lnk == &lg_lnk
-                        {
-                            self.hover_group_start = None;
+                        } else if let Some((ref h_lnk, _)) = self.hover_group_start {
+                            if h_lnk == &lg_lnk {
+                                self.hover_group_start = None;
+                            }
                         }
                     }
 
@@ -834,9 +833,10 @@ impl SidebarPanel {
             .pending_sidebar_scroll
             .clone()
             .map(|s| s.list_group_lnk())
-            && lg_lnk == list_group.lnk
         {
-            list_group_response.scroll_to_me(Some(egui::Align::Center));
+            if lg_lnk == list_group.lnk {
+                list_group_response.scroll_to_me(Some(egui::Align::Center));
+            }
         }
 
         self.drop_targets.push(DropTarget {
@@ -1287,9 +1287,8 @@ impl SidebarPanel {
                 let target_pos = siblings_in_order
                     .iter()
                     .position(|id| id.to_context_id() == actual_target_id);
-                let insert_after = if let Some(pos) = target_pos
-                    && pos > 0
-                {
+                let insert_after = if target_pos.is_some_and(|a| a > 0) {
+                    let pos = target_pos.unwrap();
                     Some(siblings_in_order[pos - 1].clone())
                 } else {
                     None
@@ -1298,11 +1297,12 @@ impl SidebarPanel {
                 let current_pos = siblings_in_order
                     .iter()
                     .position(|id| id.to_context_id() == item_id);
-                if let Some(curr_pos) = current_pos
-                    && let Some(tgt_pos) = target_pos
-                    && (curr_pos == tgt_pos || curr_pos + 1 == tgt_pos)
-                {
-                    return;
+                if let Some(curr_pos) = current_pos {
+                    if let Some(tgt_pos) = target_pos {
+                        if curr_pos == tgt_pos || curr_pos + 1 == tgt_pos {
+                            return;
+                        }
+                    }
                 }
 
                 if self.is_descendant_move(
@@ -1339,11 +1339,12 @@ impl SidebarPanel {
                     .iter()
                     .position(|id| id.to_context_id() == actual_target_id);
 
-                if let Some(curr_pos) = current_pos
-                    && let Some(tgt_pos) = target_pos
-                    && curr_pos == tgt_pos + 1
-                {
-                    return;
+                if let Some(curr_pos) = current_pos {
+                    if let Some(tgt_pos) = target_pos {
+                        if curr_pos == tgt_pos + 1 {
+                            return;
+                        }
+                    }
                 }
 
                 self.move_item(
@@ -1479,10 +1480,10 @@ impl SidebarPanel {
             self.handle_sidebar_item_click(SidebarItem::List(item.0.clone()), modifiers);
         }
 
-        if let Some((target_lnk, _)) = &self.context_menu_target
-            && target_lnk == &item.0
-        {
-            self.context_menu_target = Some((item.0.clone(), response.rect));
+        if let Some((target_lnk, _)) = &self.context_menu_target {
+            if target_lnk == &item.0 {
+                self.context_menu_target = Some((item.0.clone(), response.rect));
+            }
         }
         if response.secondary_clicked() {
             let selected_count = self.state.read().selected_sidebar_items.len();

@@ -851,9 +851,10 @@ impl ModrinthProvider {
                     .header("User-Agent", self.user_agent.clone())
                     .send()
                     .await
-                    && let Ok(versions) = resp.json::<Vec<ModrinthVersion>>().await
                 {
-                    sample_versions.push(versions);
+                    if let Ok(versions) = resp.json::<Vec<ModrinthVersion>>().await {
+                        sample_versions.push(versions);
+                    }
                 }
             }
 

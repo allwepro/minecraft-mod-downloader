@@ -318,14 +318,16 @@ impl ProjectActions {
                 )
             };
 
-            if let Ok(Some(v_list)) = versions
-                && let Some(latest) = v_list.first()
-                && Some(latest.artifact_hash.clone()) != current_hash
-            {
-                state
-                    .read()
-                    .list_pool
-                    .select_version(&list_lnk, p_lnk, latest.version_id.clone());
+            if let Ok(Some(v_list)) = versions {
+                if let Some(latest) = v_list.first() {
+                    if Some(latest.artifact_hash.clone()) != current_hash {
+                        state.read().list_pool.select_version(
+                            &list_lnk,
+                            p_lnk,
+                            latest.version_id.clone(),
+                        );
+                    }
+                }
             }
         }
     }

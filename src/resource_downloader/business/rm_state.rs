@@ -249,12 +249,11 @@ impl RMState {
                             if let Some(ver) = version_opt {
                                 versions_to_add.push((p_lnk, ver));
                             }
-                        } else if let Some(existing_proj) = list.get_project_mut(&lnk)
-                            && proj.is_manual()
-                            && !existing_proj.is_manual()
-                        {
-                            existing_proj.set_manual(true);
-                            modified = true;
+                        } else if let Some(existing_proj) = list.get_project_mut(&lnk) {
+                            if proj.is_manual() && !existing_proj.is_manual() {
+                                existing_proj.set_manual(true);
+                                modified = true;
+                            }
                         }
                     }
 
@@ -553,50 +552,50 @@ impl RMState {
                 suggested_version,
                 suggested_loader,
             } => {
-                if let Some(session) = &mut self.folder_import_session
-                    && session.path == path
-                {
-                    session.is_scanning = false;
-                    session.scan_progress = None;
-                    session.candidates = candidates.clone();
-                    session.suggested_version = suggested_version.clone();
-                    session.suggested_loader = suggested_loader.clone();
+                if let Some(session) = &mut self.folder_import_session {
+                    if session.path == path {
+                        session.is_scanning = false;
+                        session.scan_progress = None;
+                        session.candidates = candidates.clone();
+                        session.suggested_version = suggested_version.clone();
+                        session.suggested_loader = suggested_loader.clone();
 
-                    if let (Some(version), Some(loader)) =
-                        (suggested_version.clone(), suggested_loader.clone())
-                    {
+                        if let (Some(version), Some(loader)) =
+                            (suggested_version.clone(), suggested_loader.clone())
+                        {
+                            let file_names: Vec<String> =
+                                candidates.iter().map(|c| c.cleaned_name.clone()).collect();
+                            self.dispatch(Effect::SearchFolderImportCandidates {
+                                file_names,
+                                resource_type,
+                                version,
+                                loader,
+                            });
+                        }
+
                         let file_names: Vec<String> =
                             candidates.iter().map(|c| c.cleaned_name.clone()).collect();
                         self.dispatch(Effect::SearchFolderImportCandidates {
                             file_names,
                             resource_type,
-                            version,
-                            loader,
+                            version: suggested_version.clone().unwrap_or(
+                                self.api()
+                                    .game_version_pool
+                                    .get_versions()
+                                    .unwrap()
+                                    .unwrap()[0]
+                                    .clone(),
+                            ),
+                            loader: suggested_loader.clone().unwrap_or(
+                                self.api()
+                                    .game_loader_pool
+                                    .get_loaders(resource_type)
+                                    .unwrap()
+                                    .unwrap()[0]
+                                    .clone(),
+                            ),
                         });
                     }
-
-                    let file_names: Vec<String> =
-                        candidates.iter().map(|c| c.cleaned_name.clone()).collect();
-                    self.dispatch(Effect::SearchFolderImportCandidates {
-                        file_names,
-                        resource_type,
-                        version: suggested_version.clone().unwrap_or(
-                            self.api()
-                                .game_version_pool
-                                .get_versions()
-                                .unwrap()
-                                .unwrap()[0]
-                                .clone(),
-                        ),
-                        loader: suggested_loader.clone().unwrap_or(
-                            self.api()
-                                .game_loader_pool
-                                .get_loaders(resource_type)
-                                .unwrap()
-                                .unwrap()[0]
-                                .clone(),
-                        ),
-                    });
                 }
                 Some(Event::FolderImportScanned {
                     path,
