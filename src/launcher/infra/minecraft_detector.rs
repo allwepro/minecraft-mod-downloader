@@ -1,3 +1,7 @@
+// CLIPPY: nested ifs kept separate for readability in multi-step installation detection;
+//         &String arguments retained to match the existing public API surface without churn
+#![allow(clippy::collapsible_if, clippy::ptr_arg)]
+
 use crate::launcher::domain::MinecraftInstallation;
 use std::path::PathBuf;
 
@@ -146,7 +150,9 @@ mod tests {
 
     #[test]
     fn is_loader_profile_detects_known_loaders() {
-        assert!(MinecraftDetector::is_loader_profile("fabric-loader-0.16.0-1.20.1"));
+        assert!(MinecraftDetector::is_loader_profile(
+            "fabric-loader-0.16.0-1.20.1"
+        ));
         assert!(MinecraftDetector::is_loader_profile("forge-47.2.0"));
         assert!(MinecraftDetector::is_loader_profile("neoforge-20.6.1"));
         assert!(MinecraftDetector::is_loader_profile("quilt-loader-0.26.1"));
