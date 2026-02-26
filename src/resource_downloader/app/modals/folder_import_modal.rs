@@ -9,6 +9,7 @@ use crate::resource_downloader::business::rm_state::FolderImportSession;
 use crate::resource_downloader::domain::{RESOURCE_TYPES, ResourceType};
 use crate::{get_default_dir, get_project_metadata};
 use egui::{Color32, Id, ScrollArea, Ui};
+use std::cmp::Ordering;
 use std::path::PathBuf;
 
 enum ImportStep {
@@ -529,31 +530,37 @@ impl FolderImportModal {
             if let Some(matches) = &candidate.search_results {
                 let normalized_file_name = Self::normalize_name(&candidate.cleaned_name);
 
-                if matches.len() == 1 {
-                    if let Some((_, project_name)) = matches.first() {
-                        let normalized_project_name = Self::normalize_name(project_name);
-                        let length_diff = (normalized_file_name.len() as i32
-                            - normalized_project_name.len() as i32)
-                            .abs();
+                match matches.len().cmp(&1) {
+                    Ordering::Equal => {
+                        if let Some((_, project_name)) = matches.first() {
+                            let normalized_project_name = Self::normalize_name(project_name);
+                            let length_diff = (normalized_file_name.len() as i32
+                                - normalized_project_name.len() as i32)
+                                .abs();
 
-                        session.selected_matches.insert(idx, 0);
+                            session.selected_matches.insert(idx, 0);
 
-                        if normalized_file_name == normalized_project_name && length_diff <= 2 {
-                            session.exact_matches.insert(idx);
+                            if normalized_file_name == normalized_project_name && length_diff <= 2 {
+                                session.exact_matches.insert(idx);
+                            }
                         }
                     }
-                } else if matches.len() > 1 {
-                    for (match_idx, (_, project_name)) in matches.iter().enumerate() {
-                        let normalized_project_name = Self::normalize_name(project_name);
-                        let length_diff = (normalized_file_name.len() as i32
-                            - normalized_project_name.len() as i32)
-                            .abs();
+                    Ordering::Greater => {
+                        for (match_idx, (_, project_name)) in matches.iter().enumerate() {
+                            let normalized_project_name = Self::normalize_name(project_name);
+                            let length_diff = (normalized_file_name.len() as i32
+                                - normalized_project_name.len() as i32)
+                                .abs();
 
-                        if normalized_file_name == normalized_project_name && length_diff <= 2 {
-                            session.selected_matches.insert(idx, match_idx);
-                            session.exact_matches.insert(idx);
-                            break;
+                            if normalized_file_name == normalized_project_name && length_diff <= 2 {
+                                session.selected_matches.insert(idx, match_idx);
+                                session.exact_matches.insert(idx);
+                                break;
+                            }
                         }
+                    }
+                    Ordering::Less => {
+                        continue;
                     }
                 }
             }
