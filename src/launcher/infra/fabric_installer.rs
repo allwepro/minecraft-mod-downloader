@@ -1,3 +1,7 @@
+// CLIPPY: nested ifs kept separate for readability in multi-step download/parse logic;
+//         intermediate let bindings kept for clarity when building complex return values
+#![allow(clippy::collapsible_if, clippy::let_and_return)]
+
 use crate::launcher::domain::{Library, VersionManifest};
 use anyhow::{Context, Result};
 use futures_util::StreamExt;

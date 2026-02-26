@@ -158,7 +158,7 @@ impl MinecraftDownloadWindow {
             .show(ctx, |ui| {
                 if self.downloading {
                     let (progress, status) = {
-                        let guard = self.progress.lock().unwrap();
+                        let guard = self.progress.lock().unwrap_or_else(|p| p.into_inner());
                         (guard.0, guard.1.clone())
                     };
 
@@ -197,7 +197,10 @@ impl MinecraftDownloadWindow {
                     if response.changed() {
                         filter_changed = true;
                     }
-                    if ui.checkbox(&mut self.only_releases, "Release only").changed() {
+                    if ui
+                        .checkbox(&mut self.only_releases, "Release only")
+                        .changed()
+                    {
                         filter_changed = true;
                     }
                 });
@@ -232,11 +235,7 @@ impl MinecraftDownloadWindow {
                     for version in filtered.iter().take(self.visible_count) {
                         ui.group(|ui| {
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new(&version.id)
-                                        .strong()
-                                        .size(15.0),
-                                );
+                                ui.label(egui::RichText::new(&version.id).strong().size(15.0));
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
@@ -256,8 +255,7 @@ impl MinecraftDownloadWindow {
                 if self.visible_count < filtered.len() {
                     ui.add_space(6.0);
                     if ui.button("Show more").clicked() {
-                        self.visible_count =
-                            (self.visible_count + PAGE_SIZE).min(filtered.len());
+                        self.visible_count = (self.visible_count + PAGE_SIZE).min(filtered.len());
                     }
                 }
 

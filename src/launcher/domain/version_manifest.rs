@@ -225,8 +225,8 @@ impl VersionManifest {
             let parent_path = versions_dir
                 .join(parent_id)
                 .join(format!("{}.json", parent_id));
-            let parent = VersionManifest::from_file(&parent_path)?
-                .resolve_inheritance(versions_dir)?;
+            let parent =
+                VersionManifest::from_file(&parent_path)?.resolve_inheritance(versions_dir)?;
             Ok(VersionManifest::merge(parent, self))
         } else {
             Ok(self)
@@ -278,10 +278,7 @@ impl ResolvedManifest {
     }
 }
 
-fn merge_arguments(
-    parent: Option<Arguments>,
-    child: Option<Arguments>,
-) -> Option<Arguments> {
+fn merge_arguments(parent: Option<Arguments>, child: Option<Arguments>) -> Option<Arguments> {
     match (parent, child) {
         (None, None) => None,
         (Some(p), None) => Some(p),
@@ -357,7 +354,9 @@ mod tests {
     #[test]
     fn should_include_library_without_rules() {
         let library = sample_library("org.example:lib:1.0.0");
-        assert!(VersionManifest::should_include_library_for_current_os(&library));
+        assert!(VersionManifest::should_include_library_for_current_os(
+            &library
+        ));
     }
 
     #[test]
@@ -395,7 +394,9 @@ mod tests {
             url: None,
         };
 
-        assert!(!VersionManifest::should_include_library_for_current_os(&library));
+        assert!(!VersionManifest::should_include_library_for_current_os(
+            &library
+        ));
     }
 
     #[test]
@@ -460,9 +461,11 @@ mod tests {
             version_type: None,
             inherits_from: None,
         };
-        assert!(missing_main
-            .into_resolved_with_client_jar("test".to_string())
-            .is_err());
+        assert!(
+            missing_main
+                .into_resolved_with_client_jar("test".to_string())
+                .is_err()
+        );
 
         let missing_assets = VersionManifest {
             id: "test".to_string(),
@@ -477,9 +480,11 @@ mod tests {
             version_type: None,
             inherits_from: None,
         };
-        assert!(missing_assets
-            .into_resolved_with_client_jar("test".to_string())
-            .is_err());
+        assert!(
+            missing_assets
+                .into_resolved_with_client_jar("test".to_string())
+                .is_err()
+        );
     }
 
     #[test]

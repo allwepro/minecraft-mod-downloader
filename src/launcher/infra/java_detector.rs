@@ -1,3 +1,6 @@
+// CLIPPY: nested ifs kept separate for readability in multi-branch Java installation detection
+#![allow(clippy::collapsible_if)]
+
 use crate::launcher::domain::JavaInstallation;
 use std::path::PathBuf;
 use std::process::Command;
@@ -187,7 +190,6 @@ impl JavaDetector {
 
         None
     }
-
 }
 
 #[cfg(test)]

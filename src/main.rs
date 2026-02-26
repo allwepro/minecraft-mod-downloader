@@ -1,5 +1,5 @@
 mod adapters;
-mod app;  // Origin/main app architecture (for future integration)
+mod app; // Origin/main app architecture (for future integration)
 mod domain;
 mod infra;
 mod launcher;
