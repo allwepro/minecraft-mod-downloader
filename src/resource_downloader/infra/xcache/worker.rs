@@ -85,10 +85,10 @@ impl CoreCacheWorker {
 
                     self.rt_handle.spawn(async move {
                         let path = w_ctx.get_fragment_path(ty, &key);
-                        if path.exists()
-                            && let Err(e) = tokio::fs::remove_file(&path).await
-                        {
-                            log::error!("Failed to discard disk cache at {path:?}: {e}");
+                        if path.exists() {
+                            if let Err(e) = tokio::fs::remove_file(&path).await {
+                                log::error!("Failed to discard disk cache at {path:?}: {e}");
+                            }
                         }
                     });
                 }
@@ -101,10 +101,10 @@ impl CoreCacheWorker {
                 CacheCommand::DeleteAll { tys } => {
                     for ty in tys {
                         let sub_dir = self.cache_dir.join(ty.config().sub_dir);
-                        if sub_dir.exists()
-                            && let Err(e) = tokio::fs::remove_dir_all(&sub_dir).await
-                        {
-                            log::error!("Failed to delete cache for {ty:?}: {e}");
+                        if sub_dir.exists() {
+                            if let Err(e) = tokio::fs::remove_dir_all(&sub_dir).await {
+                                log::error!("Failed to delete cache for {ty:?}: {e}");
+                            }
                         }
                     }
                 }
@@ -167,25 +167,26 @@ impl WorkerContext {
         let path = self.get_fragment_path(ty, &key);
 
         // 1. Disk Check
-        if let Ok(bytes) = tokio::fs::read(&path).await
-            && let Ok(meta) = tokio::fs::metadata(&path).await
-        {
-            let modified = meta.modified().unwrap_or(SystemTime::now());
-            if SystemTime::now()
-                .duration_since(modified)
-                .unwrap_or_default()
-                < config.ttl
-                && let Ok(data) = (ty.encoder().deserialize)(&bytes)
-            {
-                return CacheResponse::Updated {
-                    ty,
-                    ctx,
-                    data,
-                    ts: modified
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
-                };
+        if let Ok(bytes) = tokio::fs::read(&path).await {
+            if let Ok(meta) = tokio::fs::metadata(&path).await {
+                let modified = meta.modified().unwrap_or(SystemTime::now());
+                if SystemTime::now()
+                    .duration_since(modified)
+                    .unwrap_or_default()
+                    < config.ttl
+                {
+                    if let Ok(data) = (ty.encoder().deserialize)(&bytes) {
+                        return CacheResponse::Updated {
+                            ty,
+                            ctx,
+                            data,
+                            ts: modified
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs(),
+                        };
+                    }
+                }
             }
         }
 

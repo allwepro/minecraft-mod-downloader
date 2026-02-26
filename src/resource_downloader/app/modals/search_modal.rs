@@ -114,19 +114,20 @@ impl ModalWindow for SearchModal {
                 self.searched_query = Some(self.search_query.clone());
             }
         });
-        if let Some(searched_query) = &self.searched_query
-            && let Some(result) =
+        if let Some(searched_query) = &self.searched_query {
+            if let Some(result) =
                 most_searched_stale::is_for_other_type(searched_query.clone(), &self.resource_type)
-        {
-            ui.label(
-                egui::RichText::new(format!(
-                    "This list is for {}s only but your search seems like a {} which you have\
+            {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "This list is for {}s only but your search seems like a {} which you have\
                          to add to a list of that type!",
-                    self.resource_type.display_name(),
-                    result.0.display_name()
-                ))
-                .small(),
-            );
+                        self.resource_type.display_name(),
+                        result.0.display_name()
+                    ))
+                    .small(),
+                );
+            }
         }
         ui.separator();
 

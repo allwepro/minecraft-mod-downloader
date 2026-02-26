@@ -36,12 +36,14 @@ impl ListActions {
         let s = state.read();
         let config = s.config.read();
 
-        if let Some(lg_lnk) = config.list_group_assignments.get(list_lnk)
-            && let Some(list_group) = config.list_groups.iter().find(|lg| &lg.lnk == lg_lnk)
-            && list_group.is_instance
-            && let Some(instance_settings) = &list_group.instance_settings
-        {
-            return instance_settings.game_version.clone();
+        if let Some(lg_lnk) = config.list_group_assignments.get(list_lnk) {
+            if let Some(list_group) = config.list_groups.iter().find(|lg| &lg.lnk == lg_lnk) {
+                if list_group.is_instance {
+                    if let Some(instance_settings) = &list_group.instance_settings {
+                        return instance_settings.game_version.clone();
+                    }
+                }
+            }
         }
         original_version.clone()
     }
@@ -170,13 +172,13 @@ impl ListActions {
     pub fn open_folder(state: SharedRDState, list_lnk: ListLnk) {
         if let Some(list_arc) = state.read().list_pool.get(&list_lnk) {
             let list = list_arc.read();
-            if let Some(rt) = list.get_resource_types().first()
-                && let Some(config) = list.get_resource_type_config(rt)
-            {
-                let original_dir = config.download_dir.clone();
-                let effective_dir =
-                    Self::get_effective_download_dir(&state, &list_lnk, *rt, &original_dir);
-                state.read().open_explorer(effective_dir.into());
+            if let Some(rt) = list.get_resource_types().first() {
+                if let Some(config) = list.get_resource_type_config(rt) {
+                    let original_dir = config.download_dir.clone();
+                    let effective_dir =
+                        Self::get_effective_download_dir(&state, &list_lnk, *rt, &original_dir);
+                    state.read().open_explorer(effective_dir.into());
+                }
             }
         }
     }
@@ -218,18 +220,22 @@ impl ListActions {
         let s = state.read();
         let config = s.config.read();
 
-        if let Some(lg_lnk) = config.list_group_assignments.get(list_lnk)
-            && let Some(list_group) = config.list_groups.iter().find(|lg| &lg.lnk == lg_lnk)
-            && list_group.is_instance
-            && matches!(
-                resource_type,
-                ResourceType::Mod | ResourceType::ResourcePack | ResourceType::Shader
-            )
-            && let Some(instance_settings) = &list_group.instance_settings
-        {
-            let subfolder = resource_type.game_folder();
-            let path = PathBuf::from(instance_settings.download_directory.clone()).join(subfolder);
-            return path.to_str().unwrap().to_string();
+        if let Some(lg_lnk) = config.list_group_assignments.get(list_lnk) {
+            if let Some(list_group) = config.list_groups.iter().find(|lg| &lg.lnk == lg_lnk) {
+                if list_group.is_instance
+                    && matches!(
+                        resource_type,
+                        ResourceType::Mod | ResourceType::ResourcePack | ResourceType::Shader
+                    )
+                {
+                    if let Some(instance_settings) = &list_group.instance_settings {
+                        let subfolder = resource_type.game_folder();
+                        let path = PathBuf::from(instance_settings.download_directory.clone())
+                            .join(subfolder);
+                        return path.to_str().unwrap().to_string();
+                    }
+                }
+            }
         }
 
         original_download_dir.to_string()

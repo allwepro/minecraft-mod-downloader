@@ -108,23 +108,25 @@ impl MainPanel {
                 let mut has_active_downloads = false;
 
                 for (list_lnk, group_lnk) in &config.list_group_assignments {
-                    if group_lnk == lg_lnk
-                        && let Some(list_arc) = state.list_pool.get(list_lnk)
-                    {
-                        let list = list_arc.read();
-                        for proj in &list.projects {
-                            if let Some((status, _)) = state.download_status.get(&proj.get_lnk())
-                                && matches!(
-                                    status,
-                                    DownloadStatus::Downloading | DownloadStatus::Queued
-                                )
-                            {
-                                has_active_downloads = true;
+                    if group_lnk == lg_lnk {
+                        if let Some(list_arc) = state.list_pool.get(list_lnk) {
+                            let list = list_arc.read();
+                            for proj in &list.projects {
+                                if let Some((status, _)) =
+                                    state.download_status.get(&proj.get_lnk())
+                                {
+                                    if matches!(
+                                        status,
+                                        DownloadStatus::Downloading | DownloadStatus::Queued
+                                    ) {
+                                        has_active_downloads = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if has_active_downloads {
                                 break;
                             }
-                        }
-                        if has_active_downloads {
-                            break;
                         }
                     }
                 }
@@ -145,10 +147,10 @@ impl MainPanel {
             self.current_list = open_list_lnk.clone();
         }
 
-        if let Some((l, p)) = pending_scroll
-            && Some(l) == open_list_lnk
-        {
-            self.should_scroll_into_view = Some(p);
+        if let Some((l, p)) = pending_scroll {
+            if Some(l) == open_list_lnk {
+                self.should_scroll_into_view = Some(p);
+            }
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -280,23 +282,27 @@ impl MainPanel {
                                 ListActions::open_folder(self.state.clone(), lnk.clone());
                             }
 
-                            if ui.add(egui::Button::new("📤 Export")).clicked()
-                                && let Some(path) = Dialogs::save_export_list_file(
+                            if ui.add(egui::Button::new("📤 Export")).clicked() {
+                                if let Some(path) = Dialogs::save_export_list_file(
                                     &list_name,
                                     content_type == ResourceType::Mod,
-                                )
-                            {
-                                let ext = path.extension().and_then(|s| s.to_str());
-                                if ext == Some("mmd") {
-                                    ListActions::export_list(self.state.clone(), lnk.clone(), path);
-                                } else if content_type == ResourceType::Mod {
-                                    ListActions::export_legacy_list(
-                                        self.state.clone(),
-                                        lnk.clone(),
-                                        path,
-                                        ver.clone(),
-                                        loader.clone(),
-                                    );
+                                ) {
+                                    let ext = path.extension().and_then(|s| s.to_str());
+                                    if ext == Some("mmd") {
+                                        ListActions::export_list(
+                                            self.state.clone(),
+                                            lnk.clone(),
+                                            path,
+                                        );
+                                    } else if content_type == ResourceType::Mod {
+                                        ListActions::export_legacy_list(
+                                            self.state.clone(),
+                                            lnk.clone(),
+                                            path,
+                                            ver.clone(),
+                                            loader.clone(),
+                                        );
+                                    }
                                 }
                             }
 
@@ -331,20 +337,20 @@ impl MainPanel {
                         ver.clone(),
                         loader.clone()
                     );
-                    if let Ok(Some(v_list)) = vers
-                        && !v_list.is_empty()
-                    {
-                        let latest = v_list.first().unwrap();
-                        let list_guard = list_arc.read();
-                        if let Some(proj) = list_guard.get_project(p_lnk) {
-                            if let Some(cur_v) = proj.get_version() {
-                                if cur_v.artifact_hash != latest.artifact_hash {
+                    if let Ok(Some(v_list)) = vers {
+                        if !v_list.is_empty() {
+                            let latest = v_list.first().unwrap();
+                            let list_guard = list_arc.read();
+                            if let Some(proj) = list_guard.get_project(p_lnk) {
+                                if let Some(cur_v) = proj.get_version() {
+                                    if cur_v.artifact_hash != latest.artifact_hash {
+                                        any_updates_available = true;
+                                        break;
+                                    }
+                                } else {
                                     any_updates_available = true;
                                     break;
                                 }
-                            } else {
-                                any_updates_available = true;
-                                break;
                             }
                         }
                     }
@@ -866,48 +872,47 @@ impl MainPanel {
             None
         };
 
-        if matches!(compatibility, Some(false))
-            && is_overruled
-            && let Ok(Some(best_vers)) = get_project_versions_best!(
+        if matches!(compatibility, Some(false)) && is_overruled {
+            if let Ok(Some(best_vers)) = get_project_versions_best!(
                 self.state,
                 p_lnk.clone(),
                 *rt,
                 g_ver.clone(),
                 g_ld.clone()
-            )
-        {
-            versions = Ok(Some(best_vers));
+            ) {
+                versions = Ok(Some(best_vers));
 
-            compatibility = if let Ok(Some(vers)) = &versions {
-                Some(!vers.is_empty())
-            } else {
-                None
-            };
+                compatibility = if let Ok(Some(vers)) = &versions {
+                    Some(!vers.is_empty())
+                } else {
+                    None
+                };
+            }
         }
 
         let auto_update_enabled = list_arc.read().get_do_updates();
 
-        if let (Ok(Some(meta)), Ok(Some(vers))) = (&metadata, &versions)
-            && !vers.is_empty()
-        {
-            let latest = vers.first().unwrap();
-            let mut list = list_arc.write();
-            if let Some(project) = list.get_project_mut(p_lnk) {
-                project.update_cache(meta.clone());
+        if let (Ok(Some(meta)), Ok(Some(vers))) = (&metadata, &versions) {
+            if !vers.is_empty() {
+                let latest = vers.first().unwrap();
+                let mut list = list_arc.write();
+                if let Some(project) = list.get_project_mut(p_lnk) {
+                    project.update_cache(meta.clone());
 
-                let is_missing_version = project.get_version().is_none();
-                let is_new_version_available = project
-                    .get_version()
-                    .as_ref()
-                    .is_some_and(|v| v.version_id != latest.version_id);
+                    let is_missing_version = project.get_version().is_none();
+                    let is_new_version_available = project
+                        .get_version()
+                        .as_ref()
+                        .is_some_and(|v| v.version_id != latest.version_id);
 
-                if is_missing_version || (auto_update_enabled && is_new_version_available) {
-                    drop(list);
-                    self.state.read().list_pool.select_version(
-                        &list_arc.read().get_lnk(),
-                        p_lnk.clone(),
-                        latest.version_id.clone(),
-                    );
+                    if is_missing_version || (auto_update_enabled && is_new_version_available) {
+                        drop(list);
+                        self.state.read().list_pool.select_version(
+                            &list_arc.read().get_lnk(),
+                            p_lnk.clone(),
+                            latest.version_id.clone(),
+                        );
+                    }
                 }
             }
         }
@@ -962,22 +967,22 @@ impl MainPanel {
         let mut latest_version_name = "⏳".to_string();
         let mut current_version_name = None;
 
-        if let Ok(Some(vers)) = &versions
-            && !vers.is_empty()
-        {
-            let latest = vers.first().unwrap();
-            latest_version_name = latest.version_name.clone();
+        if let Ok(Some(vers)) = &versions {
+            if !vers.is_empty() {
+                let latest = vers.first().unwrap();
+                latest_version_name = latest.version_name.clone();
 
-            if let Some(vid) = &version_id {
-                current_version_name = vers
-                    .iter()
-                    .find(|v| &v.version_id == vid)
-                    .map(|v| v.version_name.clone());
+                if let Some(vid) = &version_id {
+                    current_version_name = vers
+                        .iter()
+                        .find(|v| &v.version_id == vid)
+                        .map(|v| v.version_name.clone());
 
-                is_version_outdated = vid != &latest.version_id;
+                    is_version_outdated = vid != &latest.version_id;
+                }
+
+                is_updatable = is_file_present && disk_hash.as_ref() != Some(&latest.artifact_hash);
             }
-
-            is_updatable = is_file_present && disk_hash.as_ref() != Some(&latest.artifact_hash);
         }
 
         let mut display_version = if let Some(cur) = current_version_name {
@@ -1126,16 +1131,14 @@ impl MainPanel {
                                                 ),
                                             );
 
-                                            if btn.clicked()
-                                                && let Some(v) = latest_version
-                                            {
+                                            if btn.clicked() { if let Some(v) = latest_version {
                                                 ProjectActions::download_projects(
                                                     self.state.clone(),
                                                     lnk.clone(),
                                                     vec![(p_lnk.clone(), Some(v.clone()))],
                                                     found_hashes,
                                                 );
-                                            }
+                                            }}
                                         } else if !is_downloaded {
                                             let ui_enabled = can_dl && has_loaded_files && !offline_mode;
                                             let mut btn = ui.add_enabled(
@@ -1150,16 +1153,14 @@ impl MainPanel {
                                                 btn = btn.on_disabled_hover_text("Disabled in offline mode");
                                             }
 
-                                            if btn.clicked()
-                                                && let Some(v) = latest_version
-                                            {
+                                            if btn.clicked() { if let Some(v) = latest_version {
                                                 ProjectActions::download_projects(
                                                     self.state.clone(),
                                                     lnk.clone(),
                                                     vec![(p_lnk.clone(), Some(v.clone()))],
                                                     found_hashes,
                                                 );
-                                            }
+                                            }}
                                         } else {
                                             ui.label("✅");
                                         }
@@ -1325,9 +1326,8 @@ impl MainPanel {
 
             if primary_clicked {
                 let modifiers = ui.input(|i| i.modifiers);
-                if modifiers.shift
-                    && let Some(last_id) = self.last_selected.as_ref()
-                {
+                if modifiers.shift && self.last_selected.as_ref().is_some() {
+                    let last_id = self.last_selected.as_ref().unwrap();
                     if let Some(last_idx) = ordered_list.iter().position(|id| id == last_id) {
                         if !modifiers.ctrl && !modifiers.command {
                             self.selected_projects.clear();
@@ -1364,43 +1364,44 @@ impl MainPanel {
                 self.state.read().popup_manager.toggle(menu_id);
             }
 
-            if let Some((target_lnk, _)) = &self.context_menu_target
-                && target_lnk == p_lnk
-            {
-                self.context_menu_target = Some((p_lnk.clone(), response.rect));
+            if let Some((target_lnk, _)) = &self.context_menu_target {
+                if target_lnk == p_lnk {
+                    self.context_menu_target = Some((p_lnk.clone(), response.rect));
+                }
             }
 
-            if let Some(ref expanded_id) = self.expanded_depended_on.clone()
-                && expanded_id == p_lnk
-                && let Some(depended_ons) = depended_on
-            {
-                let required_deps: Vec<_> = depended_ons
-                    .iter()
-                    .filter(|dep| dep.dependency_type == ProjectDependencyType::Required)
-                    .collect();
+            if let Some(ref expanded_id) = self.expanded_depended_on.clone() {
+                if expanded_id == p_lnk {
+                    if let Some(depended_ons) = depended_on {
+                        let required_deps: Vec<_> = depended_ons
+                            .iter()
+                            .filter(|dep| dep.dependency_type == ProjectDependencyType::Required)
+                            .collect();
 
-                if !required_deps.is_empty() {
-                    ui.indent("dep_indent", |ui| {
-                        ui.add_space(4.0);
-                        for dep in &required_deps {
-                            self.render_project_entry(
-                                ui,
-                                lnk,
-                                list_arc,
-                                &dep.project,
-                                rt,
-                                g_ver,
-                                g_ld,
-                                combined_found_files,
-                                found_hashes,
-                                dir,
-                                true,
-                                active_scans,
-                                &[],
-                                0,
-                            );
+                        if !required_deps.is_empty() {
+                            ui.indent("dep_indent", |ui| {
+                                ui.add_space(4.0);
+                                for dep in &required_deps {
+                                    self.render_project_entry(
+                                        ui,
+                                        lnk,
+                                        list_arc,
+                                        &dep.project,
+                                        rt,
+                                        g_ver,
+                                        g_ld,
+                                        combined_found_files,
+                                        found_hashes,
+                                        dir,
+                                        true,
+                                        active_scans,
+                                        &[],
+                                        0,
+                                    );
+                                }
+                            });
                         }
-                    });
+                    }
                 }
             }
 
@@ -1700,10 +1701,10 @@ impl MainPanel {
                 self.instance_directory_input = dir.clone();
             } else if is_instance {
                 let state = self.state.read();
-                if let Some((_, default_dir)) = state.default_dirs.iter().next()
-                    && let Some(parent) = PathBuf::from(default_dir).parent()
-                {
-                    self.instance_directory_input = parent.to_str().unwrap().to_string();
+                if let Some((_, default_dir)) = state.default_dirs.iter().next() {
+                    if let Some(parent) = PathBuf::from(default_dir).parent() {
+                        self.instance_directory_input = parent.to_str().unwrap().to_string();
+                    }
                 }
             }
         }
@@ -1711,11 +1712,12 @@ impl MainPanel {
         if self.instance_version_input.is_none() {
             if let Some(ver) = &instance_version {
                 self.instance_version_input = Some(ver.clone());
-            } else if is_instance
-                && let Some(versions) = get_versions!(self.state)
-                && !versions.is_empty()
-            {
-                self.instance_version_input = Some(versions[0].clone());
+            } else if is_instance {
+                if let Some(versions) = get_versions!(self.state) {
+                    if !versions.is_empty() {
+                        self.instance_version_input = Some(versions[0].clone());
+                    }
+                }
             }
         }
 

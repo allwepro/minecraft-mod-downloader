@@ -49,10 +49,10 @@ impl ListFileManager {
 
         while let Some(entry) = dir.next_entry().await? {
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("mmd")
-                && let Some(file_stem) = path.file_stem().and_then(|s| s.to_str())
-            {
-                list_filenames.push(file_stem.to_string());
+            if path.extension().and_then(|s| s.to_str()) == Some("mmd") {
+                if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    list_filenames.push(file_stem.to_string());
+                }
             }
         }
 
@@ -219,12 +219,12 @@ impl ListFileManager {
 
         self.internal_remove_filename_cache(list).await;
 
-        if let Some(path) = path_target
-            && path.exists()
-        {
-            fs::remove_file(&path)
-                .await
-                .context(format!("Failed to delete list file: {}", path.display()))?;
+        if let Some(path) = path_target {
+            if path.exists() {
+                fs::remove_file(&path)
+                    .await
+                    .context(format!("Failed to delete list file: {}", path.display()))?;
+            }
         }
 
         drop(_guard);

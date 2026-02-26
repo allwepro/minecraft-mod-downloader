@@ -198,19 +198,23 @@ impl RTProjectPool {
             loader.clone(),
         )?;
 
-        if let Some(v) = &versions
-            && !v.is_empty()
-        {
-            return Ok(versions);
+        if let Some(v) = &versions {
+            if !v.is_empty() {
+                return Ok(versions);
+            }
         }
 
         // Try any loader
-        if resource_type.likely_cross_loader_compatible()
-            && let Ok(Some(any_loader)) =
+        if resource_type.likely_cross_loader_compatible() {
+            if let Ok(Some(any_loader)) =
                 self.get_versions_any_loader(project.clone(), resource_type, version.clone())
-            && !any_loader.is_empty()
-        {
-            return Ok(Some(any_loader));
+            {
+                if !any_loader.is_empty() {
+                    {
+                        return Ok(Some(any_loader));
+                    }
+                }
+            }
         }
 
         // Try the closest version
@@ -220,19 +224,23 @@ impl RTProjectPool {
                 .iter()
                 .min_by_key(|v| v.distance_int(&version).abs());
 
-            if let Some(bv) = best_v
-                && bv != &version
-            {
-                let fallback =
-                    self.get_versions(project.clone(), resource_type, bv.clone(), loader.clone())?;
-                if let Some(v) = &fallback
-                    && !v.is_empty()
-                {
-                    return Ok(fallback);
-                }
+            if let Some(bv) = best_v {
+                if bv != &version {
+                    let fallback = self.get_versions(
+                        project.clone(),
+                        resource_type,
+                        bv.clone(),
+                        loader.clone(),
+                    )?;
+                    if let Some(v) = &fallback {
+                        if !v.is_empty() {
+                            return Ok(fallback);
+                        }
+                    }
 
-                // Try the closest game version but any loader
-                return self.get_versions_any_loader(project, resource_type, bv.clone());
+                    // Try the closest game version but any loader
+                    return self.get_versions_any_loader(project, resource_type, bv.clone());
+                }
             }
         }
 
@@ -255,20 +263,22 @@ impl RTProjectPool {
             )
             .await?;
 
-        if let Some(v) = &versions
-            && !v.is_empty()
-        {
-            return Ok(versions);
+        if let Some(v) = &versions {
+            if !v.is_empty() {
+                return Ok(versions);
+            }
         }
 
         // Try any loader
-        if resource_type.likely_cross_loader_compatible()
-            && let Ok(Some(any_loader)) = self
+        if resource_type.likely_cross_loader_compatible() {
+            if let Ok(Some(any_loader)) = self
                 .get_versions_any_loader_blocking(project.clone(), resource_type, version.clone())
                 .await
-            && !any_loader.is_empty()
-        {
-            return Ok(Some(any_loader));
+            {
+                if !any_loader.is_empty() {
+                    return Ok(Some(any_loader));
+                }
+            }
         }
 
         // Try the closest version
@@ -281,27 +291,27 @@ impl RTProjectPool {
                 .iter()
                 .min_by_key(|v| v.distance_int(&version).abs());
 
-            if let Some(bv) = best_v
-                && bv != &version
-            {
-                let fallback = self
-                    .get_versions_blocking(
-                        project.clone(),
-                        resource_type,
-                        bv.clone(),
-                        loader.clone(),
-                    )
-                    .await?;
-                if let Some(v) = &fallback
-                    && !v.is_empty()
-                {
-                    return Ok(fallback);
-                }
+            if let Some(bv) = best_v {
+                if bv != &version {
+                    let fallback = self
+                        .get_versions_blocking(
+                            project.clone(),
+                            resource_type,
+                            bv.clone(),
+                            loader.clone(),
+                        )
+                        .await?;
+                    if let Some(v) = &fallback {
+                        if !v.is_empty() {
+                            return Ok(fallback);
+                        }
+                    }
 
-                // Try the closest game version but any loader
-                return self
-                    .get_versions_any_loader_blocking(project, resource_type, bv.clone())
-                    .await;
+                    // Try the closest game version but any loader
+                    return self
+                        .get_versions_any_loader_blocking(project, resource_type, bv.clone())
+                        .await;
+                }
             }
         }
 
