@@ -21,9 +21,10 @@ parking_lot = "0.12.5"
 reqwest = { version = "0.13", features = ["json", "stream"] }
 # fs
 dirs = "6.0"
-rfd = "0.17"
+rfd = "0.16"
 sha1 = "0.11.0-rc.4"
-zip = "7.2"
+zip = { version = "6.0.0", default-features = false, features = ["deflate"] }
+
 # gui
 egui = "0.32"
 image = { version = "0.24", features = ["png", "webp"] }
@@ -42,5 +43,6 @@ env_logger = "0.11"
 # other
 strsim = "0.11"
 lazy_static = "1.5.0"
+
 time = "0.3.45"
 time-core = "0.1.7"
