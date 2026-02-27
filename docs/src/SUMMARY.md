@@ -19,6 +19,7 @@
         - [Resource Manager Settings](usage/resource-manager/resource_manager_settings.md)
         - [Technical Details]()
             - [Testing](usage/resource-manager/technical-details/tests.md)
+- [AI Usage](ai_usage.md)
 
 ---
 
