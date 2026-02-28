@@ -15,8 +15,7 @@ pub struct MinecraftDownloadService;
 
 pub type ProgressCallback = Arc<dyn Fn(f32, String) + Send + Sync>;
 
-const GLOBAL_MANIFEST_URL: &str =
-    "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+const GLOBAL_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 
 const STEP_MANIFEST: f32 = 0.05;
 const STEP_VERSION_JSON: f32 = 0.1;
@@ -148,12 +147,7 @@ impl MinecraftDownloadService {
         }
 
         let libraries_dir = minecraft_dir.join("libraries");
-        Self::download_libraries(
-            &libraries_dir,
-            &version_manifest.libraries,
-            &on_progress,
-        )
-        .await?;
+        Self::download_libraries(&libraries_dir, &version_manifest.libraries, &on_progress).await?;
 
         if let Some(asset_index) = &version_manifest.asset_index {
             Self::download_assets(minecraft_dir, asset_index, &on_progress).await?;
