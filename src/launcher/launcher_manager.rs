@@ -1,21 +1,21 @@
 use crate::common::ui::structs::view_controller::ViewController;
 use crate::common::ui::top_panel::TopBarAction;
+use crate::launcher::ui::LauncherPanel;
 use crate::resource_downloader::rm_api::SharedRMAPI;
 use egui::{Context, Ui};
-//use crate::launcher::ui::LauncherPanel;
 
 pub struct LauncherManager {
-    _runtime_handle: tokio::runtime::Handle,
+    runtime_handle: tokio::runtime::Handle,
     rmapi: SharedRMAPI,
-    //launcher_panel: LauncherPanel,
+    launcher_panel: LauncherPanel,
 }
 
 impl LauncherManager {
     pub fn new(runtime_handle: tokio::runtime::Handle, rmapi: SharedRMAPI) -> Self {
         Self {
-            _runtime_handle: runtime_handle,
+            runtime_handle,
             rmapi,
-            //launcher_panel: LauncherPanel::new(),
+            launcher_panel: LauncherPanel::new(),
         }
     }
 }
@@ -41,13 +41,25 @@ impl ViewController for LauncherManager {
         // No-op
     }
 
-    fn render_main_ui(&mut self, _ctx: &Context, ui: &mut Ui) {
-        ui.heading("Coming Soon™");
+    fn render_main_ui(&mut self, ctx: &Context, _ui: &mut Ui) {
         let rma = self.rmapi.read();
         let lists = rma.all_lists();
-        let id = rma.current_list_id();
-        let _list = id.and_then(|i| lists.iter().find(|l| l.id == i));
-        //self.launcher_panel.show(ctx, lists, &self.runtime_handle, list.map(|l| l.id), list.map(|l| l.download_dir), list.map(|l| l.loader));
+        let current_id = rma.current_list_id();
+        let (download_dir, loader) = current_id
+            .as_ref()
+            .and_then(|id| lists.iter().find(|l| &l.id == id))
+            .map(|l| (l.download_dir.clone(), l.loader.clone()))
+            .unwrap_or_default();
+        drop(rma);
+
+        self.launcher_panel.show(
+            ctx,
+            &lists,
+            &self.runtime_handle,
+            &current_id,
+            &download_dir,
+            &loader,
+        );
     }
 
     fn on_exit(&mut self, _tab_switch: bool, _focus_loss: bool, _exit: bool) {

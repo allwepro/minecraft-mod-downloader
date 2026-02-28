@@ -949,6 +949,9 @@ mod tests {
                 total_size: 1,
                 url: "https://example.com/assets.json".to_string(),
             },
+            id: "1.21.1".to_string(),
+            assets: "1.21".to_string(),
+            version_type: "release".to_string(),
         }
     }
 
@@ -966,6 +969,9 @@ mod tests {
                 total_size: 1,
                 url: "https://example.com/assets.json".to_string(),
             },
+            id: "1.21.1".to_string(),
+            assets: "1.21".to_string(),
+            version_type: "release".to_string(),
         }
     }
 
