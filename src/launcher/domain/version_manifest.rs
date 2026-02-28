@@ -256,7 +256,10 @@ impl VersionManifest {
         }
     }
 
-    fn into_resolved_with_client_jar(self, client_jar_id: String) -> anyhow::Result<ResolvedManifest> {
+    fn into_resolved_with_client_jar(
+        self,
+        client_jar_id: String,
+    ) -> anyhow::Result<ResolvedManifest> {
         Ok(ResolvedManifest {
             id: self.id,
             main_class: self

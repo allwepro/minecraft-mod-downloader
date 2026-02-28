@@ -75,12 +75,13 @@ impl LauncherService {
         args.push(game_dir.join("assets").to_string_lossy().to_string());
 
         // Launch the process
-        log::info!("Launching Minecraft with command: {} {}", java_path.display(), args.join(" "));
+        log::info!(
+            "Launching Minecraft with command: {} {}",
+            java_path.display(),
+            args.join(" ")
+        );
 
-        match Command::new(java_path)
-            .args(&args)
-            .spawn()
-        {
+        match Command::new(java_path).args(&args).spawn() {
             Ok(child) => {
                 let pid = child.id();
                 log::info!("Minecraft launched successfully with PID: {}", pid);
