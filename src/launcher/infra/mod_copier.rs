@@ -38,12 +38,7 @@ enum DependencyMatch {
     Unverified,
 }
 
-const SYSTEM_PROVIDED_MOD_IDS: &[&str] = &[
-    "minecraft",
-    "fabricloader",
-    "java",
-    "java-base",
-];
+const SYSTEM_PROVIDED_MOD_IDS: &[&str] = &["minecraft", "fabricloader", "java", "java-base"];
 
 impl ModCopier {
     pub fn new() -> Self {
@@ -746,7 +741,8 @@ mod tests {
     fn write_fabric_mod_jar(path: &std::path::Path, fabric_mod_json: &serde_json::Value) {
         let file = std::fs::File::create(path).expect("failed to create mod jar");
         let mut zip = zip::ZipWriter::new(file);
-        let options = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+        let options =
+            FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
         zip.start_file("fabric.mod.json", options)
             .expect("failed to start fabric.mod.json entry");
         let payload = serde_json::to_string(fabric_mod_json).expect("failed to serialize json");
@@ -806,12 +802,12 @@ mod tests {
     fn eval_requirement_token_tilde_allows_higher_patch() {
         // ~1.21.9 should match 1.21.9 and above within the same major.minor
         for (version, expected) in [
-            ("1.21.9",  true),   // exact target
-            ("1.21.10", true),   // one patch higher
-            ("1.21.11", true),   // two patches higher (the reported bug case)
-            ("1.21.8",  false),  // one patch lower
-            ("1.22.0",  false),  // next minor — outside range
-            ("1.20.11", false),  // previous minor
+            ("1.21.9", true),   // exact target
+            ("1.21.10", true),  // one patch higher
+            ("1.21.11", true),  // two patches higher (the reported bug case)
+            ("1.21.8", false),  // one patch lower
+            ("1.22.0", false),  // next minor — outside range
+            ("1.20.11", false), // previous minor
         ] {
             let nums = ModCopier::parse_numeric_version(version);
             assert_eq!(
@@ -1021,12 +1017,19 @@ mod tests {
             allow_incompatible: false,
         }];
         let report = ModCopier::validate_mods_for_launch(
-            &mods_dir, &specs, "fabric", "1.21.11", Some("0.18.4"),
+            &mods_dir,
+            &specs,
+            "fabric",
+            "1.21.11",
+            Some("0.18.4"),
         )
         .expect("validation should not fail");
 
         assert!(
-            report.errors.iter().any(|e| e.contains("ModA") && e.contains("fabric-api")),
+            report
+                .errors
+                .iter()
+                .any(|e| e.contains("ModA") && e.contains("fabric-api")),
             "should report fabric-api as missing"
         );
 
@@ -1040,7 +1043,11 @@ mod tests {
             }),
         );
         let report2 = ModCopier::validate_mods_for_launch(
-            &mods_dir, &specs, "fabric", "1.21.11", Some("0.18.4"),
+            &mods_dir,
+            &specs,
+            "fabric",
+            "1.21.11",
+            Some("0.18.4"),
         )
         .expect("validation should not fail");
 
@@ -1056,7 +1063,11 @@ mod tests {
             allow_incompatible: true,
         }];
         let report3 = ModCopier::validate_mods_for_launch(
-            &mods_dir, &specs_skip, "fabric", "1.21.11", Some("0.18.4"),
+            &mods_dir,
+            &specs_skip,
+            "fabric",
+            "1.21.11",
+            Some("0.18.4"),
         )
         .expect("validation should not fail");
 
@@ -1084,7 +1095,11 @@ mod tests {
             allow_incompatible: false,
         }];
         let report4 = ModCopier::validate_mods_for_launch(
-            &mods_dir, &specs_b, "fabric", "1.21.11", Some("0.18.4"),
+            &mods_dir,
+            &specs_b,
+            "fabric",
+            "1.21.11",
+            Some("0.18.4"),
         )
         .expect("validation should not fail");
 
@@ -1213,10 +1228,7 @@ mod tests {
         .expect("validation should not fail unexpectedly");
 
         assert!(
-            !report
-                .errors
-                .iter()
-                .any(|e| e.contains("Bobby")),
+            !report.errors.iter().any(|e| e.contains("Bobby")),
             "Bobby should be compatible with 1.21.11 via ~1.21.9"
         );
         assert!(

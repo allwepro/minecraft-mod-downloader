@@ -3,12 +3,12 @@
 #![allow(clippy::collapsible_if, clippy::items_after_test_module)]
 
 use crate::launcher::ui::{JavaDownloadWindow, MinecraftDownloadWindow};
-use crate::resource_downloader::rm_api::List as ModList;
 use crate::launcher::{
     AdvancedLauncher, FabricInstaller, JavaDetector, JavaInstallation, LaunchConfig, LaunchProfile,
     LaunchResult, MinecraftDetector, MinecraftInstallation, ModCopier, ModCopyProgress,
     ModValidationReport, ModValidationSpec,
 };
+use crate::resource_downloader::rm_api::List as ModList;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
