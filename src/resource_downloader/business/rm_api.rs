@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub type SharedRMAPI = Arc<RwLock<RMAPI>>;
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct List {
     pub id: String,
     pub name: String,
@@ -17,6 +18,7 @@ pub struct List {
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Mod {
     pub id: String,
     pub mod_name: String,

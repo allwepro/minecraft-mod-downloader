@@ -506,6 +506,8 @@ mod tests {
 
         let parent_json = serde_json::json!({
             "id": "parent",
+            "type": "release",
+            "assets": "1.21",
             "mainClass": "net.minecraft.client.main.Main",
             "assetIndex": {
                 "id": "parent-assets",
@@ -556,6 +558,8 @@ mod tests {
 
         let parent_json = serde_json::json!({
             "id": "base",
+            "type": "release",
+            "assets": "1.21",
             "mainClass": "net.minecraft.client.main.ParentMain",
             "assetIndex": {
                 "id": "base-assets",

@@ -746,7 +746,7 @@ mod tests {
     fn write_fabric_mod_jar(path: &std::path::Path, fabric_mod_json: &serde_json::Value) {
         let file = std::fs::File::create(path).expect("failed to create mod jar");
         let mut zip = zip::ZipWriter::new(file);
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        let options = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
         zip.start_file("fabric.mod.json", options)
             .expect("failed to start fabric.mod.json entry");
         let payload = serde_json::to_string(fabric_mod_json).expect("failed to serialize json");
