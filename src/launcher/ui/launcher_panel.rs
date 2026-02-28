@@ -2,8 +2,8 @@
 //         helper items defined after the test module to keep test helpers co-located with tests
 #![allow(clippy::collapsible_if, clippy::items_after_test_module)]
 
-use crate::infra::ConfigManager;
 use crate::launcher::ui::{JavaDownloadWindow, MinecraftDownloadWindow};
+use crate::resource_downloader::rm_api::List as ModList;
 use crate::launcher::{
     AdvancedLauncher, FabricInstaller, JavaDetector, JavaInstallation, LaunchConfig, LaunchProfile,
     LaunchResult, MinecraftDetector, MinecraftInstallation, ModCopier, ModCopyProgress,
@@ -132,7 +132,7 @@ impl LauncherPanel {
     pub fn show(
         &mut self,
         ctx: &egui::Context,
-        config_manager: &Arc<ConfigManager>,
+        mod_lists: &[ModList],
         rt_handle: &tokio::runtime::Handle,
         current_list_id: &Option<String>,
         download_dir: &str,
@@ -144,7 +144,7 @@ impl LauncherPanel {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 self.render_content(
                     ui,
-                    config_manager,
+                    mod_lists,
                     rt_handle,
                     current_list_id,
                     download_dir,
@@ -271,7 +271,7 @@ impl LauncherPanel {
     fn render_content(
         &mut self,
         ui: &mut egui::Ui,
-        config_manager: &Arc<ConfigManager>,
+        mod_lists: &[ModList],
         rt_handle: &tokio::runtime::Handle,
         current_list_id: &Option<String>,
         download_dir: &str,
@@ -508,9 +508,6 @@ impl LauncherPanel {
             ui.label(egui::RichText::new("Mod List").strong());
             ui.add_space(5.0);
 
-            let mod_lists = rt_handle
-                .block_on(async { config_manager.load_all_lists().await.unwrap_or_default() });
-
             if let Some(list_id) = current_list_id {
                 if let Some(list) = mod_lists.iter().find(|l| &l.id == list_id) {
                     ui.colored_label(egui::Color32::GREEN, format!("✓ Using list: {}", list.name));
@@ -548,7 +545,7 @@ impl LauncherPanel {
 
             if response.clicked() {
                 self.launch_minecraft(
-                    config_manager,
+                    mod_lists,
                     rt_handle,
                     current_list_id,
                     download_dir,
@@ -694,7 +691,7 @@ impl LauncherPanel {
 
     fn launch_minecraft(
         &mut self,
-        config_manager: &Arc<ConfigManager>,
+        mod_lists: &[ModList],
         rt_handle: &tokio::runtime::Handle,
         current_list_id: &Option<String>,
         download_dir: &str,
@@ -757,15 +754,14 @@ impl LauncherPanel {
         let list_id = current_list_id.clone();
         let download_dir = download_dir.to_string();
         let mods_dir = mc_install.mods_dir.clone();
-        let config_manager = Arc::clone(config_manager);
+        let captured_mod_lists = mod_lists.to_vec();
         let loader_name = loader_name_for_config;
         let mc_version = self.selected_mc_version.clone();
         let fabric_version_id = self.fabric_version_id.clone();
 
         rt_handle.spawn(async move {
             if let Some(list_id) = list_id {
-                let mod_lists = config_manager.load_all_lists().await.unwrap_or_default();
-                if let Some(list) = mod_lists.iter().find(|l| l.id == list_id) {
+                if let Some(list) = captured_mod_lists.iter().find(|l| l.id == list_id) {
                     let mod_names: Vec<String> =
                         list.mods.iter().map(|m| m.mod_name.clone()).collect();
                     let mod_specs: Vec<ModValidationSpec> = list
@@ -1174,7 +1170,6 @@ impl LauncherPanel {
 #[cfg(test)]
 mod tests {
     use super::{LaunchPreflightOutcome, LauncherPanel};
-    use crate::infra::ConfigManager;
     use crate::launcher::{JavaInstallation, MinecraftInstallation, ModValidationReport};
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
@@ -1210,6 +1205,7 @@ mod tests {
             }],
             selected_java_index: Some(0),
             minecraft_installation: Some(MinecraftInstallation {
+                versions_dir: game_root.join("versions"),
                 root_dir: game_root,
                 mods_dir,
                 available_versions: vec!["1.21.1".to_string()],
@@ -1402,10 +1398,9 @@ mod tests {
         panel.launch_in_progress = true;
         panel.launch_status = Some("Launching Minecraft...".to_string());
 
-        let config_manager = Arc::new(ConfigManager::new().expect("config manager"));
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
 
-        panel.launch_minecraft(&config_manager, runtime.handle(), &None, "/tmp", "vanilla");
+        panel.launch_minecraft(&[], runtime.handle(), &None, "/tmp", "vanilla");
 
         assert_eq!(
             panel.launch_status.as_deref(),
@@ -1424,10 +1419,9 @@ mod tests {
             .cloned()
             .expect("expected disabled reason");
 
-        let config_manager = Arc::new(ConfigManager::new().expect("config manager"));
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
 
-        panel.launch_minecraft(&config_manager, runtime.handle(), &None, "/tmp", "vanilla");
+        panel.launch_minecraft(&[], runtime.handle(), &None, "/tmp", "vanilla");
 
         assert_eq!(panel.launch_status, Some(format!("❌ {}", first_reason)));
     }
