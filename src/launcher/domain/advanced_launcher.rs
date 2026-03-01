@@ -491,6 +491,7 @@ impl AdvancedLauncher {
         }
     }
 
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     fn ensure_macos_framework_shims(target_dir: &Path) {
         #[cfg(target_os = "macos")]
         {
@@ -636,24 +637,6 @@ impl AdvancedLauncher {
                 }
             }
         }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn ensure_macos_framework_shim(
-        _target_dir: &Path,
-        _name: &str,
-        _framework_path: &str,
-        _jna_debug: bool,
-    ) {
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn fallback_framework_symlink(
-        _dest: &Path,
-        _framework_path: &str,
-        _name: &str,
-        _jna_debug: bool,
-    ) {
     }
 
     /// Extracts the platform-specific JNA native shim from the Fabric/Minecraft JNA jar into a
