@@ -28,6 +28,7 @@ pub struct MinecraftVersionInfo {
     pub id: String,
     pub version_type: String,
     pub release_time: String,
+    #[allow(dead_code)]
     pub url: String,
 }
 
@@ -518,23 +519,6 @@ impl MinecraftDownloadService {
             .with_context(|| format!("Failed to move {}", dest.display()))?;
 
         Ok(())
-    }
-
-    fn calc_progress(
-        base: f32,
-        end: f32,
-        downloaded: u64,
-        total: u64,
-        index: usize,
-        count: usize,
-    ) -> f32 {
-        if total > 0 {
-            base + (end - base) * (downloaded as f32 / total as f32).min(1.0)
-        } else if count > 0 {
-            base + (end - base) * (index as f32 / count as f32)
-        } else {
-            base
-        }
     }
 
     fn report(on_progress: &Option<ProgressCallback>, progress: f32, status: impl Into<String>) {

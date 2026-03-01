@@ -119,7 +119,7 @@ impl JavaDownloadWindow {
             }
         }
 
-        let mut reload_needed = false;
+        let reload_needed = false;
         let mut open = self.open;
 
         egui::Window::new("Download Java")

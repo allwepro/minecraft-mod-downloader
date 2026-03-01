@@ -33,6 +33,7 @@ struct LoaderVersion {
 
 #[derive(Debug, Deserialize)]
 struct FabricProfile {
+    #[allow(dead_code)]
     id: String,
     #[serde(default)]
     libraries: Vec<Library>,
