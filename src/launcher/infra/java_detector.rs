@@ -8,10 +8,6 @@ use std::process::Command;
 pub struct JavaDetector;
 
 impl JavaDetector {
-    pub fn new() -> Self {
-        Self
-    }
-
     /// Detect all Java installations on the system
     pub fn detect_java_installations() -> Vec<JavaInstallation> {
         let mut installations = Vec::new();

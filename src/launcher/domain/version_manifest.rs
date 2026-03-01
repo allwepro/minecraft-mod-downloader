@@ -136,6 +136,7 @@ pub struct VersionDownloadItem {
 /// Fully-resolved manifest after applying inheritance
 #[derive(Debug, Clone)]
 pub struct ResolvedManifest {
+    #[allow(dead_code)]
     pub id: String,
     pub main_class: String,
     pub client_jar_id: String,
@@ -143,7 +144,9 @@ pub struct ResolvedManifest {
     pub minecraft_arguments: Option<String>,
     pub libraries: Vec<Library>,
     pub asset_index: AssetIndex,
+    #[allow(dead_code)]
     pub assets: String,
+    #[allow(dead_code)]
     pub version_type: String,
 }
 
@@ -153,11 +156,6 @@ impl VersionManifest {
         let content = std::fs::read_to_string(path)?;
         let manifest: VersionManifest = serde_json::from_str(&content)?;
         Ok(manifest)
-    }
-
-    /// Check if library should be included based on rules
-    pub fn should_include_library(&self, library: &Library) -> bool {
-        Self::should_include_library_for_current_os(library)
     }
 
     /// Check if library should be included for the current OS (static helper)
@@ -192,17 +190,6 @@ impl VersionManifest {
             "osx"
         } else {
             "linux"
-        }
-    }
-
-    /// Get platform-specific classifier (for natives)
-    pub fn get_natives_classifier() -> &'static str {
-        if cfg!(target_os = "windows") {
-            "natives-windows"
-        } else if cfg!(target_os = "macos") {
-            "natives-macos"
-        } else {
-            "natives-linux"
         }
     }
 
